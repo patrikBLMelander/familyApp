@@ -6,6 +6,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -15,24 +16,21 @@ public class CorsConfig {
     public CorsFilter corsFilter() {
         var config = new CorsConfiguration();
         
-        // Allow Railway domains (will be set via environment variable in production)
-        String railwayOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
-        System.out.println("CORS_ALLOWED_ORIGINS from env: " + railwayOrigins);
+        // Get allowed origins from environment variable or use defaults
+        // Match WorldCupPredictions approach
+        String allowedOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
+        System.out.println("CORS_ALLOWED_ORIGINS from env: " + allowedOrigins);
         
-        if (railwayOrigins != null && !railwayOrigins.isEmpty()) {
-            // Remove quotes if Railway added them and split by comma
-            railwayOrigins = railwayOrigins.replaceAll("^\"|\"$", "").trim();
-            String[] origins = railwayOrigins.split(",");
-            for (int i = 0; i < origins.length; i++) {
-                origins[i] = origins[i].trim();
-            }
-            System.out.println("Setting CORS allowed origins: " + java.util.Arrays.toString(origins));
-            config.setAllowedOriginPatterns(List.of(origins));
+        if (allowedOrigins != null && !allowedOrigins.isEmpty()) {
+            // Remove quotes if Railway added them
+            allowedOrigins = allowedOrigins.replaceAll("^\"|\"$", "").trim();
+            // Split by comma and trim each origin
+            config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+            System.out.println("Setting CORS allowed origins: " + config.getAllowedOrigins());
         } else {
-            // Default: Allow Railway frontend domain if no env var is set
-            // This is a fallback for production
-            System.out.println("No CORS_ALLOWED_ORIGINS set, using Railway frontend as fallback");
-            config.setAllowedOriginPatterns(List.of(
+            // Default: localhost for development + Railway frontend as fallback
+            System.out.println("No CORS_ALLOWED_ORIGINS set, using defaults");
+            config.setAllowedOrigins(Arrays.asList(
                     "https://familyapp-frontend-production.up.railway.app",
                     "http://localhost:3000",
                     "http://localhost:5173",
@@ -41,17 +39,13 @@ public class CorsConfig {
             ));
         }
         
-        // Allow all necessary methods including OPTIONS for preflight
-        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS", "HEAD"));
-        config.setAllowedHeaders(List.of("Origin", "Content-Type", "Accept", "Authorization", "X-Device-Token"));
-        config.setExposedHeaders(List.of("Access-Control-Allow-Origin", "Access-Control-Allow-Credentials"));
-        config.setAllowCredentials(false);
-        config.setMaxAge(3600L); // Cache preflight for 1 hour
-
+        // Match WorldCupPredictions: allow all headers
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true); // Match WorldCupPredictions
+        
         var source = new UrlBasedCorsConfigurationSource();
-        // Register CORS for all API endpoints
-        source.registerCorsConfiguration("/api/**", config);
-        // Also register for root to catch any edge cases
+        // Register for all paths (match WorldCupPredictions)
         source.registerCorsConfiguration("/**", config);
 
         return new CorsFilter(source);
