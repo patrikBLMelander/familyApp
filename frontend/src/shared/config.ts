@@ -20,7 +20,7 @@ function getApiBaseUrl(): string {
     if (hostname.includes('railway.app') || hostname.includes('railway')) {
       // Try to infer backend URL from frontend URL
       // This is a fallback - ideally we'd set it via environment variable
-      return 'https://familyapp-backend-production.up.railway.app/api/v1';
+      return 'https://backend-production-5c57.up.railway.app/api/v1';
     }
   }
 
