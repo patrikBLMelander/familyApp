@@ -2,6 +2,7 @@ package com.familyapp.api.config;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Global OPTIONS handler to ensure CORS preflight requests are handled
- * This is a fallback in case the CorsFilter doesn't catch all OPTIONS requests
+ * This explicitly adds CORS headers for OPTIONS requests
  */
 @RestController
 public class GlobalCorsController {
@@ -20,8 +21,23 @@ public class GlobalCorsController {
         String origin = request.getHeader("Origin");
         System.out.println("OPTIONS request received for: " + request.getRequestURI() + ", Origin: " + origin);
         
-        // Let CorsFilter handle the headers, we just return 200
-        return ResponseEntity.ok().build();
+        // Get allowed origins from environment
+        String allowedOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
+        if (allowedOrigins == null || allowedOrigins.isEmpty()) {
+            allowedOrigins = "https://familyapp-frontend-production.up.railway.app";
+        } else {
+            allowedOrigins = allowedOrigins.replaceAll("^\"|\"$", "").trim().split(",")[0].trim();
+        }
+        
+        // Explicitly set CORS headers
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Access-Control-Allow-Origin", allowedOrigins);
+        headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+        headers.add("Access-Control-Allow-Headers", "*");
+        headers.add("Access-Control-Allow-Credentials", "true");
+        headers.add("Access-Control-Max-Age", "3600");
+        
+        return ResponseEntity.ok().headers(headers).build();
     }
 }
 

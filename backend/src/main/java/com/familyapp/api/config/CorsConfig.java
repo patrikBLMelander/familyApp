@@ -31,16 +31,18 @@ public class CorsConfig {
             for (int i = 0; i < originArray.length; i++) {
                 originArray[i] = originArray[i].trim();
             }
-            // Use setAllowedOriginPatterns for more flexible matching
-            config.setAllowedOriginPatterns(Arrays.asList(originArray));
-            System.out.println("Setting CORS allowed origin patterns: " + config.getAllowedOriginPatterns());
+            // Use setAllowedOrigins (not patterns) for exact matching - matches WorldCupPredictions
+            config.setAllowedOrigins(Arrays.asList(originArray));
+            System.out.println("Setting CORS allowed origins: " + config.getAllowedOrigins());
         } else {
             // Default: localhost for development + Railway frontend as fallback
             System.out.println("No CORS_ALLOWED_ORIGINS set, using defaults");
-            config.setAllowedOriginPatterns(Arrays.asList(
+            config.setAllowedOrigins(Arrays.asList(
                     "https://familyapp-frontend-production.up.railway.app",
-                    "http://localhost:*",
-                    "http://127.0.0.1:*"
+                    "http://localhost:3000",
+                    "http://localhost:5173",
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:5173"
             ));
         }
         
