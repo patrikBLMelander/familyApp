@@ -6,8 +6,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Kopiera resten av frontend-koden och bygg
+# Kopiera resten av frontend-koden
 COPY . .
+
+# Build med miljövariabler tillgängliga
+# Vite läser VITE_* variabler från environment vid build-time
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
 FROM nginx:1.27-alpine

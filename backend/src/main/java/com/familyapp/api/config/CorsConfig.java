@@ -18,6 +18,8 @@ public class CorsConfig {
         // Allow Railway domains (will be set via environment variable in production)
         String railwayOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
         if (railwayOrigins != null && !railwayOrigins.isEmpty()) {
+            // Remove quotes if Railway added them
+            railwayOrigins = railwayOrigins.replaceAll("^\"|\"$", "").trim();
             // Use Railway origins from environment variable
             config.setAllowedOriginPatterns(List.of(railwayOrigins.split(",")));
         } else {
