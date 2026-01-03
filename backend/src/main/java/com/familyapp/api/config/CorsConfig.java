@@ -17,13 +17,20 @@ public class CorsConfig {
         
         // Allow Railway domains (will be set via environment variable in production)
         String railwayOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
+        System.out.println("CORS_ALLOWED_ORIGINS from env: " + railwayOrigins);
+        
         if (railwayOrigins != null && !railwayOrigins.isEmpty()) {
-            // Remove quotes if Railway added them
+            // Remove quotes if Railway added them and split by comma
             railwayOrigins = railwayOrigins.replaceAll("^\"|\"$", "").trim();
-            // Use Railway origins from environment variable
-            config.setAllowedOriginPatterns(List.of(railwayOrigins.split(",")));
+            String[] origins = railwayOrigins.split(",");
+            for (int i = 0; i < origins.length; i++) {
+                origins[i] = origins[i].trim();
+            }
+            System.out.println("Setting CORS allowed origins: " + java.util.Arrays.toString(origins));
+            config.setAllowedOriginPatterns(List.of(origins));
         } else {
             // Default to localhost for development
+            System.out.println("No CORS_ALLOWED_ORIGINS set, using localhost defaults");
             config.setAllowedOriginPatterns(List.of(
                     "http://localhost:3000",
                     "http://localhost:5173",
