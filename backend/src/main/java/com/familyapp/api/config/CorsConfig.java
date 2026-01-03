@@ -1,54 +1,25 @@
 package com.familyapp.api.config;
 
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Arrays;
 import java.util.List;
 
 @Configuration
-public class CorsConfig implements WebMvcConfigurer {
-
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        // Get allowed origins from environment variable
-        String allowedOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
-        String[] origins;
-        
-        if (allowedOrigins != null && !allowedOrigins.isEmpty()) {
-            allowedOrigins = allowedOrigins.replaceAll("^\"|\"$", "").trim();
-            origins = allowedOrigins.split(",");
-            for (int i = 0; i < origins.length; i++) {
-                origins[i] = origins[i].trim();
-            }
-        } else {
-            origins = new String[]{
-                "https://familyapp-frontend-production.up.railway.app",
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:5173"
-            };
-        }
-        
-        registry.addMapping("/**")
-                .allowedOrigins(origins)
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
-                .allowedHeaders("*")
-                .allowCredentials(true);
-    }
+public class CorsConfig {
 
     @Bean
-    public CorsFilter corsFilter() {
-        var config = new CorsConfiguration();
+    public FilterRegistrationBean<CorsFilter> corsFilterRegistration() {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        CorsConfiguration config = new CorsConfiguration();
         
         // Get allowed origins from environment variable or use defaults
-        // Match WorldCupPredictions approach
         String allowedOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
         System.out.println("CORS_ALLOWED_ORIGINS from env: " + allowedOrigins);
         
@@ -73,13 +44,15 @@ public class CorsConfig implements WebMvcConfigurer {
         // Match WorldCupPredictions: allow all headers
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true); // Match WorldCupPredictions
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
         
-        var source = new UrlBasedCorsConfigurationSource();
-        // Register for all paths (match WorldCupPredictions)
+        // Register for all paths
         source.registerCorsConfiguration("/**", config);
-
-        return new CorsFilter(source);
+        
+        FilterRegistrationBean<CorsFilter> bean = new FilterRegistrationBean<>(new CorsFilter(source));
+        bean.setOrder(Ordered.HIGHEST_PRECEDENCE); // Ensure CORS filter runs first
+        return bean;
     }
 }
 
