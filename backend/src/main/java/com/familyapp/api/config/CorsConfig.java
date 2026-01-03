@@ -31,17 +31,16 @@ public class CorsConfig {
             for (int i = 0; i < originArray.length; i++) {
                 originArray[i] = originArray[i].trim();
             }
-            config.setAllowedOrigins(Arrays.asList(originArray));
-            System.out.println("Setting CORS allowed origins: " + config.getAllowedOrigins());
+            // Use setAllowedOriginPatterns for more flexible matching
+            config.setAllowedOriginPatterns(Arrays.asList(originArray));
+            System.out.println("Setting CORS allowed origin patterns: " + config.getAllowedOriginPatterns());
         } else {
             // Default: localhost for development + Railway frontend as fallback
             System.out.println("No CORS_ALLOWED_ORIGINS set, using defaults");
-            config.setAllowedOrigins(Arrays.asList(
+            config.setAllowedOriginPatterns(Arrays.asList(
                     "https://familyapp-frontend-production.up.railway.app",
-                    "http://localhost:3000",
-                    "http://localhost:5173",
-                    "http://127.0.0.1:3000",
-                    "http://127.0.0.1:5173"
+                    "http://localhost:*",
+                    "http://127.0.0.1:*"
             ));
         }
         
