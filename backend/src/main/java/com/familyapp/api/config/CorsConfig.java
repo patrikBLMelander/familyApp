@@ -5,42 +5,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
 
 @Configuration
-public class CorsConfig implements WebMvcConfigurer {
-
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        // Get allowed origins from environment
-        String railwayOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
-        String[] origins;
-        
-        if (railwayOrigins != null && !railwayOrigins.isEmpty()) {
-            railwayOrigins = railwayOrigins.replaceAll("^\"|\"$", "").trim();
-            origins = railwayOrigins.split(",");
-            for (int i = 0; i < origins.length; i++) {
-                origins[i] = origins[i].trim();
-            }
-        } else {
-            origins = new String[]{
-                "https://familyapp-frontend-production.up.railway.app",
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:5173"
-            };
-        }
-        
-        registry.addMapping("/api/**")
-                .allowedOriginPatterns(origins)
-                .allowedMethods("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("Origin", "Content-Type", "Accept", "Authorization", "X-Device-Token")
-                .maxAge(3600);
-    }
+public class CorsConfig {
 
     @Bean
     public CorsFilter corsFilter() {
@@ -71,8 +40,11 @@ public class CorsConfig implements WebMvcConfigurer {
                     "http://127.0.0.1:5173"
             ));
         }
-        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
+        
+        // Allow all necessary methods including OPTIONS for preflight
+        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS", "HEAD"));
         config.setAllowedHeaders(List.of("Origin", "Content-Type", "Accept", "Authorization", "X-Device-Token"));
+        config.setExposedHeaders(List.of("Access-Control-Allow-Origin", "Access-Control-Allow-Credentials"));
         config.setAllowCredentials(false);
         config.setMaxAge(3600L); // Cache preflight for 1 hour
 
