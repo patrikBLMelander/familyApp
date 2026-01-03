@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <title>FamilyApp</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script>
+      // Set API base URL from Railway environment variable at runtime
+      // Railway injects environment variables, but we need to make them available to the app
+      window.APP_CONFIG = {
+        API_BASE_URL: 'https://familyapp-backend-production.up.railway.app/api/v1'
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>
