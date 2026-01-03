@@ -9,10 +9,8 @@ RUN npm install
 # Kopiera resten av frontend-koden
 COPY . .
 
-# Build med miljövariabler tillgängliga
-# Vite läser VITE_* variabler från environment vid build-time
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# Build - Vite läser automatiskt VITE_* variabler från environment vid build-time
+# Railway skickar automatiskt environment variables till build-steget
 RUN npm run build
 
 FROM nginx:1.27-alpine
