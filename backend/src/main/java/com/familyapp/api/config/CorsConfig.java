@@ -43,9 +43,13 @@ public class CorsConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Origin", "Content-Type", "Accept", "Authorization", "X-Device-Token"));
         config.setAllowCredentials(false);
+        config.setMaxAge(3600L); // Cache preflight for 1 hour
 
         var source = new UrlBasedCorsConfigurationSource();
+        // Register CORS for all API endpoints
         source.registerCorsConfiguration("/api/**", config);
+        // Also register for root to catch any edge cases
+        source.registerCorsConfiguration("/**", config);
 
         return new CorsFilter(source);
     }
