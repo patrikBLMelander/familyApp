@@ -30,5 +30,7 @@ server:
 logging:
   level:
     root: INFO
+    org.springframework.web.cors: DEBUG
+    org.springframework.web.filter: DEBUG
 
 

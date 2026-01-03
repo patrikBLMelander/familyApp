@@ -11,7 +11,10 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/families")
-@CrossOrigin(origins = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS, RequestMethod.PATCH})
+@CrossOrigin(origins = {"https://familyapp-frontend-production.up.railway.app", "http://localhost:3000", "http://localhost:5173"}, 
+             allowedHeaders = "*", 
+             allowCredentials = "true",
+             methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS, RequestMethod.PATCH})
 public class FamilyController {
 
     private final FamilyService service;
