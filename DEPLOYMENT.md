@@ -47,7 +47,8 @@ git push -u origin main
 1. I Railway-projektet, klicka på "+ New"
 2. Välj "GitHub Repo" → Välj ditt repository
 3. Railway kommer automatiskt upptäcka `backend/Dockerfile`
-4. Konfigurera följande miljövariabler:
+4. Sätt **Root Directory** till `backend` (under Settings → Root Directory)
+5. Konfigurera följande miljövariabler (under Variables):
 
 ```
 SPRING_DATASOURCE_URL=jdbc:mysql://${{MySQL.MYSQLHOST}}:${{MySQL.MYSQLPORT}}/${{MySQL.MYSQLDATABASE}}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
@@ -58,8 +59,9 @@ CORS_ALLOWED_ORIGINS=https://<ditt-frontend-service>.railway.app
 ```
 
 **Viktigt**: 
-- Railway använder `${{MySQL.MYSQLHOST}}` etc. för att referera till MySQL-service:ns variabler
-- Ersätt `<ditt-frontend-service>` med ditt faktiska frontend-service namn
+- Railway använder `${{ServiceName.VARIABLE}}` för att referera till andra services variabler
+- Om din MySQL-service heter något annat än "MySQL", ersätt "MySQL" med rätt service-namn
+- Ersätt `<ditt-frontend-service>` med ditt faktiska frontend-service namn (du får detta efter att frontend är deployad)
 - Du hittar frontend-URL:en i Railway under frontend-service:ns "Settings" → "Domains"
 
 ### 2.4 Konfigurera Frontend Service
@@ -67,7 +69,8 @@ CORS_ALLOWED_ORIGINS=https://<ditt-frontend-service>.railway.app
 1. I Railway-projektet, klicka på "+ New"
 2. Välj "GitHub Repo" → Välj samma repository
 3. Railway kommer automatiskt upptäcka `frontend/Dockerfile`
-4. Konfigurera följande miljövariabler:
+4. Sätt **Root Directory** till `frontend` (under Settings → Root Directory)
+5. Konfigurera följande miljövariabler (under Variables):
 
 ```
 VITE_API_BASE_URL=https://<ditt-backend-service>.railway.app/api/v1
@@ -76,6 +79,7 @@ VITE_API_BASE_URL=https://<ditt-backend-service>.railway.app/api/v1
 **Viktigt**: 
 - Ersätt `<ditt-backend-service>` med ditt faktiska backend-service namn
 - Du hittar backend-URL:en i Railway under backend-service:ns "Settings" → "Domains"
+- Backend-URL:en ser ut som: `https://backend-production-xxxx.up.railway.app`
 
 ### 2.5 Konfigurera Root Directory (för båda services)
 
