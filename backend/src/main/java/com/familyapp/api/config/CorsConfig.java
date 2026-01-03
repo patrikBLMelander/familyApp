@@ -29,9 +29,11 @@ public class CorsConfig {
             System.out.println("Setting CORS allowed origins: " + java.util.Arrays.toString(origins));
             config.setAllowedOriginPatterns(List.of(origins));
         } else {
-            // Default to localhost for development
-            System.out.println("No CORS_ALLOWED_ORIGINS set, using localhost defaults");
+            // Default: Allow Railway frontend domain if no env var is set
+            // This is a fallback for production
+            System.out.println("No CORS_ALLOWED_ORIGINS set, using Railway frontend as fallback");
             config.setAllowedOriginPatterns(List.of(
+                    "https://familyapp-frontend-production.up.railway.app",
                     "http://localhost:3000",
                     "http://localhost:5173",
                     "http://127.0.0.1:3000",
