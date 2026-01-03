@@ -1,0 +1,47 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: familyapp-db
+    environment:
+      MYSQL_DATABASE: familyapp
+      MYSQL_USER: familyapp
+      MYSQL_PASSWORD: familyapp
+      MYSQL_ROOT_PASSWORD: familyapp
+    ports:
+      - "3306:3306"
+    volumes:
+      - familyapp_db_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    build: ./backend
+    container_name: familyapp-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/familyapp?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: familyapp
+      SPRING_DATASOURCE_PASSWORD: familyapp
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    container_name: familyapp-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  familyapp_db_data:
+
+
