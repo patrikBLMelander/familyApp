@@ -27,7 +27,11 @@ public class CorsConfig {
             // Remove quotes if Railway added them
             allowedOrigins = allowedOrigins.replaceAll("^\"|\"$", "").trim();
             // Split by comma and trim each origin
-            config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+            String[] originArray = allowedOrigins.split(",");
+            for (int i = 0; i < originArray.length; i++) {
+                originArray[i] = originArray[i].trim();
+            }
+            config.setAllowedOrigins(Arrays.asList(originArray));
             System.out.println("Setting CORS allowed origins: " + config.getAllowedOrigins());
         } else {
             // Default: localhost for development + Railway frontend as fallback
