@@ -9,15 +9,8 @@ RUN npm install
 # Kopiera resten av frontend-koden
 COPY . .
 
-# Build - Railway skickar environment variables, men vi måste explicit säkerställa att de är tillgängliga
-# Vite läser VITE_* variabler från process.env vid build-time
-# Railway skickar environment variables till container, men för build måste vi använda --build-arg eller ENV
-# Eftersom Railway inte stödjer --build-arg direkt, använder vi ENV som ärvs från Railway's environment
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-
-# Debug output för att verifiera att variabeln är satt
-RUN echo "Building with VITE_API_BASE_URL=${VITE_API_BASE_URL}"
-
+# Build - Vi använder runtime config istället av build-time env vars
+# Så vi behöver inte VITE_API_BASE_URL här, den sätts i index.html och config.ts
 RUN npm run build
 
 FROM nginx:1.27-alpine
