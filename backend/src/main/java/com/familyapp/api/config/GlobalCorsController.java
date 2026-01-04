@@ -18,7 +18,12 @@ public class GlobalCorsController {
     @RequestMapping(value = "/**", method = RequestMethod.OPTIONS)
     public ResponseEntity<?> handleOptions(HttpServletRequest request, HttpServletResponse response) {
         String origin = request.getHeader("Origin");
-        System.out.println("OPTIONS request received for: " + request.getRequestURI() + ", Origin: " + origin);
+        String requestMethod = request.getHeader("Access-Control-Request-Method");
+        String requestHeaders = request.getHeader("Access-Control-Request-Headers");
+        System.out.println("OPTIONS request received for: " + request.getRequestURI());
+        System.out.println("  Origin: " + origin);
+        System.out.println("  Request-Method: " + requestMethod);
+        System.out.println("  Request-Headers: " + requestHeaders);
         
         // Get allowed origins from environment or use defaults (same logic as CorsConfig)
         String allowedOriginsEnv = System.getenv("CORS_ALLOWED_ORIGINS");
@@ -50,20 +55,27 @@ public class GlobalCorsController {
                 origin.equals("https://familyapp-frontend-production.up.railway.app")
             )) {
                 allowedOrigin = origin;
+            } else if (origin != null && origin.contains("railway.app")) {
+                // Allow any Railway origin as fallback for production
+                allowedOrigin = origin;
             } else {
-                // Fallback to localhost:5173 for local dev
-                allowedOrigin = "http://localhost:5173";
+                // Fallback: use the origin if provided, otherwise default to production frontend
+                allowedOrigin = origin != null ? origin : "https://familyapp-frontend-production.up.railway.app";
             }
         }
         
         // Explicitly set CORS headers
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Access-Control-Allow-Origin", allowedOrigin);
-        headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+        if (allowedOrigin != null) {
+            headers.add("Access-Control-Allow-Origin", allowedOrigin);
+            System.out.println("  Setting Access-Control-Allow-Origin: " + allowedOrigin);
+        }
+        headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD");
         headers.add("Access-Control-Allow-Headers", "*");
         headers.add("Access-Control-Allow-Credentials", "true");
         headers.add("Access-Control-Max-Age", "3600");
         
+        System.out.println("  Returning OPTIONS response with CORS headers");
         return ResponseEntity.ok().headers(headers).build();
     }
 }

@@ -9,7 +9,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
 import java.util.Arrays;
-import java.util.List;
 
 @Configuration
 public class CorsConfig {
@@ -46,11 +45,25 @@ public class CorsConfig {
             ));
         }
         
-        // Match WorldCupPredictions: allow all headers
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        config.setAllowedHeaders(List.of("*"));
+        // Allow all methods and common headers
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));
+        // List common headers explicitly (wildcard doesn't work in Spring Boot 3.x)
+        config.setAllowedHeaders(Arrays.asList(
+            "Content-Type",
+            "Authorization",
+            "X-Device-Token",
+            "X-Requested-With",
+            "Accept",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers"
+        ));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
+        
+        System.out.println("CORS config - Allowed methods: " + config.getAllowedMethods());
+        System.out.println("CORS config - Allowed headers: " + config.getAllowedHeaders());
+        System.out.println("CORS config - Allow credentials: " + config.getAllowCredentials());
         
         // Register for all paths
         source.registerCorsConfiguration("/**", config);
