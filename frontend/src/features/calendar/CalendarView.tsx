@@ -209,23 +209,68 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
     ? events.filter(event => new Date(event.startDateTime) >= now)
     : events;
 
+  // Helper function to get all dates for a multi-day all-day event
+  const getAllDayEventDates = (event: CalendarEventResponse): string[] => {
+    if (!event.isAllDay) return [];
+    
+    const startDateStr = event.startDateTime.substring(0, 10);
+    if (!event.endDateTime) {
+      // Single day event
+      return [startDateStr];
+    }
+    
+    // Multi-day event - get all dates from start to end (inclusive)
+    const endDateStr = event.endDateTime.substring(0, 10);
+    const dates: string[] = [];
+    const startDate = new Date(startDateStr + "T00:00:00");
+    const endDate = new Date(endDateStr + "T00:00:00");
+    
+    // Safety check: if end is before start, just return start date
+    if (endDate < startDate) {
+      return [startDateStr];
+    }
+    
+    // Safety limit: max 365 days to prevent performance issues
+    const maxDays = 365;
+    let dayCount = 0;
+    
+    // Iterate through all dates from start to end (inclusive)
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate && dayCount < maxDays) {
+      const year = currentDate.getFullYear();
+      const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+      const day = String(currentDate.getDate()).padStart(2, "0");
+      dates.push(`${year}-${month}-${day}`);
+      currentDate.setDate(currentDate.getDate() + 1);
+      dayCount++;
+    }
+    
+    return dates;
+  };
+
   // Group events by date
   // For all-day events, extract date directly from string to avoid timezone issues
+  // For multi-day all-day events, add the event to all dates it spans
   // For regular events, parse the datetime string
   const eventsByDate = filteredEvents.reduce((acc, event) => {
-    let dateKey: string;
     if (event.isAllDay) {
-      // For all-day events, extract date directly from YYYY-MM-DDTHH:mm format
-      dateKey = event.startDateTime.substring(0, 10);
+      // For all-day events, get all dates the event spans
+      const dates = getAllDayEventDates(event);
+      dates.forEach(dateKey => {
+        if (!acc[dateKey]) {
+          acc[dateKey] = [];
+        }
+        acc[dateKey].push(event);
+      });
     } else {
       // For regular events, parse the datetime
       const date = new Date(event.startDateTime);
-      dateKey = date.toISOString().split("T")[0];
+      const dateKey = date.toISOString().split("T")[0];
+      if (!acc[dateKey]) {
+        acc[dateKey] = [];
+      }
+      acc[dateKey].push(event);
     }
-    if (!acc[dateKey]) {
-      acc[dateKey] = [];
-    }
-    acc[dateKey].push(event);
     return acc;
   }, {} as Record<string, CalendarEventResponse[]>);
 
@@ -401,15 +446,33 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
                                 <div style={{ fontWeight: 600, marginBottom: "4px" }}>{event.title}</div>
                                 <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
                                   {event.isAllDay ? (
-                                    // For all-day events, show just the date with "Heldag" label
+                                    // For all-day events, show date range if multi-day, otherwise just the date
                                     (() => {
-                                      const eventDate = new Date(event.startDateTime.substring(0, 10));
-                                      const dateStr = eventDate.toLocaleDateString("sv-SE", {
+                                      const startDate = new Date(event.startDateTime.substring(0, 10));
+                                      const startDateStr = startDate.toLocaleDateString("sv-SE", {
                                         year: "numeric",
                                         month: "long",
                                         day: "numeric",
                                       });
-                                      return `${dateStr} - Heldag`;
+                                      
+                                      if (event.endDateTime) {
+                                        const endDate = new Date(event.endDateTime.substring(0, 10));
+                                        const endDateStr = endDate.toLocaleDateString("sv-SE", {
+                                          year: "numeric",
+                                          month: "long",
+                                          day: "numeric",
+                                        });
+                                        
+                                        // Check if same day
+                                        if (event.startDateTime.substring(0, 10) === event.endDateTime.substring(0, 10)) {
+                                          return `${startDateStr} - Heldag`;
+                                        }
+                                        
+                                        // Multi-day: show range
+                                        return `${startDateStr} - ${endDateStr} - Heldag`;
+                                      }
+                                      
+                                      return `${startDateStr} - Heldag`;
                                     })()
                                   ) : (
                                     formatDateTimeRange(event.startDateTime, event.endDateTime, false)
@@ -1196,13 +1259,19 @@ function WeekView({ events, categories, members, currentWeek, onWeekChange, onEv
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(day);
     dayEnd.setHours(23, 59, 59, 999);
+    const dayDateStr = day.toISOString().split("T")[0];
 
     return events.filter(event => {
       if (event.isAllDay) {
-        // For all-day events, extract date directly from string to avoid timezone issues
-        const eventDateStr = event.startDateTime.substring(0, 10);
-        const dayDateStr = day.toISOString().split("T")[0];
-        return eventDateStr === dayDateStr;
+        // For all-day events, check if this day falls within the event's date range
+        const eventStartDateStr = event.startDateTime.substring(0, 10);
+        if (!event.endDateTime) {
+          // Single day event
+          return eventStartDateStr === dayDateStr;
+        }
+        // Multi-day event - check if day is within range (inclusive)
+        const eventEndDateStr = event.endDateTime.substring(0, 10);
+        return dayDateStr >= eventStartDateStr && dayDateStr <= eventEndDateStr;
       }
       const eventStart = new Date(event.startDateTime);
       return eventStart >= dayStart && eventStart <= dayEnd;
@@ -1518,8 +1587,22 @@ function MonthView({ events, categories, members, currentMonth, onMonthChange, o
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(date);
     dayEnd.setHours(23, 59, 59, 999);
+    
+    // Format day as YYYY-MM-DD for comparison with all-day events
+    const dayDateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
     return events.filter(event => {
+      if (event.isAllDay) {
+        // For all-day events, check if this day falls within the event's date range
+        const eventStartDateStr = event.startDateTime.substring(0, 10);
+        if (!event.endDateTime) {
+          // Single day event
+          return eventStartDateStr === dayDateStr;
+        }
+        // Multi-day event - check if day is within range (inclusive)
+        const eventEndDateStr = event.endDateTime.substring(0, 10);
+        return dayDateStr >= eventStartDateStr && dayDateStr <= eventEndDateStr;
+      }
       const eventStart = new Date(event.startDateTime);
       return eventStart >= dayStart && eventStart <= dayEnd;
     });
