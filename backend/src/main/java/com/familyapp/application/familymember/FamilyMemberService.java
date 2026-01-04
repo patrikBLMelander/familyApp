@@ -42,6 +42,13 @@ public class FamilyMemberService {
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found for device token"));
     }
 
+    @Transactional(readOnly = true)
+    public FamilyMember getMemberById(UUID memberId) {
+        return repository.findById(memberId)
+                .map(this::toDomain)
+                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+    }
+
     public FamilyMember createMember(String name, Role role, UUID familyId) {
         var now = OffsetDateTime.now();
         var entity = new FamilyMemberEntity();

@@ -80,7 +80,9 @@ public class DailyTaskController {
                 request.description(),
                 request.daysOfWeek(),
                 request.memberIds() != null ? request.memberIds() : Set.of(),
-                familyId
+                familyId,
+                request.isRequired() != null ? request.isRequired() : true,
+                request.xpPoints() != null ? request.xpPoints() : 10
         );
         return toResponse(task);
     }
@@ -97,7 +99,9 @@ public class DailyTaskController {
                 request.name(),
                 request.description(),
                 request.daysOfWeek(),
-                request.memberIds() != null ? request.memberIds() : Set.of()
+                request.memberIds() != null ? request.memberIds() : Set.of(),
+                request.isRequired() != null ? request.isRequired() : true,
+                request.xpPoints() != null ? request.xpPoints() : 10
         );
         return toResponse(task);
     }
@@ -167,7 +171,9 @@ public class DailyTaskController {
                 task.description(),
                 task.daysOfWeek(),
                 task.memberIds(),
-                task.position()
+                task.position(),
+                task.isRequired(),
+                task.xpPoints()
         );
     }
 
@@ -196,7 +202,9 @@ public class DailyTaskController {
             String name,
             String description,
             Set<DailyTask.DayOfWeek> daysOfWeek,
-            Set<UUID> memberIds
+            Set<UUID> memberIds,
+            Boolean isRequired,
+            Integer xpPoints
     ) {
     }
 
@@ -205,7 +213,9 @@ public class DailyTaskController {
             String name,
             String description,
             Set<DailyTask.DayOfWeek> daysOfWeek,
-            Set<UUID> memberIds
+            Set<UUID> memberIds,
+            Boolean isRequired,
+            Integer xpPoints
     ) {
     }
 
@@ -215,7 +225,9 @@ public class DailyTaskController {
             String description,
             Set<DailyTask.DayOfWeek> daysOfWeek,
             Set<UUID> memberIds,
-            int position
+            int position,
+            boolean isRequired,
+            int xpPoints
     ) {
     }
 

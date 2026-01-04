@@ -5,6 +5,7 @@ import com.familyapp.infrastructure.dailytask.DailyTaskCompletionEntity;
 import com.familyapp.infrastructure.dailytask.DailyTaskCompletionJpaRepository;
 import com.familyapp.infrastructure.dailytask.DailyTaskEntity;
 import com.familyapp.infrastructure.dailytask.DailyTaskJpaRepository;
+import com.familyapp.application.xp.XpService;
 import com.familyapp.infrastructure.familymember.FamilyMemberEntity;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
@@ -26,17 +27,20 @@ public class DailyTaskService {
     private final DailyTaskCompletionJpaRepository completionRepository;
     private final FamilyMemberJpaRepository memberRepository;
     private final FamilyJpaRepository familyRepository;
+    private final XpService xpService;
 
     public DailyTaskService(
             DailyTaskJpaRepository taskRepository,
             DailyTaskCompletionJpaRepository completionRepository,
             FamilyMemberJpaRepository memberRepository,
-            FamilyJpaRepository familyRepository
+            FamilyJpaRepository familyRepository,
+            XpService xpService
     ) {
         this.taskRepository = taskRepository;
         this.completionRepository = completionRepository;
         this.memberRepository = memberRepository;
         this.familyRepository = familyRepository;
+        this.xpService = xpService;
     }
 
     @Transactional(readOnly = true)
@@ -192,7 +196,7 @@ public class DailyTaskService {
                 .toList();
     }
 
-    public DailyTask createTask(String name, String description, Set<DailyTask.DayOfWeek> daysOfWeek, Set<UUID> memberIds, UUID familyId) {
+    public DailyTask createTask(String name, String description, Set<DailyTask.DayOfWeek> daysOfWeek, Set<UUID> memberIds, UUID familyId, boolean isRequired, int xpPoints) {
         var now = OffsetDateTime.now();
         var entity = new DailyTaskEntity();
         entity.setId(UUID.randomUUID());
@@ -223,6 +227,8 @@ public class DailyTaskService {
                 .max()
                 .orElse(-1);
         entity.setPosition(maxPosition + 1);
+        entity.setRequired(isRequired);
+        entity.setXpPoints(xpPoints);
         
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
@@ -231,7 +237,7 @@ public class DailyTaskService {
         return toDomain(saved);
     }
 
-    public DailyTask updateTask(UUID taskId, String name, String description, Set<DailyTask.DayOfWeek> daysOfWeek, Set<UUID> memberIds) {
+    public DailyTask updateTask(UUID taskId, String name, String description, Set<DailyTask.DayOfWeek> daysOfWeek, Set<UUID> memberIds, boolean isRequired, int xpPoints) {
         var entity = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Daily task not found: " + taskId));
         
@@ -253,6 +259,8 @@ public class DailyTaskService {
             entity.setMembers(members);
         }
         
+        entity.setRequired(isRequired);
+        entity.setXpPoints(xpPoints);
         entity.setUpdatedAt(OffsetDateTime.now());
         
         var saved = taskRepository.save(entity);
@@ -275,7 +283,11 @@ public class DailyTaskService {
         
         if (existing.isPresent()) {
             // Delete the completion (uncheck)
-            completionRepository.delete(existing.get());
+            var completion = existing.get();
+            var task = completion.getTask();
+            // Remove XP when unchecking
+            xpService.removeXp(memberId, task.getXpPoints());
+            completionRepository.delete(completion);
         } else {
             // Create a new completion (check)
             var task = taskRepository.findById(taskId)
@@ -292,6 +304,9 @@ public class DailyTaskService {
             completion.setCompletedAt(OffsetDateTime.now());
             
             completionRepository.save(completion);
+            
+            // Award XP when checking (only for children)
+            xpService.awardXp(memberId, task.getXpPoints());
         }
     }
 
@@ -337,6 +352,8 @@ public class DailyTaskService {
                 memberIds,
                 entity.getPosition(),
                 entity.getFamily() != null ? entity.getFamily().getId() : null,
+                entity.isRequired(),
+                entity.getXpPoints(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

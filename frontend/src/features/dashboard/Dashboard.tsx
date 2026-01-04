@@ -1,4 +1,4 @@
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers" | "childrenxp";
 
 type DashboardProps = {
   placeholder?: string;
@@ -40,6 +40,14 @@ export function Dashboard({ placeholder, onNavigate }: DashboardProps) {
         >
           <h2>Schema</h2>
           <p>Se familjens aktiviteter och events.</p>
+        </button>
+        <button
+          type="button"
+          className="card"
+          onClick={() => onNavigate?.("childrenxp")}
+        >
+          <h2>Barnens XP</h2>
+          <p>Se alla barns level, XP och framsteg.</p>
         </button>
       </section>
       {placeholder && <p className="placeholder-text">{placeholder}</p>}

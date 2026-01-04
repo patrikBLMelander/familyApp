@@ -391,7 +391,7 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
           <div className="daily-tasks-header">
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                {!isChild && onNavigate && (
+                {onNavigate && (
                   <button
                     type="button"
                     className="back-button"
@@ -470,6 +470,14 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
                           {taskWithCompletion.task.name}
                         </span>
                       </label>
+                      <p style={{ 
+                        margin: "4px 0 0 34px", 
+                        fontSize: "0.75rem", 
+                        color: "#a0a0a0",
+                        fontStyle: "italic"
+                      }}>
+                        {taskWithCompletion.task.isRequired ? "Obligatorisk" : "Extra"} • +{taskWithCompletion.task.xpPoints} XP
+                      </p>
                       {taskWithCompletion.task.description && (
                         <p className="daily-task-description">{taskWithCompletion.task.description}</p>
                       )}

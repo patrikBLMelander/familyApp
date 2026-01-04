@@ -1,4 +1,4 @@
-type ViewKey = "dailytasks";
+type ViewKey = "dailytasks" | "xp";
 
 type ChildDashboardProps = {
   onNavigate?: (view: ViewKey) => void;
@@ -57,17 +57,11 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         </button>
         <button
           type="button"
-          className="card"
-          style={{
-            background: "linear-gradient(135deg, #fff4e6 0%, #ffe8cc 100%)",
-            border: "1px solid rgba(255, 200, 150, 0.3)",
-            opacity: 0.7,
-            cursor: "not-allowed"
-          }}
-          disabled
+          className="card card-primary"
+          onClick={() => onNavigate?.("xp")}
         >
-          <h2>Få XP</h2>
-          <p>Kommer snart! Utför sysslor och få XP för att gå upp i level.</p>
+          <h2>Min XP</h2>
+          <p>Se din level, XP och badges! Utför sysslor för att få XP.</p>
         </button>
       </section>
     </div>

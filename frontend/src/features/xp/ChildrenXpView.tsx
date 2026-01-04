@@ -1,0 +1,428 @@
+import { useEffect, useState } from "react";
+import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/familyMembers";
+import { fetchMemberXpProgress, fetchMemberXpHistory, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
+
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers";
+
+type ChildrenXpViewProps = {
+  onNavigate?: (view: ViewKey) => void;
+};
+
+const MAX_LEVEL = 10;
+const XP_PER_LEVEL = 100;
+
+// Badge emojis for each level - themed by month
+const getLevelBadges = (): Record<number, string> => {
+  const month = new Date().getMonth() + 1; // 1-12
+  
+  if (month === 1) {
+    // Snow theme for January - each level has a unique snow-related emoji
+    return {
+      1: "❄️",
+      2: "🌨️",
+      3: "⛄",
+      4: "🧊",
+      5: "🎿",
+      6: "🛷",
+      7: "🧣",
+      8: "🧤",
+      9: "⛷️",
+      10: "🏔️"
+    };
+  }
+  
+  if (month === 2) {
+    // Love/Valentine theme for February
+    return {
+      1: "💝",
+      2: "💖",
+      3: "💗",
+      4: "💓",
+      5: "💕",
+      6: "💞",
+      7: "💟",
+      8: "🌹",
+      9: "💐",
+      10: "💍"
+    };
+  }
+  
+  if (month === 3) {
+    // Spring theme for March
+    return {
+      1: "🌱",
+      2: "🌿",
+      3: "🍀",
+      4: "🌷",
+      5: "🌻",
+      6: "🌸",
+      7: "🦋",
+      8: "🐝",
+      9: "🌞",
+      10: "🌈"
+    };
+  }
+  
+  // Default badges for other months
+  return {
+    1: "🌱",
+    2: "⭐",
+    3: "🌟",
+    4: "💫",
+    5: "✨",
+    6: "🎯",
+    7: "🏆",
+    8: "👑",
+    9: "💎",
+    10: "🌟"
+  };
+};
+
+const LEVEL_BADGES = getLevelBadges();
+
+type ChildXpData = {
+  member: FamilyMemberResponse;
+  progress: XpProgressResponse | null;
+  history: XpHistoryResponse[];
+  loading: boolean;
+  error: string | null;
+};
+
+export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
+  const [children, setChildren] = useState<FamilyMemberResponse[]>([]);
+  const [childrenXpData, setChildrenXpData] = useState<Map<string, ChildXpData>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const members = await fetchAllFamilyMembers();
+        const childrenMembers = members.filter(m => m.role === "CHILD");
+        setChildren(childrenMembers);
+
+        // Load XP data for each child
+        const xpDataMap = new Map<string, ChildXpData>();
+        
+        for (const child of childrenMembers) {
+          try {
+            const [progress, history] = await Promise.all([
+              fetchMemberXpProgress(child.id).catch(() => null),
+              fetchMemberXpHistory(child.id).catch(() => [])
+            ]);
+            
+            xpDataMap.set(child.id, {
+              member: child,
+              progress,
+              history,
+              loading: false,
+              error: null
+            });
+          } catch (e) {
+            xpDataMap.set(child.id, {
+              member: child,
+              progress: null,
+              history: [],
+              loading: false,
+              error: "Kunde inte ladda XP-data"
+            });
+          }
+        }
+
+        setChildrenXpData(xpDataMap);
+      } catch (e) {
+        console.error("Error loading children XP data:", e);
+        setError("Kunde inte ladda data.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void load();
+  }, []);
+
+  const monthNames = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
+
+  if (loading) {
+    return (
+      <div className="children-xp-view">
+        <div className="daily-tasks-header">
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              {onNavigate && (
+                <button
+                  type="button"
+                  className="back-button"
+                  onClick={() => onNavigate("dashboard")}
+                  aria-label="Tillbaka"
+                >
+                  ←
+                </button>
+              )}
+              <div style={{ flex: 1 }}>
+                <h2 className="view-title" style={{ margin: 0 }}>Barnens XP</h2>
+              </div>
+            </div>
+          </div>
+        </div>
+        <section className="card">
+          <p>Laddar...</p>
+        </section>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="children-xp-view">
+        <div className="daily-tasks-header">
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              {onNavigate && (
+                <button
+                  type="button"
+                  className="back-button"
+                  onClick={() => onNavigate("dashboard")}
+                  aria-label="Tillbaka"
+                >
+                  ←
+                </button>
+              )}
+              <div style={{ flex: 1 }}>
+                <h2 className="view-title" style={{ margin: 0 }}>Barnens XP</h2>
+              </div>
+            </div>
+          </div>
+        </div>
+        <section className="card">
+          <p className="error-text">{error}</p>
+        </section>
+      </div>
+    );
+  }
+
+  if (children.length === 0) {
+    return (
+      <div className="children-xp-view">
+        <div className="daily-tasks-header">
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              {onNavigate && (
+                <button
+                  type="button"
+                  className="back-button"
+                  onClick={() => onNavigate("dashboard")}
+                  aria-label="Tillbaka"
+                >
+                  ←
+                </button>
+              )}
+              <div style={{ flex: 1 }}>
+                <h2 className="view-title" style={{ margin: 0 }}>Barnens XP</h2>
+              </div>
+            </div>
+          </div>
+        </div>
+        <section className="card">
+          <p className="placeholder-text">Inga barn i familjen än.</p>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="children-xp-view">
+      <div className="daily-tasks-header">
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {onNavigate && (
+              <button
+                type="button"
+                className="back-button"
+                onClick={() => onNavigate("dashboard")}
+                aria-label="Tillbaka"
+              >
+                ←
+              </button>
+            )}
+            <div style={{ flex: 1 }}>
+              <h2 className="view-title" style={{ margin: 0 }}>Barnens XP</h2>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {children.map((child) => {
+          const xpData = childrenXpData.get(child.id);
+          const progress = xpData?.progress;
+          const history = xpData?.history || [];
+
+          if (!progress) {
+            return (
+              <section key={child.id} className="card">
+                <h3 style={{ marginTop: 0, marginBottom: "8px", fontSize: "1rem", fontWeight: 600 }}>
+                  {child.name}
+                </h3>
+                <p style={{ margin: 0, color: "#6b6b6b", fontSize: "0.9rem" }}>
+                  {xpData?.error || "Ingen XP-data än"}
+                </p>
+              </section>
+            );
+          }
+
+          const progressPercentage = (progress.xpInCurrentLevel / XP_PER_LEVEL) * 100;
+
+          return (
+            <section key={child.id} className="card" style={{ 
+              background: "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)",
+              border: "2px solid rgba(184, 230, 184, 0.3)"
+            }}>
+              <h3 style={{ marginTop: 0, marginBottom: "16px", fontSize: "1.1rem", fontWeight: 600 }}>
+                {child.name}
+              </h3>
+
+              <div style={{ textAlign: "center", marginBottom: "20px" }}>
+                <div style={{ fontSize: "2.5rem", marginBottom: "6px" }}>
+                  {LEVEL_BADGES[progress.currentLevel] || "⭐"}
+                </div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#2d5a2d", marginBottom: "4px" }}>
+                  Level {progress.currentLevel}
+                </div>
+                <div style={{ fontSize: "0.95rem", color: "#6b6b6b" }}>
+                  {progress.currentXp} XP • {monthNames[progress.month - 1]} {progress.year}
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  marginBottom: "8px",
+                  fontSize: "0.8rem",
+                  color: "#6b6b6b",
+                  flexWrap: "wrap",
+                  gap: "4px"
+                }}>
+                  <span>Progress till Level {Math.min(progress.currentLevel + 1, MAX_LEVEL)}</span>
+                  <span>{progress.xpInCurrentLevel} / {XP_PER_LEVEL} XP</span>
+                </div>
+                <div style={{
+                  width: "100%",
+                  height: "20px",
+                  background: "rgba(200, 190, 180, 0.2)",
+                  borderRadius: "10px",
+                  overflow: "hidden",
+                  position: "relative"
+                }}>
+                  <div style={{
+                    width: `${progressPercentage}%`,
+                    height: "100%",
+                    background: "linear-gradient(90deg, rgba(184, 230, 184, 0.8) 0%, rgba(184, 230, 184, 1) 100%)",
+                    borderRadius: "10px",
+                    transition: "width 0.3s ease"
+                  }} />
+                </div>
+                {progress.currentLevel < MAX_LEVEL && (
+                  <p style={{ 
+                    margin: "6px 0 0", 
+                    fontSize: "0.8rem", 
+                    color: "#6b6b6b",
+                    textAlign: "center"
+                  }}>
+                    {progress.xpForNextLevel} XP kvar
+                  </p>
+                )}
+              </div>
+
+              {/* Stats */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "12px",
+                marginTop: "16px",
+                paddingTop: "16px",
+                borderTop: "1px solid rgba(200, 190, 180, 0.3)"
+              }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "#2d5a2d" }}>
+                    {progress.totalTasksCompleted}
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#6b6b6b" }}>
+                    Sysslor klara
+                  </div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "#2d5a2d" }}>
+                    {progress.currentXp}
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#6b6b6b" }}>
+                    Total XP
+                  </div>
+                </div>
+              </div>
+
+              {/* History */}
+              {history.length > 0 && (
+                <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid rgba(200, 190, 180, 0.3)" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "12px", color: "#6b6b6b" }}>
+                    Tidigare månader
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {history.map((h) => {
+                      const monthBadges = getBadgesForMonth(h.month);
+                      const historyBadge = monthBadges[Math.min(h.finalLevel, MAX_LEVEL)] || "⭐";
+                      return (
+                        <div
+                          key={`${h.year}-${h.month}`}
+                          style={{
+                            padding: "12px",
+                            background: "rgba(240, 240, 240, 0.3)",
+                            borderRadius: "8px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            fontSize: "0.85rem"
+                          }}
+                        >
+                          <div style={{ 
+                            fontSize: "1.5rem",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: "32px"
+                          }}>
+                            {historyBadge}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, marginBottom: "2px", color: "#2d5a2d" }}>
+                              {monthNames[h.month - 1]} {h.year}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>
+                              {h.totalTasksCompleted} sysslor klara
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontWeight: 700, color: "#2d5a2d", fontSize: "0.9rem" }}>
+                              Level {h.finalLevel}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>
+                              {h.finalXp} XP
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+

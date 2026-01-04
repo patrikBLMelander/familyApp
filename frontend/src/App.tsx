@@ -9,12 +9,14 @@ import { InviteView } from "./features/invite/InviteView";
 import { CalendarView } from "./features/calendar/CalendarView";
 import { ChildTestView } from "./features/debug/ChildTestView";
 import { LoginRegisterView } from "./features/auth/LoginRegisterView";
+import { XpDashboard } from "./features/xp/XpDashboard";
+import { ChildrenXpView } from "./features/xp/ChildrenXpView";
 import { useIsChild } from "./shared/hooks/useIsChild";
 import { getFamily } from "./shared/api/family";
 import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers" | "invite" | "childtest" | "login";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp";
 
 export function App() {
   const [currentView, setCurrentView] = useState<ViewKey>("login");
@@ -128,6 +130,8 @@ export function App() {
       switch (currentView) {
         case "dailytasks":
           return <DailyTasksView onNavigate={handleNavigate} />;
+        case "xp":
+          return <XpDashboard onNavigate={handleNavigate} />;
         case "dashboard":
         default:
           return <ChildDashboard onNavigate={handleNavigate} childName={childMember?.name} onLogout={handleLogout} />;
@@ -157,6 +161,10 @@ export function App() {
         return <CalendarView onNavigate={handleNavigate} />;
       case "chores":
         return <Dashboard placeholder="Sysslor-vy kommer här." onNavigate={handleNavigate} />;
+      case "xp":
+        return <XpDashboard onNavigate={handleNavigate} />;
+      case "childrenxp":
+        return <ChildrenXpView onNavigate={handleNavigate} />;
       case "dashboard":
       default:
         return <Dashboard onNavigate={handleNavigate} />;

@@ -36,6 +36,8 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
   const [formDescription, setFormDescription] = useState("");
   const [formDays, setFormDays] = useState<Set<DayOfWeek>>(new Set());
   const [formMemberIds, setFormMemberIds] = useState<Set<string>>(new Set());
+  const [formIsRequired, setFormIsRequired] = useState(true);
+  const [formXpPoints, setFormXpPoints] = useState(10);
 
   useEffect(() => {
     const load = async () => {
@@ -68,13 +70,17 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
         formName.trim(),
         formDescription.trim() || null,
         Array.from(formDays),
-        formMemberIds.size > 0 ? Array.from(formMemberIds) : undefined
+        formMemberIds.size > 0 ? Array.from(formMemberIds) : undefined,
+        formIsRequired,
+        formXpPoints
       );
       setTasks((prev) => [...prev, created].sort((a, b) => a.position - b.position));
       setFormName("");
       setFormDescription("");
       setFormDays(new Set());
       setFormMemberIds(new Set());
+      setFormIsRequired(true);
+      setFormXpPoints(10);
       setShowCreateForm(false);
       setError(null);
     } catch {
@@ -94,7 +100,9 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
         formName.trim(),
         formDescription.trim() || null,
         Array.from(formDays),
-        formMemberIds.size > 0 ? Array.from(formMemberIds) : undefined
+        formMemberIds.size > 0 ? Array.from(formMemberIds) : undefined,
+        formIsRequired,
+        formXpPoints
       );
       setTasks((prev) =>
         prev.map((t) => (t.id === updated.id ? updated : t)).sort((a, b) => a.position - b.position)
@@ -104,6 +112,8 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
       setFormDescription("");
       setFormDays(new Set());
       setFormMemberIds(new Set());
+      setFormIsRequired(true);
+      setFormXpPoints(10);
       setError(null);
     } catch {
       setError("Kunde inte uppdatera syssla.");
@@ -129,6 +139,8 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
     setFormDescription(task.description || "");
     setFormDays(new Set(task.daysOfWeek));
     setFormMemberIds(new Set(task.memberIds || []));
+    setFormIsRequired(task.isRequired);
+    setFormXpPoints(task.xpPoints);
     setShowCreateForm(false);
   };
 
@@ -139,6 +151,8 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
     setFormDescription("");
     setFormDays(new Set());
     setFormMemberIds(new Set());
+    setFormIsRequired(true);
+    setFormXpPoints(10);
   };
 
   const toggleMember = (memberId: string) => {
@@ -287,6 +301,63 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
                 </div>
               )}
             </div>
+            <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid rgba(200, 190, 180, 0.3)" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                <input
+                  type="checkbox"
+                  checked={formIsRequired}
+                  onChange={(e) => setFormIsRequired(e.target.checked)}
+                />
+                <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                  Obligatorisk för skärmtid
+                </span>
+              </label>
+              <div style={{ marginTop: "12px" }}>
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "0.9rem", fontWeight: 500 }}>
+                  XP-poäng
+                </label>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  {[10, 20, 30].map((points) => (
+                    <button
+                      key={points}
+                      type="button"
+                      onClick={() => setFormXpPoints(points)}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: "8px",
+                        border: formXpPoints === points 
+                          ? "2px solid #b8e6b8" 
+                          : "1px solid rgba(200, 190, 180, 0.5)",
+                        background: formXpPoints === points 
+                          ? "rgba(184, 230, 184, 0.3)" 
+                          : "transparent",
+                        color: formXpPoints === points ? "#2d5a2d" : "#6b6b6b",
+                        fontWeight: formXpPoints === points ? 600 : 400,
+                        cursor: "pointer",
+                        fontSize: "0.9rem"
+                      }}
+                    >
+                      {points} XP
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={formXpPoints}
+                    onChange={(e) => setFormXpPoints(parseInt(e.target.value) || 10)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(200, 190, 180, 0.5)",
+                      width: "80px",
+                      fontSize: "0.9rem"
+                    }}
+                    placeholder="Anpassat"
+                  />
+                </div>
+              </div>
+            </div>
             <div className="daily-task-form-actions">
               <button type="button" onClick={handleCreate} className="todo-action-button">
                 Skapa
@@ -380,6 +451,63 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
                         </div>
                       )}
                     </div>
+                    <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid rgba(200, 190, 180, 0.3)" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                        <input
+                          type="checkbox"
+                          checked={formIsRequired}
+                          onChange={(e) => setFormIsRequired(e.target.checked)}
+                        />
+                        <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                          Obligatorisk för skärmtid
+                        </span>
+                      </label>
+                      <div style={{ marginTop: "12px" }}>
+                        <label style={{ display: "block", marginBottom: "8px", fontSize: "0.9rem", fontWeight: 500 }}>
+                          XP-poäng
+                        </label>
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                          {[10, 20, 30].map((points) => (
+                            <button
+                              key={points}
+                              type="button"
+                              onClick={() => setFormXpPoints(points)}
+                              style={{
+                                padding: "8px 16px",
+                                borderRadius: "8px",
+                                border: formXpPoints === points 
+                                  ? "2px solid #b8e6b8" 
+                                  : "1px solid rgba(200, 190, 180, 0.5)",
+                                background: formXpPoints === points 
+                                  ? "rgba(184, 230, 184, 0.3)" 
+                                  : "transparent",
+                                color: formXpPoints === points ? "#2d5a2d" : "#6b6b6b",
+                                fontWeight: formXpPoints === points ? 600 : 400,
+                                cursor: "pointer",
+                                fontSize: "0.9rem"
+                              }}
+                            >
+                              {points} XP
+                            </button>
+                          ))}
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={formXpPoints}
+                            onChange={(e) => setFormXpPoints(parseInt(e.target.value) || 10)}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              border: "1px solid rgba(200, 190, 180, 0.5)",
+                              width: "80px",
+                              fontSize: "0.9rem"
+                            }}
+                            placeholder="Anpassat"
+                          />
+                        </div>
+                      </div>
+                    </div>
                     <div className="daily-task-form-actions">
                       <button
                         type="button"
@@ -401,7 +529,29 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
                   <>
                     <div className="daily-task-admin-content">
                       <div>
-                        <h4>{task.name}</h4>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                          <h4 style={{ margin: 0 }}>{task.name}</h4>
+                          <span style={{
+                            fontSize: "0.75rem",
+                            padding: "2px 8px",
+                            borderRadius: "12px",
+                            background: "rgba(200, 190, 180, 0.2)",
+                            color: "#6b6b6b",
+                            fontWeight: 600
+                          }}>
+                            {task.isRequired ? "Obligatorisk" : "Extra"}
+                          </span>
+                          <span style={{
+                            fontSize: "0.75rem",
+                            padding: "2px 8px",
+                            borderRadius: "12px",
+                            background: "rgba(184, 230, 184, 0.3)",
+                            color: "#2d5a2d",
+                            fontWeight: 600
+                          }}>
+                            +{task.xpPoints} XP
+                          </span>
+                        </div>
                         {task.description && <p className="daily-task-description">{task.description}</p>}
                         <div className="daily-task-days-display">
                           {task.daysOfWeek.length === 7 ? (

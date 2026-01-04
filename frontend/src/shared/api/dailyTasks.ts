@@ -9,6 +9,8 @@ export type DailyTaskResponse = {
   daysOfWeek: DayOfWeek[];
   memberIds: string[];
   position: number;
+  isRequired: boolean;
+  xpPoints: number;
 };
 
 export type DailyTaskWithCompletionResponse = {
@@ -53,12 +55,21 @@ export async function createDailyTask(
   name: string,
   description: string | null,
   daysOfWeek: DayOfWeek[],
-  memberIds?: string[]
+  memberIds?: string[],
+  isRequired?: boolean,
+  xpPoints?: number
 ): Promise<DailyTaskResponse> {
   const response = await fetch(`${API_BASE_URL}/daily-tasks`, {
     method: "POST",
     headers: getHeaders(),
-    body: JSON.stringify({ name, description, daysOfWeek, memberIds: memberIds || [] })
+    body: JSON.stringify({ 
+      name, 
+      description, 
+      daysOfWeek, 
+      memberIds: memberIds || [],
+      isRequired: isRequired !== undefined ? isRequired : true,
+      xpPoints: xpPoints !== undefined ? xpPoints : 10
+    })
   });
   return handleJson<DailyTaskResponse>(response);
 }
@@ -68,12 +79,21 @@ export async function updateDailyTask(
   name: string,
   description: string | null,
   daysOfWeek: DayOfWeek[],
-  memberIds?: string[]
+  memberIds?: string[],
+  isRequired?: boolean,
+  xpPoints?: number
 ): Promise<DailyTaskResponse> {
   const response = await fetch(`${API_BASE_URL}/daily-tasks/${taskId}`, {
     method: "PATCH",
     headers: getHeaders(),
-    body: JSON.stringify({ name, description, daysOfWeek, memberIds: memberIds || [] })
+    body: JSON.stringify({ 
+      name, 
+      description, 
+      daysOfWeek, 
+      memberIds: memberIds || [],
+      isRequired: isRequired !== undefined ? isRequired : true,
+      xpPoints: xpPoints !== undefined ? xpPoints : 10
+    })
   });
   return handleJson<DailyTaskResponse>(response);
 }

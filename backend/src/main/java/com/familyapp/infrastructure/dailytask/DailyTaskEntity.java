@@ -52,6 +52,12 @@ public class DailyTaskEntity {
     @Column(name = "position", nullable = false)
     private int position;
 
+    @Column(name = "is_required", nullable = false)
+    private boolean isRequired;
+
+    @Column(name = "xp_points", nullable = false)
+    private int xpPoints;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "family_id")
     @Convert(converter = UuidConverter.class)
@@ -190,6 +196,22 @@ public class DailyTaskEntity {
 
     public void setMembers(List<FamilyMemberEntity> members) {
         this.members = members;
+    }
+
+    public boolean isRequired() {
+        return isRequired;
+    }
+
+    public void setRequired(boolean required) {
+        isRequired = required;
+    }
+
+    public int getXpPoints() {
+        return xpPoints;
+    }
+
+    public void setXpPoints(int xpPoints) {
+        this.xpPoints = xpPoints;
     }
 }
 

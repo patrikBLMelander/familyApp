@@ -12,6 +12,8 @@ public record DailyTask(
         Set<java.util.UUID> memberIds, // Empty set means applies to all members
         int position,
         java.util.UUID familyId,
+        boolean isRequired, // Required for screen time
+        int xpPoints, // XP points awarded when completed
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {
