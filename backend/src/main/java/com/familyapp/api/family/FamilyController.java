@@ -4,28 +4,18 @@ import com.familyapp.application.family.FamilyService;
 import com.familyapp.domain.family.Family;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/families")
-@CrossOrigin(origins = {"https://familyapp-frontend-production.up.railway.app", "http://localhost:3000", "http://localhost:5173"}, 
-             allowedHeaders = "*", 
-             allowCredentials = "true",
-             methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS, RequestMethod.PATCH})
 public class FamilyController {
 
     private final FamilyService service;
 
     public FamilyController(FamilyService service) {
         this.service = service;
-    }
-
-    @RequestMapping(value = "/register", method = RequestMethod.OPTIONS)
-    public ResponseEntity<?> handleOptions() {
-        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/register")

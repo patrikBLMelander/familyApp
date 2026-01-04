@@ -7,8 +7,14 @@
     <script>
       // Set API base URL from Railway environment variable at runtime
       // Railway injects environment variables, but we need to make them available to the app
+      // Default to localhost for local development
+      const isLocalhost = window.location.hostname === 'localhost' || 
+                          window.location.hostname === '127.0.0.1' ||
+                          window.location.hostname === '';
       window.APP_CONFIG = {
-        API_BASE_URL: 'https://backend-production-5c57.up.railway.app/api/v1'
+        API_BASE_URL: isLocalhost 
+          ? 'http://localhost:8080/api/v1'
+          : 'https://backend-production-5c57.up.railway.app/api/v1'
       };
     </script>
   </head>

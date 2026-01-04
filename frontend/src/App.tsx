@@ -6,6 +6,7 @@ import { DailyTasksView } from "./features/dailytasks/DailyTasksView";
 import { DailyTasksAdminView } from "./features/dailytasks/DailyTasksAdminView";
 import { FamilyMembersView } from "./features/familymembers/FamilyMembersView";
 import { InviteView } from "./features/invite/InviteView";
+import { CalendarView } from "./features/calendar/CalendarView";
 import { ChildTestView } from "./features/debug/ChildTestView";
 import { LoginRegisterView } from "./features/auth/LoginRegisterView";
 import { useIsChild } from "./shared/hooks/useIsChild";
@@ -148,7 +149,7 @@ export function App() {
       case "familymembers":
         return <FamilyMembersView onNavigate={handleNavigate} />;
       case "schedule":
-        return <Dashboard placeholder="Schema-vy kommer här." onNavigate={handleNavigate} />;
+        return <CalendarView onNavigate={handleNavigate} />;
       case "chores":
         return <Dashboard placeholder="Sysslor-vy kommer här." onNavigate={handleNavigate} />;
       case "dashboard":

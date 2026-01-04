@@ -36,11 +36,10 @@ export function Dashboard({ placeholder, onNavigate }: DashboardProps) {
         <button
           type="button"
           className="card"
-          disabled
-          style={{ opacity: 0.5, cursor: "not-allowed" }}
+          onClick={() => onNavigate?.("schedule")}
         >
           <h2>Schema</h2>
-          <p>Kommer snart</p>
+          <p>Se familjens aktiviteter och events.</p>
         </button>
       </section>
       {placeholder && <p className="placeholder-text">{placeholder}</p>}

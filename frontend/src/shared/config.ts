@@ -16,6 +16,10 @@ function getApiBaseUrl(): string {
   // Third, try to infer from current location (for production)
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
+    // If we're on localhost, use local backend
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '') {
+      return 'http://localhost:8080/api/v1';
+    }
     // If we're on Railway frontend, use Railway backend
     if (hostname.includes('railway.app') || hostname.includes('railway')) {
       // Try to infer backend URL from frontend URL
