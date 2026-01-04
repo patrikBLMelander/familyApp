@@ -139,7 +139,12 @@ export function App() {
       case "invite":
         return <InviteView />;
       case "childtest":
-        return <ChildTestView />;
+        // Only show in development
+        if (import.meta.env.DEV) {
+          return <ChildTestView />;
+        }
+        // In production, redirect to dashboard
+        return null;
       case "todos":
         return <TodoListsView onNavigate={handleNavigate} />;
       case "dailytasks":

@@ -75,7 +75,6 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
           }
           
           const memberId = await getMemberIdFromToken(deviceToken);
-          console.log("Loading tasks for child, memberId:", memberId, "deviceToken:", deviceToken);
           
           if (!memberId) {
             console.error("Could not get memberId from device token");
@@ -85,7 +84,6 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
           }
           
           const data = await fetchTasksForToday(memberId);
-          console.log("Tasks loaded for child:", data);
           setTasks(data);
         } else {
           // For parents, load tasks with all members' completion info

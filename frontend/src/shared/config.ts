@@ -34,8 +34,8 @@ function getApiBaseUrl(): string {
 
 export const API_BASE_URL = getApiBaseUrl();
 
-// Debug: log the API URL being used (always, for troubleshooting)
-console.log('API Base URL:', API_BASE_URL);
-console.log('Window APP_CONFIG:', typeof window !== 'undefined' ? (window as any).APP_CONFIG : 'N/A');
-console.log('Vite env VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
+// Debug: log the API URL being used (only in development)
+if (import.meta.env.DEV) {
+  console.log('API Base URL:', API_BASE_URL);
+}
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   fetchTasksForToday,
   toggleTaskCompletion,
@@ -22,18 +22,25 @@ export function FamilyModeView({ onToggle }: FamilyModeViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [celebrations, setCelebrations] = useState<Map<string, boolean>>(new Map());
+  const [isLoading, setIsLoading] = useState(false);
+  const [togglingTasks, setTogglingTasks] = useState<Set<string>>(new Set());
+  const isLoadingRef = useRef(false);
+  const togglingTasksRef = useRef<Set<string>>(new Set());
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   useEffect(() => {
-    void loadData();
-    // Refresh every 30 seconds to keep data up to date
-    const interval = setInterval(() => {
-      void loadData();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    togglingTasksRef.current = togglingTasks;
+  }, [togglingTasks]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (isLoading) return; // Prevent concurrent loads
+    
     try {
+      setIsLoading(true);
       setLoading(true);
       const membersData = await fetchAllFamilyMembers();
       
@@ -54,24 +61,25 @@ export function FamilyModeView({ onToggle }: FamilyModeViewProps) {
           });
 
           // Show celebration if all tasks are completed and we haven't shown it yet
-          if (allCompleted && tasks.length > 0 && !celebrations.get(member.id)) {
-            setCelebrations(prev => new Map(prev).set(member.id, true));
-            // Hide celebration after 6 seconds
-            setTimeout(() => {
-              setCelebrations(prev => {
-                const newMap = new Map(prev);
-                newMap.delete(member.id);
-                return newMap;
-              });
-            }, 6000);
-          } else if (!allCompleted) {
-            // Reset celebration state if tasks are unchecked
-            setCelebrations(prev => {
-              const newMap = new Map(prev);
+          // Use functional update to avoid dependency on celebrations state
+          setCelebrations(prev => {
+            const newMap = new Map(prev);
+            if (allCompleted && tasks.length > 0 && !newMap.get(member.id)) {
+              newMap.set(member.id, true);
+              // Hide celebration after 6 seconds
+              setTimeout(() => {
+                setCelebrations(prevCeleb => {
+                  const newCelebMap = new Map(prevCeleb);
+                  newCelebMap.delete(member.id);
+                  return newCelebMap;
+                });
+              }, 6000);
+            } else if (!allCompleted) {
+              // Reset celebration state if tasks are unchecked
               newMap.delete(member.id);
-              return newMap;
-            });
-          }
+            }
+            return newMap;
+          });
         } catch (e) {
           console.error(`Error loading tasks for ${member.name}:`, e);
         }
@@ -83,17 +91,106 @@ export function FamilyModeView({ onToggle }: FamilyModeViewProps) {
       setError("Kunde inte ladda data.");
     } finally {
       setLoading(false);
+      setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+    // Refresh every 60 seconds to keep data up to date (increased from 30 to reduce unnecessary reloads)
+    const interval = setInterval(() => {
+      // Only refresh if not currently loading and no toggles in progress
+      if (!isLoadingRef.current && togglingTasksRef.current.size === 0) {
+        void loadData();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   const handleToggle = async (taskId: string, memberId: string) => {
+    const toggleKey = `${taskId}-${memberId}`;
+    
+    // Prevent double-clicks/touches
+    if (togglingTasks.has(toggleKey)) {
+      return;
+    }
+
     try {
+      setTogglingTasks(prev => new Set(prev).add(toggleKey));
+      
+      // Optimistic update
+      setMemberTasks(prev => {
+        const newMap = new Map(prev);
+        const memberData = newMap.get(memberId);
+        if (memberData) {
+          const updatedTasks = memberData.tasks.map(t => 
+            t.task.id === taskId 
+              ? { ...t, completed: !t.completed }
+              : t
+          );
+          const allCompleted = updatedTasks.length > 0 && updatedTasks.every(t => t.completed);
+          newMap.set(memberId, {
+            ...memberData,
+            tasks: updatedTasks,
+            allCompleted
+          });
+        }
+        return newMap;
+      });
+
       await toggleTaskCompletion(taskId, memberId);
-      // Reload data after toggle
-      await loadData();
+      
+      // Reload only this member's data instead of all data
+      try {
+        const tasks = await fetchTasksForToday(memberId);
+        const allCompleted = tasks.length > 0 && tasks.every(t => t.completed);
+        
+        setMemberTasks(prev => {
+          const newMap = new Map(prev);
+          const memberData = newMap.get(memberId);
+          if (memberData) {
+            newMap.set(memberId, {
+              ...memberData,
+              tasks,
+              allCompleted
+            });
+          }
+          return newMap;
+        });
+
+        // Show celebration if all tasks are completed
+        if (allCompleted && tasks.length > 0 && !celebrations.get(memberId)) {
+          setCelebrations(prev => new Map(prev).set(memberId, true));
+          setTimeout(() => {
+            setCelebrations(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(memberId);
+              return newMap;
+            });
+          }, 6000);
+        } else if (!allCompleted) {
+          setCelebrations(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(memberId);
+            return newMap;
+          });
+        }
+      } catch (e) {
+        console.error(`Error reloading tasks for member ${memberId}:`, e);
+        // Fallback to full reload on error
+        await loadData();
+      }
     } catch (e) {
       console.error("Error toggling task:", e);
       setError("Kunde inte uppdatera syssla.");
+      // Revert optimistic update on error
+      await loadData();
+    } finally {
+      setTogglingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(toggleKey);
+        return newSet;
+      });
     }
   };
 
@@ -193,23 +290,36 @@ export function FamilyModeView({ onToggle }: FamilyModeViewProps) {
                         </p>
                       ) : (
                         <ul className="daily-tasks-list" style={{ margin: 0 }}>
-                          {tasks.map((taskWithCompletion) => (
-                            <li key={`${parent.id}-${taskWithCompletion.task.id}`} className="daily-task-item">
-                              <label className="daily-task-label">
-                                <input
-                                  type="checkbox"
-                                  checked={taskWithCompletion.completed}
-                                  onChange={() => void handleToggle(taskWithCompletion.task.id, parent.id)}
-                                />
-                                <span className={taskWithCompletion.completed ? "daily-task-done" : ""}>
-                                  {taskWithCompletion.task.name}
-                                </span>
-                              </label>
-                              {taskWithCompletion.task.description && (
-                                <p className="daily-task-description">{taskWithCompletion.task.description}</p>
-                              )}
-                            </li>
-                          ))}
+                          {tasks.map((taskWithCompletion) => {
+                            const toggleKey = `${taskWithCompletion.task.id}-${parent.id}`;
+                            const isToggling = togglingTasks.has(toggleKey);
+                            
+                            return (
+                              <li key={`${parent.id}-${taskWithCompletion.task.id}`} className="daily-task-item">
+                                <label className="daily-task-label">
+                                  <input
+                                    type="checkbox"
+                                    checked={taskWithCompletion.completed}
+                                    disabled={isToggling}
+                                    onChange={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      void handleToggle(taskWithCompletion.task.id, parent.id);
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                  />
+                                  <span className={taskWithCompletion.completed ? "daily-task-done" : ""}>
+                                    {taskWithCompletion.task.name}
+                                  </span>
+                                </label>
+                                {taskWithCompletion.task.description && (
+                                  <p className="daily-task-description">{taskWithCompletion.task.description}</p>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
                     </div>
@@ -278,23 +388,36 @@ export function FamilyModeView({ onToggle }: FamilyModeViewProps) {
                         </p>
                       ) : (
                         <ul className="daily-tasks-list" style={{ margin: 0 }}>
-                          {tasks.map((taskWithCompletion) => (
-                            <li key={`${child.id}-${taskWithCompletion.task.id}`} className="daily-task-item">
-                              <label className="daily-task-label">
-                                <input
-                                  type="checkbox"
-                                  checked={taskWithCompletion.completed}
-                                  onChange={() => void handleToggle(taskWithCompletion.task.id, child.id)}
-                                />
-                                <span className={taskWithCompletion.completed ? "daily-task-done" : ""}>
-                                  {taskWithCompletion.task.name}
-                                </span>
-                              </label>
-                              {taskWithCompletion.task.description && (
-                                <p className="daily-task-description">{taskWithCompletion.task.description}</p>
-                              )}
-                            </li>
-                          ))}
+                          {tasks.map((taskWithCompletion) => {
+                            const toggleKey = `${taskWithCompletion.task.id}-${child.id}`;
+                            const isToggling = togglingTasks.has(toggleKey);
+                            
+                            return (
+                              <li key={`${child.id}-${taskWithCompletion.task.id}`} className="daily-task-item">
+                                <label className="daily-task-label">
+                                  <input
+                                    type="checkbox"
+                                    checked={taskWithCompletion.completed}
+                                    disabled={isToggling}
+                                    onChange={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      void handleToggle(taskWithCompletion.task.id, child.id);
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                  />
+                                  <span className={taskWithCompletion.completed ? "daily-task-done" : ""}>
+                                    {taskWithCompletion.task.name}
+                                  </span>
+                                </label>
+                                {taskWithCompletion.task.description && (
+                                  <p className="daily-task-description">{taskWithCompletion.task.description}</p>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
                     </div>
