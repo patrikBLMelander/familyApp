@@ -9,7 +9,7 @@ type ChildrenXpViewProps = {
 };
 
 const MAX_LEVEL = 10;
-const XP_PER_LEVEL = 100;
+const XP_PER_LEVEL = 12;
 
 // Badge emojis for each level - themed by month
 const getLevelBadges = (): Record<number, string> => {

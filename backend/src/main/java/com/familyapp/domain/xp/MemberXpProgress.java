@@ -15,14 +15,14 @@ public record MemberXpProgress(
         OffsetDateTime updatedAt
 ) {
     public static final int MAX_LEVEL = 10;
-    public static final int XP_PER_LEVEL = 100;
+    public static final int XP_PER_LEVEL = 12;
 
     /**
      * Calculate level based on XP (1-10)
-     * Level 1: 0-99 XP
-     * Level 2: 100-199 XP
+     * Level 1: 0-11 XP
+     * Level 2: 12-23 XP
      * ...
-     * Level 10: 900-999 XP
+     * Level 10: 108-119 XP
      */
     public static int calculateLevel(int xp) {
         int level = (xp / XP_PER_LEVEL) + 1;
@@ -40,7 +40,7 @@ public record MemberXpProgress(
     }
 
     /**
-     * Get XP progress within current level (0-99)
+     * Get XP progress within current level (0-11)
      */
     public int getXpInCurrentLevel() {
         return currentXp % XP_PER_LEVEL;

@@ -37,7 +37,7 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
   const [formDays, setFormDays] = useState<Set<DayOfWeek>>(new Set());
   const [formMemberIds, setFormMemberIds] = useState<Set<string>>(new Set());
   const [formIsRequired, setFormIsRequired] = useState(true);
-  const [formXpPoints, setFormXpPoints] = useState(10);
+  const [formXpPoints, setFormXpPoints] = useState(1);
 
   useEffect(() => {
     const load = async () => {
@@ -80,7 +80,7 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
       setFormDays(new Set());
       setFormMemberIds(new Set());
       setFormIsRequired(true);
-      setFormXpPoints(10);
+      setFormXpPoints(1);
       setShowCreateForm(false);
       setError(null);
     } catch {
@@ -113,7 +113,7 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
       setFormDays(new Set());
       setFormMemberIds(new Set());
       setFormIsRequired(true);
-      setFormXpPoints(10);
+      setFormXpPoints(1);
       setError(null);
     } catch {
       setError("Kunde inte uppdatera syssla.");
@@ -317,7 +317,7 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
                   XP-poäng
                 </label>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  {[10, 20, 30].map((points) => (
+                  {[1, 2, 3].map((points) => (
                     <button
                       key={points}
                       type="button"
@@ -345,7 +345,7 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
                     min="1"
                     max="100"
                     value={formXpPoints}
-                    onChange={(e) => setFormXpPoints(parseInt(e.target.value) || 10)}
+                    onChange={(e) => setFormXpPoints(parseInt(e.target.value) || 1)}
                     style={{
                       padding: "8px 12px",
                       borderRadius: "8px",
@@ -467,7 +467,7 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
                           XP-poäng
                         </label>
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                          {[10, 20, 30].map((points) => (
+                          {[1, 2, 3].map((points) => (
                             <button
                               key={points}
                               type="button"
@@ -495,7 +495,7 @@ export function DailyTasksAdminView({ onNavigate }: DailyTasksAdminViewProps) {
                             min="1"
                             max="100"
                             value={formXpPoints}
-                            onChange={(e) => setFormXpPoints(parseInt(e.target.value) || 10)}
+                            onChange={(e) => setFormXpPoints(parseInt(e.target.value) || 1)}
                             style={{
                               padding: "8px 12px",
                               borderRadius: "8px",

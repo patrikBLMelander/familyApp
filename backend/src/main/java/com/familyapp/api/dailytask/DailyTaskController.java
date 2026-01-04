@@ -82,7 +82,7 @@ public class DailyTaskController {
                 request.memberIds() != null ? request.memberIds() : Set.of(),
                 familyId,
                 request.isRequired() != null ? request.isRequired() : true,
-                request.xpPoints() != null ? request.xpPoints() : 10
+                request.xpPoints() != null ? request.xpPoints() : 1
         );
         return toResponse(task);
     }
@@ -101,7 +101,7 @@ public class DailyTaskController {
                 request.daysOfWeek(),
                 request.memberIds() != null ? request.memberIds() : Set.of(),
                 request.isRequired() != null ? request.isRequired() : true,
-                request.xpPoints() != null ? request.xpPoints() : 10
+                request.xpPoints() != null ? request.xpPoints() : 1
         );
         return toResponse(task);
     }
