@@ -19,6 +19,7 @@ import { FamilyResponse } from "./shared/api/family";
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp";
 
 export function App() {
+  console.log("=== FamilyApp Frontend Starting - XP System: 12 XP per level ===");
   const [currentView, setCurrentView] = useState<ViewKey>("login");
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
