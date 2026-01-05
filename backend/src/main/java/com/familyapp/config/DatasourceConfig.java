@@ -18,6 +18,12 @@ public class DatasourceConfig {
     @Value("${spring.datasource.url}")
     private String datasourceUrl;
 
+    @Value("${spring.datasource.username}")
+    private String datasourceUsername;
+
+    @Value("${spring.datasource.password}")
+    private String datasourcePassword;
+
     @Bean
     @Primary
     public DataSource dataSource() {
@@ -26,6 +32,8 @@ public class DatasourceConfig {
         
         return DataSourceBuilder.create()
                 .url(enhancedUrl)
+                .username(datasourceUsername)
+                .password(datasourcePassword)
                 .build();
     }
 
