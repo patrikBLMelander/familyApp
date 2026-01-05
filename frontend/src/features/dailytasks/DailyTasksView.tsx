@@ -388,8 +388,8 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
         <FamilyModeView onToggle={() => setFamilyMode(false)} />
       ) : (
         <>
-          <div className="daily-tasks-header">
-            <div style={{ flex: 1 }}>
+          <div className="daily-tasks-header" style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "flex-start" }}>
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 {onNavigate && (
                   <button
@@ -397,23 +397,24 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
                     className="back-button"
                     onClick={() => onNavigate("dashboard")}
                     aria-label="Tillbaka"
+                    style={{ flexShrink: 0 }}
                   >
                     ←
                   </button>
                 )}
-                <div style={{ flex: 1 }}>
-                  <h2 className="view-title" style={{ margin: 0, marginBottom: "4px" }}>Dagens sysslor</h2>
-                  <p className="daily-tasks-date" style={{ margin: 0 }}>{todayName} {today.toLocaleDateString('sv-SE')}</p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2 className="view-title" style={{ margin: 0, marginBottom: "4px", wordBreak: "break-word" }}>Dagens sysslor</h2>
+                  <p className="daily-tasks-date" style={{ margin: 0, wordBreak: "break-word" }}>{todayName} {today.toLocaleDateString('sv-SE')}</p>
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", flexShrink: 0 }}>
               {isChild && (
                 <button
                   type="button"
                   className="button-secondary"
                   onClick={handleLogout}
-                  style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                  style={{ fontSize: "0.8rem", padding: "6px 12px", whiteSpace: "nowrap" }}
                 >
                   Logga ut
                 </button>
@@ -424,7 +425,7 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
                     type="button"
                     className="button-primary"
                     onClick={() => setFamilyMode(true)}
-                    style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                    style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap" }}
                   >
                     Familjeläge
                   </button>
@@ -433,6 +434,7 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
                       type="button"
                       className="todo-action-button"
                       onClick={() => onNavigate("dailytasksadmin")}
+                      style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap" }}
                     >
                       Hantera sysslor
                     </button>
@@ -551,7 +553,7 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
                       {taskWithChildren.task.description && (
                         <p className="daily-task-description">{taskWithChildren.task.description}</p>
                       )}
-                      <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "6px", width: "100%", maxWidth: "100%" }}>
                         {taskWithChildren.childCompletions.map((childCompletion) => (
                           <span
                             key={childCompletion.childId}
@@ -563,7 +565,9 @@ export function DailyTasksView({ onNavigate }: DailyTasksViewProps) {
                                 ? "rgba(184, 230, 184, 0.3)" 
                                 : "rgba(240, 240, 240, 0.6)",
                               color: childCompletion.completed ? "#2d5a2d" : "#6b6b6b",
-                              fontWeight: childCompletion.completed ? 500 : 400
+                              fontWeight: childCompletion.completed ? 500 : 400,
+                              whiteSpace: "nowrap",
+                              flexShrink: 0
                             }}
                           >
                             {childCompletion.childName}: {childCompletion.completed ? "✓" : "○"}

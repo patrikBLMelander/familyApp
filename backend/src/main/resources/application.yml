@@ -3,14 +3,17 @@ spring:
     name: familyapp-backend
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/familyapp?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/familyapp?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&autoReconnect=true&failOverReadOnly=false&maxReconnects=10&initialTimeout=2&connectTimeout=60000&socketTimeout=60000}
     username: ${SPRING_DATASOURCE_USERNAME:familyapp}
     password: ${SPRING_DATASOURCE_PASSWORD:familyapp}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      connection-timeout: 30000
+      connection-timeout: 60000
       maximum-pool-size: 10
       minimum-idle: 2
+      connection-test-query: SELECT 1
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
 
   jpa:
     hibernate:
@@ -23,6 +26,8 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    connect-retries: 10
+    connect-retries-interval: 5
 
 server:
   port: ${SERVER_PORT:8080}
