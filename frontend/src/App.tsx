@@ -12,6 +12,7 @@ import { LoginRegisterView } from "./features/auth/LoginRegisterView";
 import { XpDashboard } from "./features/xp/XpDashboard";
 import { ChildrenXpView } from "./features/xp/ChildrenXpView";
 import { useIsChild } from "./shared/hooks/useIsChild";
+import { usePwaInstall } from "./shared/hooks/usePwaInstall";
 import { getFamily } from "./shared/api/family";
 import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { FamilyResponse } from "./shared/api/family";
@@ -25,6 +26,7 @@ export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [family, setFamily] = useState<FamilyResponse | null>(null);
   const { isChild, childMember, loading: childLoading } = useIsChild();
+  const { isInstallable, isInstalled, isIOS, handleInstallClick } = usePwaInstall();
 
   // Check authentication status and load family
   useEffect(() => {
@@ -209,6 +211,25 @@ export function App() {
             >
               Dagliga sysslor
             </button>
+            {/* PWA Install button - show if not installed */}
+            {!isInstalled && (
+              <button
+                type="button"
+                className="side-menu-item"
+                onClick={handleInstallClick}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  marginTop: "8px",
+                  paddingTop: "12px",
+                  borderTop: "1px solid rgba(220, 210, 200, 0.4)"
+                }}
+              >
+                <span style={{ fontSize: "1.2rem" }}>📱</span>
+                <span>Installera app</span>
+              </button>
+            )}
           </>
         ) : (
           // Parent menu - show all options
@@ -248,6 +269,25 @@ export function App() {
             >
               Familjemedlemmar
             </button>
+            {/* PWA Install button - show if not installed */}
+            {!isInstalled && (
+              <button
+                type="button"
+                className="side-menu-item"
+                onClick={handleInstallClick}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  marginTop: "8px",
+                  paddingTop: "12px",
+                  borderTop: "1px solid rgba(220, 210, 200, 0.4)"
+                }}
+              >
+                <span style={{ fontSize: "1.2rem" }}>📱</span>
+                <span>Installera app</span>
+              </button>
+            )}
           </>
         )}
       </nav>
