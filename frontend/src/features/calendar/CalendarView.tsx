@@ -142,6 +142,8 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
     try {
       await deleteCalendarEvent(eventId);
       await loadData();
+      setEditingEvent(null);
+      setShowCreateForm(false);
     } catch (e) {
       setError("Kunde inte ta bort event.");
       console.error("Error deleting event:", e);
@@ -203,12 +205,6 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
     }
   };
 
-  // Filter events based on view type
-  const now = new Date();
-  const filteredEvents = viewType === "rolling" 
-    ? events.filter(event => new Date(event.startDateTime) >= now)
-    : events;
-
   // Helper function to get all dates for a multi-day all-day event
   const getAllDayEventDates = (event: CalendarEventResponse): string[] => {
     if (!event.isAllDay) return [];
@@ -247,6 +243,22 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
     
     return dates;
   };
+
+  // Filter events based on view type
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
+  const filteredEvents = viewType === "rolling" 
+    ? events.filter(event => {
+        if (event.isAllDay) {
+          // For all-day events, check if any date in the event range is today or in the future
+          const eventDates = getAllDayEventDates(event);
+          return eventDates.some(dateStr => dateStr >= todayStr);
+        } else {
+          // For regular events, check if startDateTime is in the future
+          return new Date(event.startDateTime) >= now;
+        }
+      })
+    : events;
 
   // Group events by date
   // For all-day events, extract date directly from string to avoid timezone issues
@@ -505,9 +517,9 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
                                 </button>
                                 <button
                                   type="button"
-                                  className="delete-button"
+                                  className="todo-action-button-danger"
                                   onClick={() => void handleDeleteEvent(event.id)}
-                                  style={{ fontSize: "0.8rem", padding: "4px 8px" }}
+                                  style={{ fontSize: "0.8rem", padding: "4px 8px", borderRadius: "8px" }}
                                 >
                                   Ta bort
                                 </button>
@@ -562,6 +574,7 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
               void handleCreateEvent(eventData);
             }
           }}
+          onDelete={editingEvent ? () => void handleDeleteEvent(editingEvent.id) : undefined}
           onCancel={() => {
             setShowCreateForm(false);
             setEditingEvent(null);
@@ -602,10 +615,11 @@ type EventFormProps = {
     recurringEndDate?: string | null; // Changed from Date to string
     recurringEndCount?: number | null;
   }) => void;
+  onDelete?: () => void;
   onCancel: () => void;
 };
 
-function EventForm({ event, categories, members, onSave, onCancel }: EventFormProps) {
+function EventForm({ event, categories, members, onSave, onDelete, onCancel }: EventFormProps) {
   const [title, setTitle] = useState(event?.title || "");
   const [description, setDescription] = useState(event?.description || "");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -1210,13 +1224,25 @@ function EventForm({ event, categories, members, onSave, onCancel }: EventFormPr
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-          <button type="submit" className="button-primary">
-            {event ? "Spara ändringar" : "Skapa event"}
-          </button>
-          <button type="button" onClick={onCancel} className="todo-action-button">
-            Avbryt
-          </button>
+        <div style={{ display: "flex", gap: "8px", marginTop: "12px", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button type="submit" className="button-primary">
+              {event ? "Spara ändringar" : "Skapa event"}
+            </button>
+            <button type="button" onClick={onCancel} className="todo-action-button">
+              Avbryt
+            </button>
+          </div>
+          {event && onDelete && (
+            <button 
+              type="button" 
+              onClick={() => onDelete()} 
+              className="todo-action-button-danger"
+              style={{ borderRadius: "10px" }}
+            >
+              Ta bort
+            </button>
+          )}
         </div>
       </form>
     </section>
