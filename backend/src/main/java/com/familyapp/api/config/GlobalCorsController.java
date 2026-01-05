@@ -71,7 +71,8 @@ public class GlobalCorsController {
             System.out.println("  Setting Access-Control-Allow-Origin: " + allowedOrigin);
         }
         headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD");
-        headers.add("Access-Control-Allow-Headers", "*");
+        // List common headers explicitly (wildcard doesn't work in Spring Boot 3.x with credentials)
+        headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Token, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
         headers.add("Access-Control-Allow-Credentials", "true");
         headers.add("Access-Control-Max-Age", "3600");
         
