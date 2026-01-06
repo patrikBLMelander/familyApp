@@ -1,5 +1,24 @@
 import { useEffect, useState } from "react";
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  horizontalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   fetchTodoLists,
   createTodoList,
   addTodoItem,
@@ -42,15 +61,6 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
   const [newListName, setNewListName] = useState("");
   const [newItemDescription, setNewItemDescription] = useState("");
   const [activeListId, setActiveListId] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [draggingListId, setDraggingListId] = useState<string | null>(null);
-  const [dragOverListId, setDragOverListId] = useState<string | null>(null);
-  const [touchStartY, setTouchStartY] = useState<number | null>(null);
-  const [touchStartListX, setTouchStartListX] = useState<number | null>(null);
-  const [touchStartListY, setTouchStartListY] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isDraggingList, setIsDraggingList] = useState(false);
   const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
   const [swipeOffset, setSwipeOffset] = useState<number>(0);
   const [swipedItemId, setSwipedItemId] = useState<string | null>(null);
@@ -58,6 +68,19 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  // Configure sensors for @dnd-kit
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px movement before drag starts
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -267,10 +290,13 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
     }
   };
 
-  const handleReorder = async () => {
-    if (!activeListId || !draggingId || !dragOverId || draggingId === dragOverId) {
-      setDraggingId(null);
-      setDragOverId(null);
+  const activeList = lists.find((l) => l.id === activeListId) ?? lists[0];
+
+  // Handle drag end for todo items
+  const handleItemsDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!activeListId || !over || active.id === over.id) {
+      setActiveDragId(null);
       return;
     }
 
@@ -281,65 +307,62 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
         const activeItems = list.items.filter((item) => !item.done);
         const doneItems = list.items.filter((item) => item.done);
 
-        const dragIndex = activeItems.findIndex((item) => item.id === draggingId);
-        const targetIndex = activeItems.findIndex((item) => item.id === dragOverId);
-        if (dragIndex === -1 || targetIndex === -1) {
+        const oldIndex = activeItems.findIndex((item) => item.id === active.id);
+        const newIndex = activeItems.findIndex((item) => item.id === over.id);
+        
+        if (oldIndex === -1 || newIndex === -1) {
           return list;
         }
 
-        const reordered = [...activeItems];
-        const [moved] = reordered.splice(dragIndex, 1);
-        reordered.splice(targetIndex, 0, moved);
-
-        // Bygg ny lista med uppdaterade positioner i den ordning vi vill visa.
+        const reordered = arrayMove(activeItems, oldIndex, newIndex);
         const newItemsWithPos = [...reordered, ...doneItems].map((item, index) => ({
           ...item,
           position: index
         }));
 
-        // Fire-and-forget till backend; vi väntar inte på svaret för att UI ska kännas snabbt.
+        // Fire-and-forget till backend
         void reorderTodoItems(list.id, newItemsWithPos.map((item) => item.id));
 
         return { ...list, items: newItemsWithPos };
       });
     });
 
-    setDraggingId(null);
-    setDragOverId(null);
+    setActiveDragId(null);
   };
 
-  const activeList = lists.find((l) => l.id === activeListId) ?? lists[0];
-
-  const handleReorderLists = () => {
-    if (!draggingListId || !dragOverListId || draggingListId === dragOverListId) {
-      setDraggingListId(null);
-      setDragOverListId(null);
+  // Handle drag end for todo lists
+  const handleListsDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      setActiveDragId(null);
       return;
     }
 
     setLists((prev) => {
-      const current = [...prev];
-      const fromIndex = current.findIndex((l) => l.id === draggingListId);
-      const toIndex = current.findIndex((l) => l.id === dragOverListId);
-      if (fromIndex === -1 || toIndex === -1) {
+      const oldIndex = prev.findIndex((l) => l.id === active.id);
+      const newIndex = prev.findIndex((l) => l.id === over.id);
+      
+      if (oldIndex === -1 || newIndex === -1) {
         return prev;
       }
 
-      const [moved] = current.splice(fromIndex, 1);
-      current.splice(toIndex, 0, moved);
-
-      const withPositions = current.map((list, index) => ({
+      const reordered = arrayMove(prev, oldIndex, newIndex);
+      const reorderedWithPos = reordered.map((list, index) => ({
         ...list,
         position: index
       }));
 
-      void reorderTodoLists(withPositions.map((l) => l.id));
+      // Fire-and-forget till backend
+      void reorderTodoLists(reorderedWithPos.map((l) => l.id));
 
-      return withPositions;
+      return reorderedWithPos;
     });
 
-    setDraggingListId(null);
-    setDragOverListId(null);
+    setActiveDragId(null);
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
   };
 
   return (
@@ -361,104 +384,32 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
       {error && <p className="error-text">{error}</p>}
 
       <section className="list-selector">
-        <div className="list-selector-scroll">
-          {lists.map((list) => (
-            <button
-              key={list.id}
-              type="button"
-              className={`chip chip-draggable${
-                activeList?.id === list.id ? " chip-active" : ""
-              }${dragOverListId === list.id ? " chip-drop-target" : ""}`}
-              style={{
-                background: TODO_COLORS.find(c => c.value === list.color)?.gradient || "linear-gradient(90deg, #b8e6b8 0%, #a8d8a8 100%)",
-                border: activeList?.id === list.id 
-                  ? `2px solid ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}`
-                  : `1px solid ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}80`,
-                color: "#2d5a2d",
-                boxShadow: activeList?.id === list.id 
-                  ? `0 2px 8px ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}40`
-                  : `0 1px 3px ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}30`,
-                fontWeight: activeList?.id === list.id ? "600" : "500",
-                position: "relative"
-              }}
-              onClick={(event) => {
-                // Only set active if not dragging and not just finished dragging
-                if (!isDraggingList && !draggingListId) {
-                  setActiveListId(list.id);
-                }
-              }}
-              draggable
-              data-dragging={draggingListId === list.id ? "true" : "false"}
-              onDragStart={() => {
-                setDraggingListId(list.id);
-                setDragOverListId(null);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                if (dragOverListId !== list.id) {
-                  setDragOverListId(list.id);
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                handleReorderLists();
-              }}
-              onDragEnd={() => {
-                setDraggingListId(null);
-                setDragOverListId(null);
-              }}
-              onTouchStart={(event) => {
-                setTouchStartListX(event.touches[0].clientX);
-                setTouchStartListY(event.touches[0].clientY);
-                setIsDraggingList(false);
-              }}
-              onTouchMove={(event) => {
-                if (touchStartListX === null || touchStartListY === null) return;
-                const deltaX = Math.abs(event.touches[0].clientX - touchStartListX);
-                const deltaY = Math.abs(event.touches[0].clientY - touchStartListY);
-                // Only start dragging if moved more than 10px (prioritize horizontal movement for lists)
-                if (deltaX > 10 || (deltaX > 5 && deltaY < deltaX)) {
-                  if (!isDraggingList) {
-                    setIsDraggingList(true);
-                    setDraggingListId(list.id);
-                    setDragOverListId(null);
-                  }
-                  event.preventDefault(); // Prevent scrolling while dragging
-                  const touchX = event.touches[0].clientX;
-                  const touchY = event.touches[0].clientY;
-                  const element = document.elementFromPoint(touchX, touchY);
-                  const targetChip = element?.closest('.chip-draggable');
-                  if (targetChip) {
-                    const targetId = targetChip.getAttribute('data-list-id');
-                    if (targetId && targetId !== draggingListId) {
-                      setDragOverListId(targetId);
-                    }
-                  }
-                }
-              }}
-              onTouchEnd={(event) => {
-                if (isDraggingList && draggingListId && dragOverListId) {
-                  event.preventDefault();
-                  handleReorderLists();
-                  // Prevent onClick from firing after drag
-                  setTimeout(() => {
-                    setDraggingListId(null);
-                    setDragOverListId(null);
-                  }, 100);
-                } else {
-                  setDraggingListId(null);
-                  setDragOverListId(null);
-                }
-                setTouchStartListX(null);
-                setTouchStartListY(null);
-                setIsDraggingList(false);
-              }}
-              data-list-id={list.id}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleListsDragEnd}
+        >
+          <div className="list-selector-scroll">
+            <SortableContext
+              items={lists.map((l) => l.id)}
+              strategy={horizontalListSortingStrategy}
             >
-              {list.name}
-            </button>
-          ))}
-        </div>
+              {lists.map((list) => (
+                <SortableTodoListChip
+                  key={list.id}
+                  list={list}
+                  isActive={activeList?.id === list.id}
+                  onClick={() => {
+                    if (activeDragId !== list.id) {
+                      setActiveListId(list.id);
+                    }
+                  }}
+                />
+              ))}
+            </SortableContext>
+          </div>
+        </DndContext>
         <form onSubmit={handleCreateList} className="inline-form">
           <input
             type="text"
@@ -606,133 +557,34 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
 
               return (
                 <>
-                  <ul className="todo-items">
-                    {activeItems.map((item, index) => (
-                      <li
-                        key={item.id}
-                        className={`todo-draggable${
-                          draggingId === item.id ? " todo-draggable-active" : ""
-                        }${dragOverId === item.id ? " todo-drop-target" : ""}`}
-                        draggable
-                        onDragStart={() => {
-                          setDraggingId(item.id);
-                          setDragOverId(null);
-                        }}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          if (dragOverId !== item.id) {
-                            setDragOverId(item.id);
-                          }
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          void handleReorder();
-                        }}
-                        onDragEnd={() => {
-                          setDraggingId(null);
-                          setDragOverId(null);
-                        }}
-                        onTouchStart={(event) => {
-                          setTouchStartY(event.touches[0].clientY);
-                          setSwipeStartX(event.touches[0].clientX);
-                          setIsDragging(false);
-                          // Close other swiped items
-                          if (swipedItemId !== item.id) {
-                            setSwipedItemId(null);
-                            setSwipeOffset(0);
-                          }
-                        }}
-                        onTouchMove={(event) => {
-                          if (touchStartY === null || swipeStartX === null) return;
-                          const deltaY = Math.abs(event.touches[0].clientY - touchStartY);
-                          const deltaX = event.touches[0].clientX - swipeStartX;
-                          
-                          // Determine if it's a swipe (horizontal) or drag (vertical)
-                          if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
-                            // Horizontal swipe - show delete
-                            event.preventDefault();
-                            if (deltaX < 0) {
-                              // Swiping left
-                              setSwipedItemId(item.id);
-                              setSwipeOffset(Math.max(deltaX, -80));
-                            } else {
-                              // Swiping right - close
-                              setSwipedItemId(null);
-                              setSwipeOffset(0);
-                            }
-                          } else if (deltaY > 10) {
-                            // Vertical drag - reorder
-                            if (!isDragging) {
-                              setIsDragging(true);
-                              setDraggingId(item.id);
-                              setDragOverId(null);
-                            }
-                            event.preventDefault();
-                            const touchY = event.touches[0].clientY;
-                            const element = document.elementFromPoint(event.touches[0].clientX, touchY);
-                            const targetItem = element?.closest('.todo-draggable');
-                            if (targetItem) {
-                              const targetId = targetItem.getAttribute('data-item-id');
-                              if (targetId && targetId !== draggingId) {
-                                setDragOverId(targetId);
-                              }
-                            }
-                          }
-                        }}
-                        onTouchEnd={(event) => {
-                          if (isDragging && draggingId && dragOverId) {
-                            event.preventDefault();
-                            void handleReorder();
-                            setDraggingId(null);
-                            setDragOverId(null);
-                            setIsDragging(false);
-                          } else if (swipedItemId === item.id) {
-                            // If swiped more than 50px, delete automatically
-                            if (swipeOffset < -50) {
-                              void handleDeleteItem(item.id);
-                            } else {
-                              // Otherwise close swipe
-                              setSwipedItemId(null);
-                              setSwipeOffset(0);
-                            }
-                          }
-                          setTouchStartY(null);
-                          setSwipeStartX(null);
-                        }}
-                        data-item-id={item.id}
-                        style={{
-                          transform: swipedItemId === item.id ? `translateX(${swipeOffset}px)` : 'translateX(0)',
-                          transition: swipedItemId === item.id && swipeOffset === -80 ? 'transform 0.2s ease' : 'none'
-                        }}
-                      >
-                        <div className="todo-item-content">
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={item.done}
-                              onChange={() => handleToggleItem(activeList.id, item.id)}
-                            />
-                            <span className={item.done ? "todo-done" : ""}>{item.description}</span>
-                          </label>
-                        </div>
-                        {swipedItemId === item.id && (
-                          <button
-                            className="todo-delete-button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleDeleteItem(item.id);
-                            }}
-                            onTouchStart={(e) => e.stopPropagation()}
-                            onTouchMove={(e) => e.stopPropagation()}
-                            onTouchEnd={(e) => e.stopPropagation()}
-                            type="button"
-                          >
-                            Ta bort
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleItemsDragEnd}
+                  >
+                    <SortableContext
+                      items={activeItems.map((item) => item.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <ul className="todo-items">
+                        {activeItems.map((item) => (
+                          <SortableTodoItem
+                            key={item.id}
+                            item={item}
+                            onToggle={() => handleToggleItem(activeList.id, item.id)}
+                            onDelete={() => handleDeleteItem(item.id)}
+                            swipedItemId={swipedItemId}
+                            swipeOffset={swipeOffset}
+                            swipeStartX={swipeStartX}
+                            setSwipeStartX={setSwipeStartX}
+                            setSwipedItemId={setSwipedItemId}
+                            setSwipeOffset={setSwipeOffset}
+                          />
+                        ))}
+                      </ul>
+                    </SortableContext>
+                  </DndContext>
 
                   {doneItems.length > 0 && (
                     <>
@@ -839,6 +691,170 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
         )}
       </section>
     </div>
+  );
+}
+
+// Sortable Todo Item Component
+function SortableTodoItem({
+  item,
+  onToggle,
+  onDelete,
+  swipedItemId,
+  swipeOffset,
+  swipeStartX,
+  setSwipeStartX,
+  setSwipedItemId,
+  setSwipeOffset,
+}: {
+  item: TodoItem;
+  onToggle: () => void;
+  onDelete: () => void;
+  swipedItemId: string | null;
+  swipeOffset: number;
+  swipeStartX: number | null;
+  setSwipeStartX: (x: number | null) => void;
+  setSwipedItemId: (id: string | null) => void;
+  setSwipeOffset: (offset: number) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{
+        ...style,
+        transform: swipedItemId === item.id 
+          ? `translateX(${swipeOffset}px) ${style.transform || ''}` 
+          : style.transform,
+        transition: swipedItemId === item.id && swipeOffset === -80 
+          ? 'transform 0.2s ease' 
+          : style.transition,
+      }}
+      className={`todo-draggable${isDragging ? " todo-draggable-active" : ""}`}
+      data-item-id={item.id}
+      onTouchStart={(e) => {
+        setSwipeStartX(e.touches[0].clientX);
+        if (swipedItemId !== item.id) {
+          setSwipedItemId(null);
+          setSwipeOffset(0);
+        }
+      }}
+      onTouchMove={(e) => {
+        if (swipeStartX === null) return;
+        const deltaX = e.touches[0].clientX - swipeStartX;
+        const deltaY = Math.abs(e.touches[0].clientY - e.touches[0].clientY);
+        
+        // Only handle swipe if horizontal movement is greater
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+          e.preventDefault();
+          if (deltaX < 0) {
+            setSwipedItemId(item.id);
+            setSwipeOffset(Math.max(deltaX, -80));
+          } else {
+            setSwipedItemId(null);
+            setSwipeOffset(0);
+          }
+        }
+      }}
+      onTouchEnd={() => {
+        if (swipedItemId === item.id) {
+          if (swipeOffset < -50) {
+            onDelete();
+          } else {
+            setSwipedItemId(null);
+            setSwipeOffset(0);
+          }
+        }
+        setSwipeStartX(null);
+      }}
+    >
+      <div className="todo-item-content" {...attributes} {...listeners}>
+        <label>
+          <input
+            type="checkbox"
+            checked={item.done}
+            onChange={onToggle}
+          />
+          <span className={item.done ? "todo-done" : ""}>{item.description}</span>
+        </label>
+      </div>
+      {swipedItemId === item.id && (
+        <button
+          className="todo-delete-button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          type="button"
+        >
+          Ta bort
+        </button>
+      )}
+    </li>
+  );
+}
+
+// Sortable Todo List Chip Component
+function SortableTodoListChip({
+  list,
+  isActive,
+  onClick,
+}: {
+  list: TodoList;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: list.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <button
+      ref={setNodeRef}
+      style={{
+        ...style,
+        background: TODO_COLORS.find(c => c.value === list.color)?.gradient || "linear-gradient(90deg, #b8e6b8 0%, #a8d8a8 100%)",
+        border: isActive 
+          ? `2px solid ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}`
+          : `1px solid ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}80`,
+        color: "#2d5a2d",
+        boxShadow: isActive 
+          ? `0 2px 8px ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}40`
+          : `0 1px 3px ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}30`,
+        fontWeight: isActive ? "600" : "500",
+        position: "relative",
+      }}
+      className={`chip chip-draggable${isActive ? " chip-active" : ""}${isDragging ? " chip-dragging" : ""}`}
+      onClick={onClick}
+      {...attributes}
+      {...listeners}
+    >
+      {list.name}
+    </button>
   );
 }
 
