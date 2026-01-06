@@ -81,6 +81,52 @@ public class XpService {
     }
 
     /**
+     * Award bonus XP to a member (e.g., for special occasions)
+     * This does NOT increment the task completion count
+     * Only awards XP to children
+     */
+    public void awardBonusXp(UUID memberId, int xpPoints) {
+        var member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+
+        // Only award XP to children
+        if (!"CHILD".equals(member.getRole())) {
+            return;
+        }
+
+        LocalDate now = LocalDate.now();
+        int year = now.getYear();
+        int month = now.getMonthValue();
+
+        // Get or create progress for current month
+        var progressEntity = progressRepository.findByMemberIdAndYearAndMonth(memberId, year, month)
+                .orElseGet(() -> {
+                    var newProgress = new MemberXpProgressEntity();
+                    newProgress.setId(UUID.randomUUID());
+                    newProgress.setMember(member);
+                    newProgress.setYear(year);
+                    newProgress.setMonth(month);
+                    newProgress.setCurrentXp(0);
+                    newProgress.setCurrentLevel(1);
+                    newProgress.setTotalTasksCompleted(0);
+                    newProgress.setCreatedAt(OffsetDateTime.now());
+                    newProgress.setUpdatedAt(OffsetDateTime.now());
+                    return newProgress;
+                });
+
+        // Update XP and level (but NOT task completion count)
+        int newXp = progressEntity.getCurrentXp() + xpPoints;
+        int newLevel = MemberXpProgress.calculateLevel(newXp);
+        
+        progressEntity.setCurrentXp(newXp);
+        progressEntity.setCurrentLevel(newLevel);
+        // Note: totalTasksCompleted is NOT incremented for bonus XP
+        progressEntity.setUpdatedAt(OffsetDateTime.now());
+
+        progressRepository.save(progressEntity);
+    }
+
+    /**
      * Remove XP from a member when they uncheck a task
      */
     public void removeXp(UUID memberId, int xpPoints) {

@@ -68,3 +68,12 @@ export async function fetchMemberXpHistory(memberId: string): Promise<XpHistoryR
   return handleJson<XpHistoryResponse[]>(response);
 }
 
+export async function awardBonusXp(memberId: string, xpPoints: number): Promise<XpProgressResponse> {
+  const response = await fetch(`${API_BASE_URL}/xp/members/${memberId}/bonus`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ xpPoints })
+  });
+  return handleJson<XpProgressResponse>(response);
+}
+

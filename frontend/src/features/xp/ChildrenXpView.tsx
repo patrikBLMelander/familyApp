@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/familyMembers";
-import { fetchMemberXpProgress, fetchMemberXpHistory, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
+import { fetchMemberXpProgress, fetchMemberXpHistory, awardBonusXp, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers";
 
@@ -93,6 +93,9 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
   const [childrenXpData, setChildrenXpData] = useState<Map<string, ChildXpData>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bonusXpDialog, setBonusXpDialog] = useState<{ childId: string; childName: string } | null>(null);
+  const [bonusXpAmount, setBonusXpAmount] = useState<string>("10");
+  const [awardingXp, setAwardingXp] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -141,6 +144,42 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
 
     void load();
   }, []);
+
+  const handleAwardBonusXp = async () => {
+    if (!bonusXpDialog) return;
+    
+    const xpAmount = parseInt(bonusXpAmount, 10);
+    if (isNaN(xpAmount) || xpAmount <= 0 || xpAmount > 100) {
+      alert("XP måste vara mellan 1 och 100");
+      return;
+    }
+
+    try {
+      setAwardingXp(true);
+      const updatedProgress = await awardBonusXp(bonusXpDialog.childId, xpAmount);
+      
+      // Update the child's progress in state
+      setChildrenXpData(prev => {
+        const newMap = new Map(prev);
+        const childData = newMap.get(bonusXpDialog.childId);
+        if (childData) {
+          newMap.set(bonusXpDialog.childId, {
+            ...childData,
+            progress: updatedProgress
+          });
+        }
+        return newMap;
+      });
+
+      setBonusXpDialog(null);
+      setBonusXpAmount("10");
+    } catch (e) {
+      console.error("Error awarding bonus XP:", e);
+      alert("Kunde inte ge bonus-XP. Försök igen.");
+    } finally {
+      setAwardingXp(false);
+    }
+  };
 
   const monthNames = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
 
@@ -279,9 +318,19 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               background: "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)",
               border: "2px solid rgba(184, 230, 184, 0.3)"
             }}>
-              <h3 style={{ marginTop: 0, marginBottom: "16px", fontSize: "1.1rem", fontWeight: 600 }}>
-                {child.name}
-              </h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+                <h3 style={{ marginTop: 0, marginBottom: 0, fontSize: "1.1rem", fontWeight: 600 }}>
+                  {child.name}
+                </h3>
+                <button
+                  type="button"
+                  className="button-primary"
+                  onClick={() => setBonusXpDialog({ childId: child.id, childName: child.name })}
+                  style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap" }}
+                >
+                  + Ge XP
+                </button>
+              </div>
 
               <div style={{ textAlign: "center", marginBottom: "20px" }}>
                 <div style={{ fontSize: "2.5rem", marginBottom: "6px" }}>
@@ -422,7 +471,98 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           );
         })}
       </div>
+
+      {/* Bonus XP Dialog */}
+      {bonusXpDialog && (
+        <>
+          <div 
+            className="backdrop" 
+            onClick={() => !awardingXp && setBonusXpDialog(null)}
+            style={{ zIndex: 100 }}
+          />
+          <div style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "white",
+            borderRadius: "12px",
+            padding: "24px",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+            zIndex: 101,
+            maxWidth: "90%",
+            width: "400px"
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: "16px", fontSize: "1.1rem", fontWeight: 600 }}>
+              Ge bonus-XP till {bonusXpDialog.childName}
+            </h3>
+            <div style={{ marginBottom: "16px" }}>
+              <label htmlFor="bonusXpAmount" style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>
+                XP-poäng (1-100)
+              </label>
+              <input
+                id="bonusXpAmount"
+                type="number"
+                min="1"
+                max="100"
+                value={bonusXpAmount}
+                onChange={(e) => setBonusXpAmount(e.target.value)}
+                disabled={awardingXp}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  border: "1px solid #ddd",
+                  fontSize: "1rem"
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="todo-action-button"
+                onClick={() => setBonusXpDialog(null)}
+                disabled={awardingXp}
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                className="button-primary"
+                onClick={handleAwardBonusXp}
+                disabled={awardingXp}
+              >
+                {awardingXp ? "Ger XP..." : "Ge XP"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
+function getBadgesForMonth(month: number): Record<number, string> {
+  if (month === 1) {
+    return {
+      1: "❄️", 2: "🌨️", 3: "⛄", 4: "🧊", 5: "🎿",
+      6: "🛷", 7: "🧣", 8: "🧤", 9: "⛷️", 10: "🏔️"
+    };
+  }
+  if (month === 2) {
+    return {
+      1: "💝", 2: "💖", 3: "💗", 4: "💓", 5: "💕",
+      6: "💞", 7: "💟", 8: "🌹", 9: "💐", 10: "💍"
+    };
+  }
+  if (month === 3) {
+    return {
+      1: "🌱", 2: "🌿", 3: "🍀", 4: "🌷", 5: "🌻",
+      6: "🌸", 7: "🦋", 8: "🐝", 9: "🌞", 10: "🌈"
+    };
+  }
+  return {
+    1: "🌱", 2: "⭐", 3: "🌟", 4: "💫", 5: "✨",
+    6: "🎯", 7: "🏆", 8: "👑", 9: "💎", 10: "🌟"
+  };
+}
