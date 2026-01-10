@@ -392,8 +392,27 @@ export function FamilyModeView({ onToggle }: FamilyModeViewProps) {
                             const toggleKey = `${taskWithCompletion.task.id}-${child.id}`;
                             const isToggling = togglingTasks.has(toggleKey);
                             
+                            // Different background colors for required vs extra tasks (only when not completed)
+                            const bgColor = taskWithCompletion.completed 
+                              ? "#f0fff4" // Same green for all completed tasks
+                              : (taskWithCompletion.task.isRequired ? "#f7fafc" : "#fff7ed");
+                            const borderColor = taskWithCompletion.completed 
+                              ? "#48bb78" // Same green border for all completed tasks
+                              : (taskWithCompletion.task.isRequired ? "#e2e8f0" : "#fed7aa");
+                            
                             return (
-                              <li key={`${child.id}-${taskWithCompletion.task.id}`} className="daily-task-item">
+                              <li 
+                                key={`${child.id}-${taskWithCompletion.task.id}`} 
+                                className="daily-task-item"
+                                style={{
+                                  background: bgColor,
+                                  borderColor: borderColor,
+                                  borderRadius: "8px",
+                                  padding: "12px",
+                                  border: `1px solid ${borderColor}`,
+                                  borderBottom: "none",
+                                }}
+                              >
                                 <label className="daily-task-label">
                                   <input
                                     type="checkbox"
@@ -408,14 +427,17 @@ export function FamilyModeView({ onToggle }: FamilyModeViewProps) {
                                       e.stopPropagation();
                                     }}
                                   />
-                                  <span className={taskWithCompletion.completed ? "daily-task-done" : ""}>
+                                  <span 
+                                    className={taskWithCompletion.completed ? "daily-task-done" : ""}
+                                    style={{ color: "#2d3748" }}
+                                  >
                                     {taskWithCompletion.task.name}
                                   </span>
                                 </label>
                                 <p style={{ 
                                   margin: "4px 0 0 34px", 
                                   fontSize: "0.75rem", 
-                                  color: "#a0a0a0",
+                                  color: "#718096",
                                   fontStyle: "italic"
                                 }}>
                                   {taskWithCompletion.task.isRequired ? "Obligatorisk" : "Extra"} • +{taskWithCompletion.task.xpPoints} XP

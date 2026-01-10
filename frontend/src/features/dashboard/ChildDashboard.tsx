@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchCurrentPet, PetResponse } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
-import { fetchTasksForToday, DailyTaskWithCompletionResponse } from "../../shared/api/dailyTasks";
+import { fetchTasksForToday, toggleTaskCompletion, DailyTaskWithCompletionResponse } from "../../shared/api/dailyTasks";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
 
@@ -57,6 +57,42 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
 
     void load();
   }, []);
+
+  const handleToggleTask = async (taskId: string) => {
+    // Optimistic update
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.task.id === taskId
+          ? { ...task, completed: !task.completed }
+          : task
+      )
+    );
+
+    try {
+      await toggleTaskCompletion(taskId);
+      
+      // Reload data to get updated state
+      const deviceToken = localStorage.getItem("deviceToken");
+      if (deviceToken) {
+        const member = await getMemberByDeviceToken(deviceToken);
+        const [xpData, tasksData] = await Promise.all([
+          fetchCurrentXpProgress().catch(() => null),
+          fetchTasksForToday(member.id).catch(() => []),
+        ]);
+        setXpProgress(xpData);
+        setTasks(tasksData);
+      }
+    } catch (e) {
+      console.error("Error toggling task:", e);
+      // Revert on error by reloading
+      const deviceToken = localStorage.getItem("deviceToken");
+      if (deviceToken) {
+        const member = await getMemberByDeviceToken(deviceToken);
+        const tasksData = await fetchTasksForToday(member.id).catch(() => []);
+        setTasks(tasksData);
+      }
+    }
+  };
 
   const handleLogout = () => {
     if (confirm("Vill du gå tillbaka till föräldervyn?")) {
@@ -295,45 +331,66 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {tasks.slice(0, 3).map((task) => (
-              <div
-                key={task.task.id}
-                style={{
-                  padding: "16px",
-                  background: task.completed ? "#f0fff4" : "#f7fafc",
-                  borderRadius: "12px",
-                  border: `2px solid ${task.completed ? "#48bb78" : "#e2e8f0"}`,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
-              >
-                <div style={{
-                  fontSize: "1.5rem",
-                  opacity: task.completed ? 1 : 0.5,
-                }}>
-                  {task.completed ? "✅" : "⭕"}
-                </div>
-                <div style={{ flex: 1 }}>
+            {tasks.slice(0, 3).map((task) => {
+              // Different background colors for required vs extra tasks (only when not completed)
+              const bgColor = task.completed 
+                ? "#f0fff4" // Same green for all completed tasks
+                : (task.task.isRequired ? "#f7fafc" : "#fff7ed");
+              const borderColor = task.completed 
+                ? "#48bb78" // Same green border for all completed tasks
+                : (task.task.isRequired ? "#e2e8f0" : "#fed7aa");
+              
+              return (
+                <div
+                  key={task.task.id}
+                  onClick={() => handleToggleTask(task.task.id)}
+                  style={{
+                    padding: "16px",
+                    background: bgColor,
+                    borderRadius: "12px",
+                    border: `2px solid ${borderColor}`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "scale(1.02)";
+                    e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                >
                   <div style={{
-                    fontWeight: task.completed ? 600 : 500,
-                    color: task.completed ? "#2d3748" : "#4a5568",
-                    textDecoration: task.completed ? "line-through" : "none",
+                    fontSize: "1.5rem",
+                    opacity: task.completed ? 1 : 0.5,
                   }}>
-                    {task.task.name}
+                    {task.completed ? "✅" : "⭕"}
                   </div>
-                  {task.task.xpPoints > 0 && (
+                  <div style={{ flex: 1 }}>
                     <div style={{
-                      fontSize: "0.85rem",
-                      color: "#718096",
-                      marginTop: "4px",
+                      fontWeight: task.completed ? 600 : 500,
+                      color: "#2d3748", // Same color for all text, readable
+                      textDecoration: task.completed ? "line-through" : "none",
                     }}>
-                      +{task.task.xpPoints} XP
+                      {task.task.name}
                     </div>
-                  )}
+                    {task.task.xpPoints > 0 && (
+                      <div style={{
+                        fontSize: "0.85rem",
+                        color: "#718096",
+                        marginTop: "4px",
+                      }}>
+                        +{task.task.xpPoints} XP
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {tasks.length > 3 && (
               <button
                 type="button"

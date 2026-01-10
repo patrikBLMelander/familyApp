@@ -396,6 +396,154 @@ Detta dokument beskriver planerade funktioner och förbättringar för FamilyApp
 
 ---
 
+## 4. Månadsvy för Menscykel-Tracking
+
+**Beskrivning:**
+- En månadsvy där kvinnor kan hålla koll på sin menstruationscykel
+- Markera start/slut av period i kalendern
+- Automatisk förutsägelse av nästa period baserat på historik
+- Visuell indikation (färg/märke) för dagar med period
+- Visar även ägglossning (beräknad baserat på cykellängd)
+- Privat data - bara användaren själv kan se sin egen data
+- Endast tillgängligt för föräldrar (PARENT role) som är kvinnor
+
+**Designbeslut:**
+1. **Åtkomst/kontroll:**
+   - ✅ Bara personen själv kan se sin data
+   - ✅ Endast på vuxnas vy (PARENT role)
+   - ✅ Visas bara för föräldrar som har kön = kvinna
+
+2. **Användaridentifiering:**
+   - ✅ Lägg till optional "gender/kön"-fält i `family_member` tabell
+   - ✅ Möjlighet att sätta kön via redigeringsverktyget för familjemedlemmar
+
+3. **Data-struktur:**
+   - ✅ Spara de tre senaste cyklerna
+   - ✅ Räkna ut snittet från de tre senaste cyklerna
+   - ✅ Spara start- och slutdatum för varje period
+   - ✅ Alla dagar mellan start och slut ska färgas
+   - ✅ Visa ägglossning (beräknad) - vanligtvis dag 14 i en 28-dagars cykel, men beräknas baserat på faktisk cykellängd
+   - ✅ Ägglossning ska ha annan färg än period-dagar
+
+**Tekniska krav - Backend:**
+
+1. **Databas (Flyway migration):**
+   - Ny tabell: `menstrual_cycle` eller `period_tracking`
+   - Fält:
+     - `id` (VARCHAR(36) PRIMARY KEY)
+     - `member_id` (VARCHAR(36) NOT NULL, FOREIGN KEY)
+     - `start_date` (DATE NOT NULL) - Startdatum för perioden
+     - `end_date` (DATE) - Slutdatum (kan vara NULL för pågående period)
+     - `cycle_length` (INTEGER) - Cykellängd i dagar (beräknas)
+     - `period_length` (INTEGER) - Periodlängd i dagar (beräknas)
+     - `notes` (TEXT) - Valfria anteckningar
+     - `created_at`, `updated_at` (DATETIME)
+   - Index: `idx_member_id`, `idx_start_date`
+   - UNIQUE constraint? Kanske inte - en användare kan ha perioder som börjar olika datum
+
+2. **Domain Model:**
+   - `MenstrualCycle` eller `PeriodRecord` record
+   - `MenstrualCycleEntity` (JPA entity)
+   - `MenstrualCycleJpaRepository` (extends JpaRepository)
+
+3. **Service Layer:**
+   - `MenstrualCycleService` med metoder:
+     - `createPeriod(memberId, startDate, endDate)` - Skapa ny period
+     - `updatePeriod(periodId, startDate, endDate)` - Uppdatera period
+     - `deletePeriod(periodId)` - Ta bort period
+     - `getPeriodsForMember(memberId, startDate?, endDate?)` - Hämta perioder för användare (för kalendervy)
+     - `getLatestPeriods(memberId, limit)` - Hämta de N senaste perioderna (för statistik)
+     - `predictNextPeriod(memberId)` - Räkna ut förväntad nästa period baserat på snittet av de 3 senaste cyklerna
+     - `calculateOvulation(memberId, cycleStartDate)` - Beräkna ägglossning för en specifik cykel (vanligtvis dag 14, men anpassas efter cykellängd)
+     - `getCycleStatistics(memberId)` - Genomsnittlig cykellängd, periodlängd baserat på de 3 senaste
+
+4. **API Controller:**
+   - `MenstrualCycleController` med endpoints:
+     - `POST /api/v1/menstrual-cycle/period` - Skapa ny period (endast för PARENT, verifiera kön)
+     - `PUT /api/v1/menstrual-cycle/period/{periodId}` - Uppdatera period
+     - `DELETE /api/v1/menstrual-cycle/period/{periodId}` - Ta bort period
+     - `GET /api/v1/menstrual-cycle/periods?startDate=X&endDate=Y` - Hämta perioder för inloggad användare (för kalendervy)
+     - `GET /api/v1/menstrual-cycle/prediction` - Förutsäg nästa period (baserat på de 3 senaste)
+     - `GET /api/v1/menstrual-cycle/statistics` - Statistik (genomsnittlig cykellängd, periodlängd)
+
+5. **Uppdatera FamilyMemberService/Controller:**
+   - Lägg till möjlighet att uppdatera `gender` och `email` för familjemedlemmar
+   - Endpoint: `PUT /api/v1/family-members/{memberId}` - Uppdatera name, email, gender
+   - Endast föräldrar kan uppdatera (samma som nuvarande redigering)
+
+6. **Säkerhet/Privacy:**
+   - Endpoints ska bara returnera data för den inloggade användaren
+   - Verifiera `member_id` mot device token
+   - Verifiera att användaren är PARENT och har gender = FEMALE för att komma åt menscykel-features
+
+**Tekniska krav - Frontend:**
+
+1. **Komponenter:**
+   - `MenstrualCycleView.tsx` - Huvudvy (månadsvy)
+   - Kan återanvända `MonthView` från `CalendarView.tsx` som inspiration/bas
+   - `PeriodForm.tsx` - Formulär för att lägga till/redigera period (start/slut datum)
+   - `CycleStatistics.tsx` - Visa statistik (genomsnittlig cykellängd, nästa förväntade period)
+
+2. **API Client:**
+   - `frontend/src/shared/api/menstrualCycle.ts`
+   - Funktioner för alla endpoints ovan
+
+3. **Visuell design:**
+   - Månadsvy med kalendergrid (liknande CalendarView's MonthView)
+   - Färgkodning: Dagar med period = röd/rös ton (t.ex. rgba(255, 192, 203, 0.5))
+   - Förväntade dagar = ljusare ton eller streckad ram
+   - Klicka på dag för att markera/avmarkera period
+   - Visuell indikator för nästa förväntade period
+   - Diskret design (inte för påträngande)
+
+4. **Navigation:**
+   - Lägg till i huvudmenyn/dashboard (bara för användare som har aktiverat feature?)
+   - Eller som en view under "schedule/calendar"?
+
+**Algoritm för förutsägelse:**
+- Hämta de 3 senaste perioderna (sorterade efter start_date DESC)
+- Beräkna cykellängd för varje cykel (start_date av period N+1 - start_date av period N)
+- Beräkna genomsnittlig cykellängd från de 2-3 cyklerna (behöver minst 2 perioder för att räkna 1 cykel)
+- Lägg till genomsnittlig cykellängd till senaste periodens startdatum
+- Visa +/- 2 dagars felmarginal (cykler varierar)
+
+**Algoritm för ägglossning:**
+- Ägglossning beräknas som: start_date + (cykellängd / 2) - 14 dagar (vanligtvis dag 14 i en 28-dagars cykel)
+- För längre/kortare cykler: start_date + (cykellängd / 2)
+- Eller: start_date + (genomsnittlig cykellängd / 2) - för nästa förväntade cykel
+
+**Exempel på data-struktur:**
+
+```
+Period 1: 2024-01-05 till 2024-01-09 (start: 2024-01-05)
+Period 2: 2024-02-02 till 2024-02-06 (start: 2024-02-02) → Cykel 1: 28 dagar (2024-02-02 - 2024-01-05)
+Period 3: 2024-03-01 till 2024-03-05 (start: 2024-03-01) → Cykel 2: 28 dagar (2024-03-01 - 2024-02-02)
+Genomsnittlig cykellängd: 28 dagar
+Förväntad nästa period: 2024-03-29 (±2 dagar)
+Ägglossning för nästa cykel: 2024-03-15 (2024-03-01 + 14 dagar)
+```
+
+**Komplexitet:** Medium
+- Backend: ~3-4 timmar (migration, domain, service, controller)
+- Frontend: ~4-5 timmar (view, forms, API integration, styling)
+- Testing: ~1-2 timmar
+- **Total: ~8-11 timmar**
+
+**Fördelar:**
+- Fyller en viktig behov för många tjejer/kvinnor
+- Privat data - respekterar integritet
+- Kan använda befintlig kalender-infrastruktur som inspiration
+- Enkel men användbar feature
+
+**Överväganden:**
+- Känslig data - säkerhet och privacy är viktigt (bara användaren själv kan se)
+- Endast för föräldrar som är kvinnor
+- Skalbar design - kan lägga till fler features senare (symptom tracking, flow intensity, etc.)
+- Gender-fält är optional - användare kan välja att inte sätta det
+- Email kan läggas till för alla familjemedlemmar (inte bara föräldrar)
+
+---
+
 ## Anteckningar
 
 - Alla push-notifikationer kräver PWA service worker
