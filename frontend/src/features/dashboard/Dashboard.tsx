@@ -46,8 +46,8 @@ export function Dashboard({ placeholder, onNavigate }: DashboardProps) {
           className="card"
           onClick={() => onNavigate?.("childrenxp")}
         >
-          <h2>Barnens XP</h2>
-          <p>Se alla barns level, XP och framsteg.</p>
+          <h2>Mina Barns Djur</h2>
+          <p>Se alla barns djur, level, XP och framsteg.</p>
         </button>
       </section>
       {placeholder && <p className="placeholder-text">{placeholder}</p>}

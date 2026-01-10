@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/familyMembers";
 import { fetchMemberXpProgress, fetchMemberXpHistory, awardBonusXp, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
+import { fetchMemberPet, fetchMemberPetHistory, PetResponse, PetHistoryResponse } from "../../shared/api/pets";
+import { PetVisualization } from "../pet/PetVisualization";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers";
 
@@ -8,82 +10,15 @@ type ChildrenXpViewProps = {
   onNavigate?: (view: ViewKey) => void;
 };
 
-const MAX_LEVEL = 10;
-const XP_PER_LEVEL = 12;
-
-// Badge emojis for each level - themed by month
-const getLevelBadges = (): Record<number, string> => {
-  const month = new Date().getMonth() + 1; // 1-12
-  
-  if (month === 1) {
-    // Snow theme for January - each level has a unique snow-related emoji
-    return {
-      1: "❄️",
-      2: "🌨️",
-      3: "⛄",
-      4: "🧊",
-      5: "🎿",
-      6: "🛷",
-      7: "🧣",
-      8: "🧤",
-      9: "⛷️",
-      10: "🏔️"
-    };
-  }
-  
-  if (month === 2) {
-    // Love/Valentine theme for February
-    return {
-      1: "💝",
-      2: "💖",
-      3: "💗",
-      4: "💓",
-      5: "💕",
-      6: "💞",
-      7: "💟",
-      8: "🌹",
-      9: "💐",
-      10: "💍"
-    };
-  }
-  
-  if (month === 3) {
-    // Spring theme for March
-    return {
-      1: "🌱",
-      2: "🌿",
-      3: "🍀",
-      4: "🌷",
-      5: "🌻",
-      6: "🌸",
-      7: "🦋",
-      8: "🐝",
-      9: "🌞",
-      10: "🌈"
-    };
-  }
-  
-  // Default badges for other months
-  return {
-    1: "🌱",
-    2: "⭐",
-    3: "🌟",
-    4: "💫",
-    5: "✨",
-    6: "🎯",
-    7: "🏆",
-    8: "👑",
-    9: "💎",
-    10: "🌟"
-  };
-};
-
-const LEVEL_BADGES = getLevelBadges();
+const MAX_LEVEL = 5;
+const XP_PER_LEVEL = 24;
 
 type ChildXpData = {
   member: FamilyMemberResponse;
   progress: XpProgressResponse | null;
   history: XpHistoryResponse[];
+  pet: PetResponse | null;
+  petHistory: PetHistoryResponse[];
   loading: boolean;
   error: string | null;
 };
@@ -110,15 +45,19 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
         
         for (const child of childrenMembers) {
           try {
-            const [progress, history] = await Promise.all([
+            const [progress, history, pet, petHistory] = await Promise.all([
               fetchMemberXpProgress(child.id).catch(() => null),
-              fetchMemberXpHistory(child.id).catch(() => [])
+              fetchMemberXpHistory(child.id).catch(() => []),
+              fetchMemberPet(child.id).catch(() => null),
+              fetchMemberPetHistory(child.id).catch(() => [])
             ]);
             
             xpDataMap.set(child.id, {
               member: child,
               progress,
               history,
+              pet,
+              petHistory,
               loading: false,
               error: null
             });
@@ -127,6 +66,8 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               member: child,
               progress: null,
               history: [],
+              pet: null,
+              petHistory: [],
               loading: false,
               error: "Kunde inte ladda XP-data"
             });
@@ -158,18 +99,41 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
       setAwardingXp(true);
       const updatedProgress = await awardBonusXp(bonusXpDialog.childId, xpAmount);
       
-      // Update the child's progress in state
-      setChildrenXpData(prev => {
-        const newMap = new Map(prev);
-        const childData = newMap.get(bonusXpDialog.childId);
-        if (childData) {
-          newMap.set(bonusXpDialog.childId, {
-            ...childData,
-            progress: updatedProgress
-          });
-        }
-        return newMap;
-      });
+      // Reload pet data to get updated growth stage
+      try {
+        const [pet, petHistory] = await Promise.all([
+          fetchMemberPet(bonusXpDialog.childId).catch(() => null),
+          fetchMemberPetHistory(bonusXpDialog.childId).catch(() => [])
+        ]);
+        
+        // Update the child's progress and pet in state
+        setChildrenXpData(prev => {
+          const newMap = new Map(prev);
+          const childData = newMap.get(bonusXpDialog.childId);
+          if (childData) {
+            newMap.set(bonusXpDialog.childId, {
+              ...childData,
+              progress: updatedProgress,
+              pet: pet || childData.pet,
+              petHistory: petHistory.length > 0 ? petHistory : childData.petHistory
+            });
+          }
+          return newMap;
+        });
+      } catch (e) {
+        // If pet reload fails, still update progress
+        setChildrenXpData(prev => {
+          const newMap = new Map(prev);
+          const childData = newMap.get(bonusXpDialog.childId);
+          if (childData) {
+            newMap.set(bonusXpDialog.childId, {
+              ...childData,
+              progress: updatedProgress
+            });
+          }
+          return newMap;
+        });
+      }
 
       setBonusXpDialog(null);
       setBonusXpAmount("10");
@@ -200,7 +164,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 </button>
               )}
               <div style={{ flex: 1 }}>
-                <h2 className="view-title" style={{ margin: 0 }}>Barnens XP</h2>
+                <h2 className="view-title" style={{ margin: 0 }}>Mina Barns Djur</h2>
               </div>
             </div>
           </div>
@@ -229,7 +193,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 </button>
               )}
               <div style={{ flex: 1 }}>
-                <h2 className="view-title" style={{ margin: 0 }}>Barnens XP</h2>
+                <h2 className="view-title" style={{ margin: 0 }}>Mina Barns Djur</h2>
               </div>
             </div>
           </div>
@@ -258,7 +222,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 </button>
               )}
               <div style={{ flex: 1 }}>
-                <h2 className="view-title" style={{ margin: 0 }}>Barnens XP</h2>
+                <h2 className="view-title" style={{ margin: 0 }}>Mina Barns Djur</h2>
               </div>
             </div>
           </div>
@@ -297,6 +261,8 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           const xpData = childrenXpData.get(child.id);
           const progress = xpData?.progress;
           const history = xpData?.history || [];
+          const pet = xpData?.pet;
+          const petHistory = xpData?.petHistory || [];
 
           if (!progress) {
             return (
@@ -315,34 +281,68 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
 
           return (
             <section key={child.id} className="card" style={{ 
-              background: "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)",
-              border: "2px solid rgba(184, 230, 184, 0.3)"
+              background: pet ? `url(/pets/${pet.petType}/${pet.petType}-background.png)` : "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+              backgroundColor: pet ? "white" : "transparent",
+              border: "2px solid rgba(184, 230, 184, 0.3)",
+              position: "relative",
+              overflow: "hidden"
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-                <h3 style={{ marginTop: 0, marginBottom: 0, fontSize: "1.1rem", fontWeight: 600 }}>
-                  {child.name}
-                </h3>
-                <button
-                  type="button"
-                  className="button-primary"
-                  onClick={() => setBonusXpDialog({ childId: child.id, childName: child.name })}
-                  style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap" }}
-                >
-                  + Ge XP
-                </button>
-              </div>
+              {/* Overlay for text readability if background image */}
+              {pet && (
+                <div style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  background: "linear-gradient(to bottom, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.9) 100%)",
+                  zIndex: 0,
+                }} />
+              )}
+              
+              <div style={{ position: "relative", zIndex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+                  <h3 style={{ marginTop: 0, marginBottom: 0, fontSize: "1.1rem", fontWeight: 600 }}>
+                    {child.name}
+                  </h3>
+                  <button
+                    type="button"
+                    className="button-primary"
+                    onClick={() => setBonusXpDialog({ childId: child.id, childName: child.name })}
+                    style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap" }}
+                  >
+                    + Ge XP
+                  </button>
+                </div>
 
-              <div style={{ textAlign: "center", marginBottom: "20px" }}>
-                <div style={{ fontSize: "2.5rem", marginBottom: "6px" }}>
-                  {LEVEL_BADGES[progress.currentLevel] || "⭐"}
+                <div style={{ textAlign: "center", marginBottom: "20px" }}>
+                  {pet ? (
+                    <>
+                      <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center" }}>
+                        <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="medium" />
+                      </div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#2d5a2d", marginBottom: "4px" }}>
+                        {pet.name || (pet.petType === "dragon" ? "Drake" : pet.petType === "cat" ? "Katt" : pet.petType === "dog" ? "Hund" : pet.petType === "bird" ? "Fågel" : pet.petType === "bear" ? "Björn" : "Kanin")}
+                      </div>
+                      <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
+                        Växtsteg {pet.growthStage} av 5
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: "2.5rem", marginBottom: "6px" }}>
+                      🥚
+                    </div>
+                  )}
+                  <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#2d5a2d", marginBottom: "4px" }}>
+                    Level {progress.currentLevel}
+                  </div>
+                  <div style={{ fontSize: "0.95rem", color: "#6b6b6b" }}>
+                    {progress.currentXp} XP • {monthNames[progress.month - 1]} {progress.year}
+                  </div>
                 </div>
-                <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#2d5a2d", marginBottom: "4px" }}>
-                  Level {progress.currentLevel}
-                </div>
-                <div style={{ fontSize: "0.95rem", color: "#6b6b6b" }}>
-                  {progress.currentXp} XP • {monthNames[progress.month - 1]} {progress.year}
-                </div>
-              </div>
 
               {/* Progress Bar */}
               <div style={{ marginBottom: "16px" }}>
@@ -414,15 +414,16 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               </div>
 
               {/* History */}
-              {history.length > 0 && (
+              {(history.length > 0 || petHistory.length > 0) && (
                 <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid rgba(200, 190, 180, 0.3)" }}>
                   <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "12px", color: "#6b6b6b" }}>
                     Tidigare månader
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     {history.map((h) => {
-                      const monthBadges = getBadgesForMonth(h.month);
-                      const historyBadge = monthBadges[Math.min(h.finalLevel, MAX_LEVEL)] || "⭐";
+                      // Find matching pet history if available
+                      const matchingPet = petHistory.find(p => p.year === h.year && p.month === h.month);
+                      
                       return (
                         <div
                           key={`${h.year}-${h.month}`}
@@ -437,18 +438,27 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                           }}
                         >
                           <div style={{ 
-                            fontSize: "1.5rem",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            minWidth: "32px"
+                            minWidth: "48px",
+                            minHeight: "48px"
                           }}>
-                            {historyBadge}
+                            {matchingPet ? (
+                              <PetVisualization petType={matchingPet.petType} growthStage={matchingPet.finalGrowthStage} size="small" />
+                            ) : (
+                              <div style={{ fontSize: "1.5rem" }}>🥚</div>
+                            )}
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 600, marginBottom: "2px", color: "#2d5a2d" }}>
                               {monthNames[h.month - 1]} {h.year}
                             </div>
+                            {matchingPet && (
+                              <div style={{ fontSize: "0.7rem", color: "#6b6b6b", marginBottom: "2px" }}>
+                                {matchingPet.petType === "dragon" ? "Drake" : matchingPet.petType === "cat" ? "Katt" : matchingPet.petType === "dog" ? "Hund" : matchingPet.petType === "bird" ? "Fågel" : matchingPet.petType === "bear" ? "Björn" : "Kanin"} • Växtsteg {matchingPet.finalGrowthStage}
+                              </div>
+                            )}
                             <div style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>
                               {h.totalTasksCompleted} sysslor klara
                             </div>
@@ -467,6 +477,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   </div>
                 </div>
               )}
+              </div>
             </section>
           );
         })}
@@ -540,29 +551,4 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
       )}
     </div>
   );
-}
-
-function getBadgesForMonth(month: number): Record<number, string> {
-  if (month === 1) {
-    return {
-      1: "❄️", 2: "🌨️", 3: "⛄", 4: "🧊", 5: "🎿",
-      6: "🛷", 7: "🧣", 8: "🧤", 9: "⛷️", 10: "🏔️"
-    };
-  }
-  if (month === 2) {
-    return {
-      1: "💝", 2: "💖", 3: "💗", 4: "💓", 5: "💕",
-      6: "💞", 7: "💟", 8: "🌹", 9: "💐", 10: "💍"
-    };
-  }
-  if (month === 3) {
-    return {
-      1: "🌱", 2: "🌿", 3: "🍀", 4: "🌷", 5: "🌻",
-      6: "🌸", 7: "🦋", 8: "🐝", 9: "🌞", 10: "🌈"
-    };
-  }
-  return {
-    1: "🌱", 2: "⭐", 3: "🌟", 4: "💫", 5: "✨",
-    6: "🎯", 7: "🏆", 8: "👑", 9: "💎", 10: "🌟"
-  };
 }

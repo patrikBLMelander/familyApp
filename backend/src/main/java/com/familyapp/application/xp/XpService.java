@@ -1,12 +1,17 @@
 package com.familyapp.application.xp;
 
+import com.familyapp.application.pet.PetService;
 import com.familyapp.domain.xp.MemberXpHistory;
 import com.familyapp.domain.xp.MemberXpProgress;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
+import com.familyapp.infrastructure.pet.ChildPetJpaRepository;
+import com.familyapp.infrastructure.pet.PetHistoryEntity;
+import com.familyapp.infrastructure.pet.PetHistoryJpaRepository;
 import com.familyapp.infrastructure.xp.MemberXpHistoryEntity;
 import com.familyapp.infrastructure.xp.MemberXpHistoryJpaRepository;
 import com.familyapp.infrastructure.xp.MemberXpProgressEntity;
 import com.familyapp.infrastructure.xp.MemberXpProgressJpaRepository;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,15 +29,24 @@ public class XpService {
     private final MemberXpProgressJpaRepository progressRepository;
     private final MemberXpHistoryJpaRepository historyRepository;
     private final FamilyMemberJpaRepository memberRepository;
+    private final ChildPetJpaRepository petRepository;
+    private final PetHistoryJpaRepository petHistoryRepository;
+    private final PetService petService;
 
     public XpService(
             MemberXpProgressJpaRepository progressRepository,
             MemberXpHistoryJpaRepository historyRepository,
-            FamilyMemberJpaRepository memberRepository
+            FamilyMemberJpaRepository memberRepository,
+            ChildPetJpaRepository petRepository,
+            PetHistoryJpaRepository petHistoryRepository,
+            @Lazy PetService petService
     ) {
         this.progressRepository = progressRepository;
         this.historyRepository = historyRepository;
         this.memberRepository = memberRepository;
+        this.petRepository = petRepository;
+        this.petHistoryRepository = petHistoryRepository;
+        this.petService = petService;
     }
 
     /**
@@ -78,6 +92,9 @@ public class XpService {
         progressEntity.setUpdatedAt(OffsetDateTime.now());
 
         progressRepository.save(progressEntity);
+        
+        // Update pet growth stage when XP changes
+        petService.updateGrowthStage(memberId);
     }
 
     /**
@@ -124,6 +141,9 @@ public class XpService {
         progressEntity.setUpdatedAt(OffsetDateTime.now());
 
         progressRepository.save(progressEntity);
+        
+        // Update pet growth stage when XP changes
+        petService.updateGrowthStage(memberId);
     }
 
     /**
@@ -157,6 +177,9 @@ public class XpService {
         progress.setUpdatedAt(OffsetDateTime.now());
 
         progressRepository.save(progress);
+        
+        // Update pet growth stage when XP changes
+        petService.updateGrowthStage(memberId);
     }
 
     @Transactional(readOnly = true)
@@ -178,6 +201,7 @@ public class XpService {
 
     /**
      * Monthly reset: Move current month's progress to history and reset progress
+     * Also moves pets to history
      * Runs on the first day of each month at 00:00
      */
     @Scheduled(cron = "0 0 0 1 * ?") // First day of month at midnight
@@ -214,6 +238,28 @@ public class XpService {
             progress.setTotalTasksCompleted(0);
             progress.setUpdatedAt(OffsetDateTime.now());
             progressRepository.save(progress);
+        }
+
+        // Move pets to history
+        var previousMonthPets = petRepository.findAll().stream()
+                .filter(p -> p.getYear() == previousYear && p.getMonth() == previousMonth)
+                .toList();
+
+        for (var pet : previousMonthPets) {
+            // Save to pet history
+            var petHistory = new PetHistoryEntity();
+            petHistory.setId(UUID.randomUUID());
+            petHistory.setMember(pet.getMember());
+            petHistory.setYear(previousYear);
+            petHistory.setMonth(previousMonth);
+            petHistory.setSelectedEggType(pet.getSelectedEggType());
+            petHistory.setPetType(pet.getPetType());
+            petHistory.setFinalGrowthStage(pet.getGrowthStage());
+            petHistory.setCreatedAt(OffsetDateTime.now());
+            petHistoryRepository.save(petHistory);
+
+            // Delete from current pets (moved to history)
+            petRepository.delete(pet);
         }
     }
 

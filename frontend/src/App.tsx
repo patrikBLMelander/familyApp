@@ -11,25 +11,45 @@ import { ChildTestView } from "./features/debug/ChildTestView";
 import { LoginRegisterView } from "./features/auth/LoginRegisterView";
 import { XpDashboard } from "./features/xp/XpDashboard";
 import { ChildrenXpView } from "./features/xp/ChildrenXpView";
+import { EggSelectionView } from "./features/pet/EggSelectionView";
+import { PetTestView } from "./features/pet/PetTestView";
 import { useIsChild } from "./shared/hooks/useIsChild";
 import { usePwaInstall } from "./shared/hooks/usePwaInstall";
 import { getFamily } from "./shared/api/family";
 import { getMemberByDeviceToken } from "./shared/api/familyMembers";
+import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest";
 
 export function App() {
-  console.log("=== FamilyApp Frontend Starting - XP System: 12 XP per level ===");
+  console.log("=== FamilyApp Frontend Starting - XP System: 24 XP per level (5 levels) ===");
   const [currentView, setCurrentView] = useState<ViewKey>("login");
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [family, setFamily] = useState<FamilyResponse | null>(null);
   const { isChild, childMember, loading: childLoading } = useIsChild();
   const { isInstallable, isInstalled, isIOS, handleInstallClick } = usePwaInstall();
+  const [hasPet, setHasPet] = useState<boolean | null>(null);
+
+  // Check for hash-based routing (for test views) - must run first
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (hash === "pettest" && import.meta.env.DEV) {
+      setCurrentView("pettest");
+      setIsAuthenticated(true); // Allow test view without auth
+      return;
+    }
+  }, []);
 
   // Check authentication status and load family
   useEffect(() => {
+    // Skip if we're on a test view
+    const hash = window.location.hash.replace("#", "");
+    if (hash === "pettest" && import.meta.env.DEV) {
+      return;
+    }
+
     const loadFamily = async () => {
       const deviceToken = localStorage.getItem("deviceToken");
       if (deviceToken) {
@@ -64,12 +84,36 @@ export function App() {
     }
   }, []);
 
-  // Reset to dashboard when child status changes
+  // Check if child has selected a pet for the current month
   useEffect(() => {
-    if (!childLoading && isChild && currentView !== "dailytasks" && currentView !== "invite") {
-      setCurrentView("dashboard");
+    const checkPet = async () => {
+      if (!childLoading && isChild && isAuthenticated) {
+        try {
+          await fetchCurrentPet();
+          setHasPet(true);
+        } catch (e) {
+          // Pet doesn't exist or error
+          setHasPet(false);
+        }
+      } else if (!isChild) {
+        setHasPet(null);
+      }
+    };
+    void checkPet();
+  }, [isChild, childLoading, isAuthenticated]);
+
+  // Navigate to correct view based on pet status when child logs in
+  useEffect(() => {
+    if (!childLoading && isChild && isAuthenticated && currentView !== "dailytasks" && currentView !== "invite" && currentView !== "xp") {
+      if (hasPet === false) {
+        setCurrentView("eggselection");
+      } else if (hasPet === true && currentView === "eggselection") {
+        setCurrentView("dashboard");
+      } else if (hasPet === true) {
+        setCurrentView("dashboard");
+      }
     }
-  }, [isChild, childLoading]);
+  }, [isChild, childLoading, isAuthenticated, hasPet]);
 
   const handleNavigate = (view: ViewKey) => {
     setCurrentView(view);
@@ -109,7 +153,6 @@ export function App() {
   const handleLogin = async (deviceToken: string) => {
     localStorage.setItem("deviceToken", deviceToken);
     setIsAuthenticated(true);
-    setCurrentView("dashboard");
     // Load family info
     try {
       const member = await getMemberByDeviceToken(deviceToken);
@@ -117,12 +160,25 @@ export function App() {
         const familyData = await getFamily(member.familyId);
         setFamily(familyData);
       }
+      // Check if child and has pet - will be handled by useEffect
+      setCurrentView("dashboard");
     } catch (e) {
       console.error("Failed to load family:", e);
+      setCurrentView("dashboard");
     }
   };
 
+  const handleEggSelected = (pet: PetResponse) => {
+    setHasPet(true);
+    setCurrentView("dashboard");
+  };
+
   const renderView = () => {
+    // Show test views first (they work without auth in dev)
+    if (currentView === "pettest" && import.meta.env.DEV) {
+      return <PetTestView />;
+    }
+
     // Show login/register if not authenticated
     if (!isAuthenticated && currentView !== "invite") {
       return <LoginRegisterView onLogin={handleLogin} />;
@@ -131,12 +187,18 @@ export function App() {
     // If child is logged in, only show child-accessible views
     if (isChild) {
       switch (currentView) {
+        case "eggselection":
+          return <EggSelectionView onEggSelected={handleEggSelected} />;
         case "dailytasks":
           return <DailyTasksView onNavigate={handleNavigate} />;
         case "xp":
           return <XpDashboard onNavigate={handleNavigate} />;
         case "dashboard":
         default:
+          // If no pet, show egg selection instead
+          if (hasPet === false) {
+            return <EggSelectionView onEggSelected={handleEggSelected} />;
+          }
           return <ChildDashboard onNavigate={handleNavigate} childName={childMember?.name} onLogout={handleLogout} />;
       }
     }
@@ -149,6 +211,13 @@ export function App() {
         // Only show in development
         if (import.meta.env.DEV) {
           return <ChildTestView />;
+        }
+        // In production, redirect to dashboard
+        return null;
+      case "pettest":
+        // Only show in development
+        if (import.meta.env.DEV) {
+          return <PetTestView />;
         }
         // In production, redirect to dashboard
         return null;

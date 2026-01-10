@@ -7,103 +7,8 @@ type XpDashboardProps = {
   onNavigate?: (view: ViewKey) => void;
 };
 
-const MAX_LEVEL = 10;
-const XP_PER_LEVEL = 12;
-
-// Badge emojis for each level - themed by month
-const getLevelBadges = (): Record<number, string> => {
-  const month = new Date().getMonth() + 1; // 1-12
-  
-  if (month === 1) {
-    // Snow theme for January - each level has a unique snow-related emoji
-    return {
-      1: "❄️",
-      2: "🌨️",
-      3: "⛄",
-      4: "🧊",
-      5: "🎿",
-      6: "🛷",
-      7: "🧣",
-      8: "🧤",
-      9: "⛷️",
-      10: "🏔️"
-    };
-  }
-  
-  if (month === 2) {
-    // Love/Valentine theme for February
-    return {
-      1: "💝",
-      2: "💖",
-      3: "💗",
-      4: "💓",
-      5: "💕",
-      6: "💞",
-      7: "💟",
-      8: "🌹",
-      9: "💐",
-      10: "💍"
-    };
-  }
-  
-  if (month === 3) {
-    // Spring theme for March
-    return {
-      1: "🌱",
-      2: "🌿",
-      3: "🍀",
-      4: "🌷",
-      5: "🌻",
-      6: "🌸",
-      7: "🦋",
-      8: "🐝",
-      9: "🌞",
-      10: "🌈"
-    };
-  }
-  
-  // Default badges for other months
-  return {
-    1: "🌱",
-    2: "⭐",
-    3: "🌟",
-    4: "💫",
-    5: "✨",
-    6: "🎯",
-    7: "🏆",
-    8: "👑",
-    9: "💎",
-    10: "🌟"
-  };
-};
-
-const LEVEL_BADGES = getLevelBadges();
-
-// Get badges for a specific month (for history)
-const getBadgesForMonth = (month: number): Record<number, string> => {
-  if (month === 1) {
-    return {
-      1: "❄️", 2: "🌨️", 3: "⛄", 4: "🧊", 5: "🎿",
-      6: "🛷", 7: "🧣", 8: "🧤", 9: "⛷️", 10: "🏔️"
-    };
-  }
-  if (month === 2) {
-    return {
-      1: "💝", 2: "💖", 3: "💗", 4: "💓", 5: "💕",
-      6: "💞", 7: "💟", 8: "🌹", 9: "💐", 10: "💍"
-    };
-  }
-  if (month === 3) {
-    return {
-      1: "🌱", 2: "🌿", 3: "🍀", 4: "🌷", 5: "🌻",
-      6: "🌸", 7: "🦋", 8: "🐝", 9: "🌞", 10: "🌈"
-    };
-  }
-  return {
-    1: "🌱", 2: "⭐", 3: "🌟", 4: "💫", 5: "✨",
-    6: "🎯", 7: "🏆", 8: "👑", 9: "💎", 10: "🌟"
-  };
-};
+const MAX_LEVEL = 5;
+const XP_PER_LEVEL = 24;
 
 export function XpDashboard({ onNavigate }: XpDashboardProps) {
   const [progress, setProgress] = useState<XpProgressResponse | null>(null);
@@ -205,10 +110,7 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
         border: "2px solid rgba(184, 230, 184, 0.3)"
       }}>
         <div style={{ textAlign: "center", marginBottom: "20px" }}>
-          <div style={{ fontSize: "3rem", marginBottom: "6px" }}>
-            {LEVEL_BADGES[progress.currentLevel] || "⭐"}
-          </div>
-          <h2 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "#2d5a2d" }}>
+          <h2 style={{ margin: 0, fontSize: "2.5rem", fontWeight: 700, color: "#2d5a2d" }}>
             Level {progress.currentLevel}
           </h2>
           <p style={{ margin: "6px 0 0", fontSize: "1rem", color: "#6b6b6b" }}>
@@ -286,54 +188,6 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
         </div>
       </section>
 
-      {/* Badges Section */}
-      <section className="card" style={{ marginTop: "16px" }}>
-        <h3 style={{ marginTop: 0, marginBottom: "12px", fontSize: "1rem", fontWeight: 600 }}>
-          Dina Badges
-        </h3>
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
-          gap: "8px"
-        }}>
-          {Array.from({ length: MAX_LEVEL }, (_, i) => i + 1).map((level) => {
-            const hasBadge = progress.currentLevel >= level;
-            return (
-              <div
-                key={level}
-                style={{
-                  aspectRatio: "1",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: hasBadge 
-                    ? "rgba(184, 230, 184, 0.2)" 
-                    : "rgba(240, 240, 240, 0.5)",
-                  borderRadius: "12px",
-                  border: hasBadge 
-                    ? "2px solid rgba(184, 230, 184, 0.5)" 
-                    : "1px solid rgba(200, 190, 180, 0.3)",
-                  opacity: hasBadge ? 1 : 0.4,
-                  transition: "all 0.2s ease"
-                }}
-              >
-                <div style={{ fontSize: "1.5rem", marginBottom: "2px" }}>
-                  {LEVEL_BADGES[level] || "⭐"}
-                </div>
-                <div style={{ 
-                  fontSize: "0.7rem", 
-                  fontWeight: hasBadge ? 600 : 400,
-                  color: hasBadge ? "#2d5a2d" : "#a0a0a0"
-                }}>
-                  L{level}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
       {/* History Section */}
       {history.length > 0 && (
         <section className="card" style={{ marginTop: "16px" }}>
@@ -342,8 +196,6 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {history.map((h) => {
-              const monthBadges = getBadgesForMonth(h.month);
-              const historyBadge = monthBadges[Math.min(h.finalLevel, MAX_LEVEL)] || "⭐";
               return (
                 <div
                   key={`${h.year}-${h.month}`}
@@ -356,15 +208,6 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
                     gap: "12px"
                   }}
                 >
-                  <div style={{ 
-                    fontSize: "1.5rem",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minWidth: "32px"
-                  }}>
-                    {historyBadge}
-                  </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, marginBottom: "2px", color: "#2d5a2d" }}>
                       {monthNames[h.month - 1]} {h.year}
