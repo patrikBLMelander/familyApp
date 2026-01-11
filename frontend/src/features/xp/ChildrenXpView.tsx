@@ -4,7 +4,7 @@ import { fetchMemberXpProgress, fetchMemberXpHistory, awardBonusXp, XpProgressRe
 import { fetchMemberPet, fetchMemberPetHistory, PetResponse, PetHistoryResponse } from "../../shared/api/pets";
 import { PetVisualization } from "../pet/PetVisualization";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
 
 type ChildrenXpViewProps = {
   onNavigate?: (view: ViewKey) => void;

@@ -105,7 +105,10 @@ public class CalendarController {
                 recurringType,
                 request.recurringInterval(),
                 request.recurringEndDate(),
-                request.recurringEndCount()
+                request.recurringEndCount(),
+                request.isTask(),
+                request.xpPoints(),
+                request.isRequired()
         );
         
         return toResponse(event);
@@ -148,7 +151,10 @@ public class CalendarController {
                 recurringType,
                 request.recurringInterval(),
                 request.recurringEndDate(),
-                request.recurringEndCount()
+                request.recurringEndCount(),
+                request.isTask(),
+                request.xpPoints(),
+                request.isRequired()
         );
         
         return toResponse(event);
@@ -222,6 +228,92 @@ public class CalendarController {
         service.deleteCategory(categoryId);
     }
 
+    // Task Completion Endpoints
+
+    @PostMapping("/events/{eventId}/task-completion")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CalendarEventTaskCompletionResponse markTaskCompleted(
+            @PathVariable("eventId") UUID eventId,
+            @RequestBody MarkTaskCompletedRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID memberId = request.memberId();
+        UUID requesterFamilyId = null;
+        
+        // Validate device token and get requester's family
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+                // If memberId not provided, use requester's ID
+                if (memberId == null) {
+                    memberId = requester.id();
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        if (memberId == null) {
+            throw new IllegalArgumentException("Member ID is required");
+        }
+        
+        // Access control: Verify requester is in same family as the member they're marking tasks for
+        if (requesterFamilyId != null) {
+            var targetMember = memberService.getMemberById(memberId);
+            if (!requesterFamilyId.equals(targetMember.familyId())) {
+                throw new IllegalArgumentException("Access denied: Member is not in the same family");
+            }
+        }
+        
+        var completion = service.markTaskCompleted(eventId, memberId, request.occurrenceDate());
+        return toCompletionResponse(completion);
+    }
+
+    @DeleteMapping("/events/{eventId}/task-completion")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unmarkTaskCompleted(
+            @PathVariable("eventId") UUID eventId,
+            @RequestParam("memberId") UUID memberId,
+            @RequestParam("occurrenceDate") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate occurrenceDate,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        // Access control: Verify requester is in same family as the member
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                var targetMember = memberService.getMemberById(memberId);
+                if (!requester.familyId().equals(targetMember.familyId())) {
+                    throw new IllegalArgumentException("Access denied: Member is not in the same family");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token or access denied");
+            }
+        }
+        
+        service.unmarkTaskCompleted(eventId, memberId, occurrenceDate);
+    }
+
+    @GetMapping("/events/{eventId}/task-completion")
+    public List<CalendarEventTaskCompletionResponse> getTaskCompletions(
+            @PathVariable("eventId") UUID eventId
+    ) {
+        var completions = service.getTaskCompletions(eventId);
+        return completions.stream()
+                .map(this::toCompletionResponse)
+                .toList();
+    }
+
+    @GetMapping("/members/{memberId}/task-completions")
+    public List<CalendarEventTaskCompletionResponse> getTaskCompletionsForMember(
+            @PathVariable("memberId") UUID memberId
+    ) {
+        var completions = service.getTaskCompletionsForMember(memberId);
+        return completions.stream()
+                .map(this::toCompletionResponse)
+                .toList();
+    }
+
     private CalendarEventResponse toResponse(CalendarEvent event) {
         // Format LocalDateTime as "yyyy-MM-ddTHH:mm" (no timezone, no seconds)
         java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
@@ -240,6 +332,9 @@ public class CalendarController {
                 event.recurringInterval(),
                 event.recurringEndDate() != null ? event.recurringEndDate().toString() : null,
                 event.recurringEndCount(),
+                event.isTask(),
+                event.xpPoints(),
+                event.isRequired(),
                 event.createdAt().toString(),
                 event.updatedAt().toString(),
                 event.participantIds()
@@ -254,6 +349,16 @@ public class CalendarController {
                 category.color(),
                 category.createdAt().toString(),
                 category.updatedAt().toString()
+        );
+    }
+
+    private CalendarEventTaskCompletionResponse toCompletionResponse(com.familyapp.domain.calendar.CalendarEventTaskCompletion completion) {
+        return new CalendarEventTaskCompletionResponse(
+                completion.id(),
+                completion.eventId(),
+                completion.memberId(),
+                completion.occurrenceDate().toString(),
+                completion.completedAt().toString()
         );
     }
 
@@ -274,7 +379,10 @@ public class CalendarController {
             Integer recurringInterval,
             @DateTimeFormat(pattern = "yyyy-MM-dd")
             LocalDate recurringEndDate,
-            Integer recurringEndCount
+            Integer recurringEndCount,
+            Boolean isTask,  // TRUE = "Dagens Att Göra", FALSE = vanlig event
+            Integer xpPoints,  // XP-poäng (only used when isTask = TRUE)
+            Boolean isRequired  // TRUE = obligatorisk, FALSE = extra (only used when isTask = TRUE)
     ) {
     }
 
@@ -295,7 +403,10 @@ public class CalendarController {
             Integer recurringInterval,
             @DateTimeFormat(pattern = "yyyy-MM-dd")
             LocalDate recurringEndDate,
-            Integer recurringEndCount
+            Integer recurringEndCount,
+            Boolean isTask,  // TRUE = "Dagens Att Göra", FALSE = vanlig event
+            Integer xpPoints,  // XP-poäng (only used when isTask = TRUE)
+            Boolean isRequired  // TRUE = obligatorisk, FALSE = extra (only used when isTask = TRUE)
     ) {
     }
 
@@ -314,6 +425,9 @@ public class CalendarController {
             Integer recurringInterval,
             String recurringEndDate,
             Integer recurringEndCount,
+            boolean isTask,
+            Integer xpPoints,
+            boolean isRequired,
             String createdAt,
             String updatedAt,
             Set<UUID> participantIds
@@ -341,6 +455,22 @@ public class CalendarController {
             String color,
             String createdAt,
             String updatedAt
+    ) {
+    }
+
+    public record MarkTaskCompletedRequest(
+            UUID memberId,  // Optional if device token is provided
+            @DateTimeFormat(pattern = "yyyy-MM-dd")
+            LocalDate occurrenceDate
+    ) {
+    }
+
+    public record CalendarEventTaskCompletionResponse(
+            UUID id,
+            UUID eventId,
+            UUID memberId,
+            String occurrenceDate,
+            String completedAt
     ) {
     }
 }

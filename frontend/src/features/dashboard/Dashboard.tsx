@@ -1,4 +1,4 @@
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers" | "childrenxp";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "childrenxp";
 
 type DashboardProps = {
   placeholder?: string;
@@ -14,16 +14,8 @@ export function Dashboard({ placeholder, onNavigate }: DashboardProps) {
           className="card card-primary"
           onClick={() => onNavigate?.("todos")}
         >
-          <h2>To do-listor</h2>
+          <h2>Listor</h2>
           <p>Snabb överblick över inköp, packlistor och vardagssysslor.</p>
-        </button>
-        <button
-          type="button"
-          className="card"
-          onClick={() => onNavigate?.("dailytasks")}
-        >
-          <h2>Dagens sysslor</h2>
-          <p>Se dagens sysslor för dig och barnen.</p>
         </button>
         <button
           type="button"
@@ -38,8 +30,8 @@ export function Dashboard({ placeholder, onNavigate }: DashboardProps) {
           className="card"
           onClick={() => onNavigate?.("schedule")}
         >
-          <h2>Schema</h2>
-          <p>Se familjens aktiviteter och events.</p>
+          <h2>Kalender</h2>
+          <p>Se familjens aktiviteter, events och dagens sysslor.</p>
         </button>
         <button
           type="button"

@@ -1,16 +1,21 @@
 package com.familyapp.application.calendar;
 
+import com.familyapp.application.xp.XpService;
 import com.familyapp.domain.calendar.CalendarEvent;
 import com.familyapp.domain.calendar.CalendarEventCategory;
+import com.familyapp.domain.calendar.CalendarEventTaskCompletion;
 import com.familyapp.infrastructure.calendar.CalendarEventCategoryEntity;
 import com.familyapp.infrastructure.calendar.CalendarEventCategoryJpaRepository;
 import com.familyapp.infrastructure.calendar.CalendarEventEntity;
 import com.familyapp.infrastructure.calendar.CalendarEventJpaRepository;
+import com.familyapp.infrastructure.calendar.CalendarEventTaskCompletionEntity;
+import com.familyapp.infrastructure.calendar.CalendarEventTaskCompletionJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -26,17 +31,23 @@ public class CalendarService {
     private final CalendarEventCategoryJpaRepository categoryRepository;
     private final FamilyMemberJpaRepository memberRepository;
     private final FamilyJpaRepository familyRepository;
+    private final CalendarEventTaskCompletionJpaRepository completionRepository;
+    private final XpService xpService;
 
     public CalendarService(
             CalendarEventJpaRepository eventRepository,
             CalendarEventCategoryJpaRepository categoryRepository,
             FamilyMemberJpaRepository memberRepository,
-            FamilyJpaRepository familyRepository
+            FamilyJpaRepository familyRepository,
+            CalendarEventTaskCompletionJpaRepository completionRepository,
+            XpService xpService
     ) {
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
         this.memberRepository = memberRepository;
         this.familyRepository = familyRepository;
+        this.completionRepository = completionRepository;
+        this.xpService = xpService;
     }
 
     @Transactional(readOnly = true)
@@ -51,7 +62,12 @@ public class CalendarService {
                 .filter(CalendarEvent::isRecurring)
                 .toList();
         
-        var result = new java.util.ArrayList<CalendarEvent>(baseEvents);
+        // Filter out recurring base events since we'll generate instances for them
+        var nonRecurringBaseEvents = baseEvents.stream()
+                .filter(event -> !event.isRecurring())
+                .toList();
+        
+        var result = new java.util.ArrayList<CalendarEvent>(nonRecurringBaseEvents);
         
         // Generate recurring instances
         for (var recurringEvent : allRecurringEvents) {
@@ -158,6 +174,9 @@ public class CalendarService {
                         null,
                         null,
                         null,
+                        baseEvent.isTask(),
+                        baseEvent.xpPoints(),
+                        baseEvent.isRequired(),
                         baseEvent.createdAt(),
                         baseEvent.updatedAt(),
                         baseEvent.participantIds()
@@ -191,6 +210,19 @@ public class CalendarService {
         };
     }
 
+    private LocalDate getNextOccurrenceDate(
+            LocalDate current,
+            CalendarEvent.RecurringType type,
+            int interval
+    ) {
+        return switch (type) {
+            case DAILY -> current.plusDays(interval);
+            case WEEKLY -> current.plusWeeks(interval);
+            case MONTHLY -> current.plusMonths(interval);
+            case YEARLY -> current.plusYears(interval);
+        };
+    }
+
     public CalendarEvent createEvent(
             UUID familyId,
             UUID categoryId,
@@ -205,7 +237,10 @@ public class CalendarService {
             CalendarEvent.RecurringType recurringType,
             Integer recurringInterval,
             java.time.LocalDate recurringEndDate,
-            Integer recurringEndCount
+            Integer recurringEndCount,
+            Boolean isTask,
+            Integer xpPoints,
+            Boolean isRequired
     ) {
         var now = OffsetDateTime.now();
         var entity = new CalendarEventEntity();
@@ -253,6 +288,23 @@ public class CalendarService {
             entity.setRecurringEndCount(null);
         }
         
+        // Task fields
+        boolean isTaskValue = isTask != null ? isTask : false;
+        entity.setTask(isTaskValue);
+        
+        // Validate: If isTask=false, xpPoints should be null or 0
+        // If isTask=true and xpPoints is null, use default of 1
+        if (!isTaskValue && xpPoints != null && xpPoints > 0) {
+            throw new IllegalArgumentException("xpPoints can only be set when isTask=true");
+        }
+        if (isTaskValue && xpPoints == null) {
+            entity.setXpPoints(1); // Default XP for tasks
+        } else {
+            entity.setXpPoints(xpPoints);
+        }
+        
+        entity.setRequired(isRequired != null ? isRequired : true);
+        
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         
@@ -273,7 +325,10 @@ public class CalendarService {
             CalendarEvent.RecurringType recurringType,
             Integer recurringInterval,
             java.time.LocalDate recurringEndDate,
-            Integer recurringEndCount
+            Integer recurringEndCount,
+            Boolean isTask,
+            Integer xpPoints,
+            Boolean isRequired
     ) {
         var entity = eventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
@@ -312,6 +367,30 @@ public class CalendarService {
             entity.setRecurringInterval(null);
             entity.setRecurringEndDate(null);
             entity.setRecurringEndCount(null);
+        }
+        
+        // Update task fields (only if provided)
+        if (isTask != null) {
+            entity.setTask(isTask);
+            // Validate: If isTask=false, xpPoints should be null or 0
+            if (!isTask && entity.getXpPoints() != null && entity.getXpPoints() > 0) {
+                entity.setXpPoints(null);
+            }
+            // If isTask=true and xpPoints is null, use default of 1
+            if (isTask && (xpPoints == null && entity.getXpPoints() == null)) {
+                entity.setXpPoints(1);
+            }
+        }
+        if (xpPoints != null) {
+            // Validate: xpPoints can only be set when isTask=true
+            boolean currentIsTask = isTask != null ? isTask : entity.isTask();
+            if (!currentIsTask && xpPoints > 0) {
+                throw new IllegalArgumentException("xpPoints can only be set when isTask=true");
+            }
+            entity.setXpPoints(xpPoints);
+        }
+        if (isRequired != null) {
+            entity.setRequired(isRequired);
         }
         
         entity.setUpdatedAt(OffsetDateTime.now());
@@ -396,6 +475,9 @@ public class CalendarService {
                 entity.getRecurringInterval(),
                 entity.getRecurringEndDate(),
                 entity.getRecurringEndCount(),
+                entity.isTask(),
+                entity.getXpPoints(),
+                entity.isRequired(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 participantIds
@@ -411,6 +493,185 @@ public class CalendarService {
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+    // Task Completion Methods
+
+    /**
+     * Mark a task (calendar event with isTask=true) as completed for a specific member and occurrence date.
+     * For events with multiple participants, completion is shared (when one participant marks it complete, it's complete for all).
+     */
+    public CalendarEventTaskCompletion markTaskCompleted(UUID eventId, UUID memberId, LocalDate occurrenceDate) {
+        var eventEntity = eventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+        
+        if (!eventEntity.isTask()) {
+            throw new IllegalArgumentException("Event is not a task (isTask=false)");
+        }
+        
+        var member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Member not found: " + memberId));
+        
+        // Validate: Member must be in the same family as the event
+        if (eventEntity.getFamily() == null || member.getFamily() == null ||
+            !eventEntity.getFamily().getId().equals(member.getFamily().getId())) {
+            throw new IllegalArgumentException("Member is not in the same family as the event");
+        }
+        
+        // Validate occurrence date
+        validateOccurrenceDate(eventEntity, occurrenceDate);
+        
+        // Check if already completed by this member
+        var existing = completionRepository.findByEventIdAndMemberIdAndOccurrenceDate(eventId, memberId, occurrenceDate);
+        if (existing.isPresent()) {
+            return toDomainCompletion(existing.get());
+        }
+        
+        // Create completion
+        var completionEntity = new CalendarEventTaskCompletionEntity();
+        completionEntity.setId(UUID.randomUUID());
+        completionEntity.setEvent(eventEntity);
+        completionEntity.setMember(member);
+        completionEntity.setOccurrenceDate(occurrenceDate);
+        completionEntity.setCompletedAt(OffsetDateTime.now());
+        
+        var saved = completionRepository.save(completionEntity);
+        
+        // Award XP if xpPoints is set (only for children, handled by XpService)
+        Integer xpPoints = eventEntity.getXpPoints();
+        if (xpPoints != null && xpPoints > 0) {
+            xpService.awardXp(memberId, xpPoints);
+        }
+        
+        return toDomainCompletion(saved);
+    }
+
+    /**
+     * Remove completion for a task.
+     */
+    public void unmarkTaskCompleted(UUID eventId, UUID memberId, LocalDate occurrenceDate) {
+        var eventEntity = eventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+        
+        var completion = completionRepository.findByEventIdAndMemberIdAndOccurrenceDate(eventId, memberId, occurrenceDate);
+        if (completion.isPresent()) {
+            // Remove XP if xpPoints is set (only for children, handled by XpService)
+            Integer xpPoints = eventEntity.getXpPoints();
+            if (xpPoints != null && xpPoints > 0) {
+                xpService.removeXp(memberId, xpPoints);
+            }
+            completionRepository.delete(completion.get());
+        }
+    }
+
+    /**
+     * Check if a task is completed for a specific occurrence date.
+     * For events with multiple participants, returns true if ANY participant has marked it complete.
+     */
+    @Transactional(readOnly = true)
+    public boolean isTaskCompleted(UUID eventId, LocalDate occurrenceDate) {
+        var completions = completionRepository.findByEventIdAndOccurrenceDate(eventId, occurrenceDate);
+        return !completions.isEmpty();
+    }
+
+    /**
+     * Get all completions for a specific event.
+     */
+    @Transactional(readOnly = true)
+    public List<CalendarEventTaskCompletion> getTaskCompletions(UUID eventId) {
+        return completionRepository.findByEventId(eventId).stream()
+                .map(this::toDomainCompletion)
+                .toList();
+    }
+
+    /**
+     * Get completions for a specific member.
+     */
+    @Transactional(readOnly = true)
+    public List<CalendarEventTaskCompletion> getTaskCompletionsForMember(UUID memberId) {
+        return completionRepository.findByMemberId(memberId).stream()
+                .map(this::toDomainCompletion)
+                .toList();
+    }
+
+    private CalendarEventTaskCompletion toDomainCompletion(CalendarEventTaskCompletionEntity entity) {
+        return new CalendarEventTaskCompletion(
+                entity.getId(),
+                entity.getEvent() != null ? entity.getEvent().getId() : null,
+                entity.getMember() != null ? entity.getMember().getId() : null,
+                entity.getOccurrenceDate(),
+                entity.getCompletedAt()
+        );
+    }
+
+    /**
+     * Validate that the occurrence date matches the event's schedule.
+     * For one-time events: occurrenceDate must equal the start date.
+     * For recurring events: occurrenceDate must be a valid occurrence date.
+     */
+    private void validateOccurrenceDate(CalendarEventEntity eventEntity, LocalDate occurrenceDate) {
+        if (occurrenceDate == null) {
+            throw new IllegalArgumentException("Occurrence date cannot be null");
+        }
+        
+        LocalDate eventStartDate = eventEntity.getStartDateTime().toLocalDate();
+        
+        // For one-time events (not recurring)
+        if (eventEntity.getRecurringType() == null || eventEntity.getRecurringType().isEmpty()) {
+            if (!occurrenceDate.equals(eventStartDate)) {
+                throw new IllegalArgumentException(
+                    "Occurrence date " + occurrenceDate + " does not match event start date " + eventStartDate
+                );
+            }
+            return;
+        }
+        
+        // For recurring events: check if occurrenceDate is a valid occurrence
+        // We check if the date matches the recurring pattern
+        CalendarEvent.RecurringType recurringType;
+        try {
+            recurringType = CalendarEvent.RecurringType.valueOf(eventEntity.getRecurringType());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid recurring type: " + eventEntity.getRecurringType());
+        }
+        
+        int interval = eventEntity.getRecurringInterval() != null ? eventEntity.getRecurringInterval() : 1;
+        
+        // Check recurring end date
+        if (eventEntity.getRecurringEndDate() != null && occurrenceDate.isAfter(eventEntity.getRecurringEndDate())) {
+            throw new IllegalArgumentException(
+                "Occurrence date " + occurrenceDate + " is after recurring end date " + eventEntity.getRecurringEndDate()
+            );
+        }
+        
+        // Check if occurrenceDate matches the pattern
+        boolean isValid = false;
+        LocalDate currentDate = eventStartDate;
+        int maxIterations = 10000; // Safety limit
+        int iteration = 0;
+        
+        while (!currentDate.isAfter(occurrenceDate) && iteration < maxIterations) {
+            if (currentDate.equals(occurrenceDate)) {
+                isValid = true;
+                break;
+            }
+            
+            // Move to next occurrence
+            currentDate = getNextOccurrenceDate(currentDate, recurringType, interval);
+            
+            iteration++;
+            
+            // Check recurring end date
+            if (eventEntity.getRecurringEndDate() != null && currentDate.isAfter(eventEntity.getRecurringEndDate())) {
+                break;
+            }
+        }
+        
+        if (!isValid) {
+            throw new IllegalArgumentException(
+                "Occurrence date " + occurrenceDate + " does not match the recurring pattern for event starting " + eventStartDate
+            );
+        }
     }
 }
 

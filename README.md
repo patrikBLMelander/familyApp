@@ -14,11 +14,12 @@ En familjeapplikation för att hantera to-do listor, dagliga sysslor och scheman
 ## Funktioner
 
 - ✅ To-do listor med drag-and-drop
-- ✅ Dagliga sysslor för barn och vuxna
-- ✅ Familjeläge för padda/display
+- ✅ Kalender med events och återkommande händelser
+- ✅ Dagliga sysslor (hanteras via kalendern med XP-system för barn)
 - ✅ QR-kod inbjudningar för familjemedlemmar
 - ✅ Privata listor
 - ✅ Färgteman för listor
+- ✅ XP-system och djur för barn (motivation för att göra sysslor)
 
 ## Lokal utveckling
 

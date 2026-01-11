@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchCurrentPet, PetResponse } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
-import { fetchTasksForToday, toggleTaskCompletion, DailyTaskWithCompletionResponse } from "../../shared/api/dailyTasks";
+import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse } from "../../shared/api/calendar";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
 
@@ -18,7 +18,7 @@ const XP_PER_LEVEL = 24;
 export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboardProps) {
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
-  const [tasks, setTasks] = useState<DailyTaskWithCompletionResponse[]>([]);
+  const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +46,14 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
 
         setPet(petData);
         setXpProgress(xpData);
-        setTasks(tasksData);
+        // Sort tasks: required first, then by title
+        const sortedTasks = [...tasksData].sort((a, b) => {
+          if (a.event.isRequired !== b.event.isRequired) {
+            return a.event.isRequired ? -1 : 1; // Required first
+          }
+          return a.event.title.localeCompare(b.event.title);
+        });
+        setTasks(sortedTasks);
       } catch (e) {
         console.error("Error loading dashboard data:", e);
         setError("Kunde inte ladda data.");
@@ -58,30 +65,31 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
     void load();
   }, []);
 
-  const handleToggleTask = async (taskId: string) => {
+  const handleToggleTask = async (eventId: string) => {
     // Optimistic update
     setTasks((prev) =>
       prev.map((task) =>
-        task.task.id === taskId
+        task.event.id === eventId
           ? { ...task, completed: !task.completed }
           : task
       )
     );
 
     try {
-      await toggleTaskCompletion(taskId);
+      const deviceToken = localStorage.getItem("deviceToken");
+      if (!deviceToken) {
+        throw new Error("No device token");
+      }
+      const member = await getMemberByDeviceToken(deviceToken);
+      await toggleTaskCompletion(eventId, member.id);
       
       // Reload data to get updated state
-      const deviceToken = localStorage.getItem("deviceToken");
-      if (deviceToken) {
-        const member = await getMemberByDeviceToken(deviceToken);
-        const [xpData, tasksData] = await Promise.all([
-          fetchCurrentXpProgress().catch(() => null),
-          fetchTasksForToday(member.id).catch(() => []),
-        ]);
-        setXpProgress(xpData);
-        setTasks(tasksData);
-      }
+      const [xpData, tasksData] = await Promise.all([
+        fetchCurrentXpProgress().catch(() => null),
+        fetchTasksForToday(member.id).catch(() => []),
+      ]);
+      setXpProgress(xpData);
+      setTasks(tasksData);
     } catch (e) {
       console.error("Error toggling task:", e);
       // Revert on error by reloading
@@ -335,15 +343,15 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
               // Different background colors for required vs extra tasks (only when not completed)
               const bgColor = task.completed 
                 ? "#f0fff4" // Same green for all completed tasks
-                : (task.task.isRequired ? "#f7fafc" : "#fff7ed");
+                : (task.event.isRequired ? "#f7fafc" : "#fff7ed");
               const borderColor = task.completed 
                 ? "#48bb78" // Same green border for all completed tasks
-                : (task.task.isRequired ? "#e2e8f0" : "#fed7aa");
+                : (task.event.isRequired ? "#e2e8f0" : "#fed7aa");
               
               return (
                 <div
-                  key={task.task.id}
-                  onClick={() => handleToggleTask(task.task.id)}
+                  key={task.event.id}
+                  onClick={() => handleToggleTask(task.event.id)}
                   style={{
                     padding: "16px",
                     background: bgColor,
@@ -376,49 +384,21 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
                       color: "#2d3748", // Same color for all text, readable
                       textDecoration: task.completed ? "line-through" : "none",
                     }}>
-                      {task.task.name}
+                      {task.event.title}
                     </div>
-                    {task.task.xpPoints > 0 && (
+                    {task.event.xpPoints && task.event.xpPoints > 0 && (
                       <div style={{
                         fontSize: "0.85rem",
                         color: "#718096",
                         marginTop: "4px",
                       }}>
-                        +{task.task.xpPoints} XP
+                        +{task.event.xpPoints} XP
                       </div>
                     )}
                   </div>
                 </div>
               );
             })}
-            {tasks.length > 3 && (
-              <button
-                type="button"
-                className="button-primary"
-                onClick={() => onNavigate?.("dailytasks")}
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  marginTop: "8px",
-                }}
-              >
-                Se alla sysslor ({tasks.length})
-              </button>
-            )}
-            {tasks.length <= 3 && (
-              <button
-                type="button"
-                className="button-primary"
-                onClick={() => onNavigate?.("dailytasks")}
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  marginTop: "8px",
-                }}
-              >
-                Se alla sysslor
-              </button>
-            )}
           </div>
         )}
       </section>

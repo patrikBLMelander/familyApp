@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchCurrentXpProgress, fetchXpHistory, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores";
 
 type XpDashboardProps = {
   onNavigate?: (view: ViewKey) => void;

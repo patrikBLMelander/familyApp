@@ -10,10 +10,14 @@ import {
   updateCalendarCategory,
   deleteCalendarCategory,
   CalendarEventCategoryResponse,
+  fetchTasksForToday,
+  fetchTasksForDate,
+  toggleTaskCompletion,
+  CalendarTaskWithCompletionResponse,
 } from "../../shared/api/calendar";
-import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/familyMembers";
+import { fetchAllFamilyMembers, FamilyMemberResponse, getMemberByDeviceToken } from "../../shared/api/familyMembers";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
 
 type CalendarViewProps = {
   onNavigate?: (view: ViewKey) => void;
@@ -33,10 +37,181 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [showTasksOnly, setShowTasksOnly] = useState(false);
+  const [showAllMembers, setShowAllMembers] = useState(false);
+  const [tasksWithCompletion, setTasksWithCompletion] = useState<CalendarTaskWithCompletionResponse[]>([]);
+  const [tasksByMember, setTasksByMember] = useState<Map<string, CalendarTaskWithCompletionResponse[]>>(new Map());
+  const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddTitle, setQuickAddTitle] = useState("");
+  const [initialStartDate, setInitialStartDate] = useState<string | null>(null);
 
   useEffect(() => {
     void loadData();
+    void loadCurrentMember();
   }, []);
+
+  useEffect(() => {
+    if (showTasksOnly && viewType === "rolling") {
+      if (showAllMembers) {
+        void loadTasksForAllMembers();
+      } else if (currentMemberId) {
+        void loadTasks();
+      }
+    }
+  }, [showTasksOnly, viewType, currentMemberId, selectedDate, showAllMembers]);
+
+  const loadCurrentMember = async () => {
+    const deviceToken = localStorage.getItem("deviceToken");
+    if (deviceToken) {
+      try {
+        const member = await getMemberByDeviceToken(deviceToken);
+        setCurrentMemberId(member.id);
+      } catch (e) {
+        console.error("Error loading current member:", e);
+      }
+    }
+  };
+
+  const loadTasks = async () => {
+    if (!currentMemberId) return;
+    try {
+      const tasks = await fetchTasksForDate(currentMemberId, selectedDate);
+      // Sort tasks: required first, then by title
+      const sortedTasks = [...tasks].sort((a, b) => {
+        if (a.event.isRequired !== b.event.isRequired) {
+          return a.event.isRequired ? -1 : 1; // Required first
+        }
+        return a.event.title.localeCompare(b.event.title);
+      });
+      setTasksWithCompletion(sortedTasks);
+    } catch (e) {
+      console.error("Error loading tasks:", e);
+      setTasksWithCompletion([]);
+    }
+  };
+
+  const loadTasksForAllMembers = async () => {
+    try {
+      const allTasks = new Map<string, CalendarTaskWithCompletionResponse[]>();
+      
+      // Fetch tasks for each member
+      for (const member of members) {
+        try {
+          const tasks = await fetchTasksForDate(member.id, selectedDate);
+          // Sort tasks: required first, then by title
+          const sortedTasks = [...tasks].sort((a, b) => {
+            if (a.event.isRequired !== b.event.isRequired) {
+              return a.event.isRequired ? -1 : 1; // Required first
+            }
+            return a.event.title.localeCompare(b.event.title);
+          });
+          if (sortedTasks.length > 0) {
+            allTasks.set(member.id, sortedTasks);
+          }
+        } catch (e) {
+          console.error(`Error loading tasks for member ${member.id}:`, e);
+        }
+      }
+      
+      setTasksByMember(allTasks);
+    } catch (e) {
+      console.error("Error loading tasks for all members:", e);
+      setTasksByMember(new Map());
+    }
+  };
+
+  const handleToggleTask = async (eventId: string, memberId?: string) => {
+    const targetMemberId = memberId || currentMemberId;
+    if (!targetMemberId) return;
+    
+    // Optimistic update
+    if (showAllMembers) {
+      setTasksByMember((prev) => {
+        const newMap = new Map(prev);
+        const memberTasks = newMap.get(targetMemberId) || [];
+        newMap.set(
+          targetMemberId,
+          memberTasks.map((task) =>
+            task.event.id === eventId
+              ? { ...task, completed: !task.completed }
+              : task
+          )
+        );
+        return newMap;
+      });
+    } else {
+      setTasksWithCompletion((prev) =>
+        prev.map((task) =>
+          task.event.id === eventId
+            ? { ...task, completed: !task.completed }
+            : task
+        )
+      );
+    }
+
+    try {
+      await toggleTaskCompletion(eventId, targetMemberId, selectedDate);
+      // Reload tasks to get updated state
+      if (showAllMembers) {
+        await loadTasksForAllMembers();
+      } else {
+        await loadTasks();
+      }
+    } catch (e) {
+      console.error("Error toggling task:", e);
+      // Reload on error to revert
+      if (showAllMembers) {
+        await loadTasksForAllMembers();
+      } else {
+        await loadTasks();
+      }
+    }
+  };
+
+  const handleQuickAddTask = async () => {
+    if (!currentMemberId || !quickAddTitle.trim()) return;
+
+    try {
+      // Format date as YYYY-MM-DD
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const day = String(selectedDate.getDate()).padStart(2, "0");
+      const dateStr = `${year}-${month}-${day}`;
+      
+      // Create all-day task with defaults
+      await createCalendarEvent(
+        quickAddTitle.trim(),
+        `${dateStr}T00:00`, // startDateTime
+        null, // endDateTime (null for all-day)
+        true, // isAllDay
+        undefined, // description
+        undefined, // categoryId
+        undefined, // location
+        [currentMemberId], // participantIds
+        null, // recurringType
+        null, // recurringInterval
+        null, // recurringEndDate
+        null, // recurringEndCount
+        true, // isTask
+        1, // xpPoints
+        true // isRequired
+      );
+      
+      // Clear input and reload tasks
+      setQuickAddTitle("");
+      setShowQuickAdd(false);
+      if (showAllMembers) {
+        await loadTasksForAllMembers();
+      } else {
+        await loadTasks();
+      }
+    } catch (e) {
+      console.error("Error creating quick task:", e);
+      setError("Kunde inte skapa task.");
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -70,6 +245,9 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
     recurringInterval?: number | null;
     recurringEndDate?: string | null; // Changed from Date to string
     recurringEndCount?: number | null;
+    isTask?: boolean;
+    xpPoints?: number | null;
+    isRequired?: boolean;
   }) => {
     try {
       await createCalendarEvent(
@@ -84,7 +262,10 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
         eventData.recurringType,
         eventData.recurringInterval,
         eventData.recurringEndDate,
-        eventData.recurringEndCount
+        eventData.recurringEndCount,
+        eventData.isTask,
+        eventData.xpPoints,
+        eventData.isRequired
       );
       await loadData();
       setShowCreateForm(false);
@@ -109,6 +290,9 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
       recurringInterval?: number | null;
       recurringEndDate?: string | null; // Changed from Date to string
       recurringEndCount?: number | null;
+      isTask?: boolean;
+      xpPoints?: number | null;
+      isRequired?: boolean;
     }
   ) => {
     try {
@@ -125,7 +309,10 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
         eventData.recurringType,
         eventData.recurringInterval,
         eventData.recurringEndDate,
-        eventData.recurringEndCount
+        eventData.recurringEndCount,
+        eventData.isTask,
+        eventData.xpPoints,
+        eventData.isRequired
       );
       await loadData();
       setEditingEvent(null);
@@ -244,21 +431,33 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
     return dates;
   };
 
-  // Filter events based on view type
+  // Filter events based on view type and task/event toggle
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
-  const filteredEvents = viewType === "rolling" 
-    ? events.filter(event => {
-        if (event.isAllDay) {
-          // For all-day events, check if any date in the event range is today or in the future
-          const eventDates = getAllDayEventDates(event);
-          return eventDates.some(dateStr => dateStr >= todayStr);
-        } else {
-          // For regular events, check if startDateTime is in the future
-          return new Date(event.startDateTime) >= now;
-        }
-      })
-    : events;
+  
+  // Filter by task/event type based on showTasksOnly (applies to all views)
+  let filteredEvents = events.filter(event => {
+    if (showTasksOnly) {
+      if (!event.isTask) return false;
+      // If showTasksOnly is true and showAllMembers is false, filter by current member
+      if (!showAllMembers && currentMemberId) {
+        return event.participantIds.includes(currentMemberId);
+      }
+      return true;
+    } else {
+      return !event.isTask; // Show only non-task events
+    }
+  });
+  
+  // For rolling view, also filter by date (today or future)
+  if (viewType === "rolling") {
+    filteredEvents = filteredEvents.filter(event => {
+      const isFutureEvent = event.isAllDay
+        ? getAllDayEventDates(event).some(dateStr => dateStr >= todayStr)
+        : new Date(event.startDateTime) >= now;
+      return isFutureEvent;
+    });
+  }
 
   // Group events by date
   // For all-day events, extract date directly from string to avoid timezone issues
@@ -309,7 +508,7 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
             ←
           </button>
         )}
-        <h2 className="view-title" style={{ margin: 0, flex: 1 }}>Schema</h2>
+        <h2 className="view-title" style={{ margin: 0, flex: 1 }}>Kalender</h2>
         {!showCreateForm && !editingEvent && (
           <div style={{ display: "flex", gap: "8px" }}>
             <button
@@ -331,72 +530,173 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
         )}
       </div>
 
-      {/* View type toggle - only show when not in form */}
+      {/* View type toggle and filters - only show when not in form */}
       {!showCreateForm && !editingEvent && (
         <div style={{ 
           display: "flex", 
-          gap: "4px", 
-          marginBottom: "16px",
-          padding: "4px",
-          background: "rgba(255, 255, 255, 0.6)",
-          borderRadius: "8px",
-          border: "1px solid rgba(220, 210, 200, 0.3)"
+          flexDirection: "column",
+          gap: "8px",
+          marginBottom: "16px"
         }}>
-        <button
-          type="button"
-          onClick={() => setViewType("rolling")}
-          style={{
-            flex: 1,
-            padding: "8px 12px",
-            borderRadius: "6px",
-            border: "none",
-            background: viewType === "rolling" ? "#b8e6b8" : "transparent",
-            color: viewType === "rolling" ? "#2d5a2d" : "#6b6b6b",
-            fontWeight: viewType === "rolling" ? 600 : 400,
-            fontSize: "0.85rem",
-            cursor: "pointer",
-            transition: "all 0.2s ease"
-          }}
-        >
-          Rullande
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewType("week")}
-          style={{
-            flex: 1,
-            padding: "8px 12px",
-            borderRadius: "6px",
-            border: "none",
-            background: viewType === "week" ? "#b8e6b8" : "transparent",
-            color: viewType === "week" ? "#2d5a2d" : "#6b6b6b",
-            fontWeight: viewType === "week" ? 600 : 400,
-            fontSize: "0.85rem",
-            cursor: "pointer",
-            transition: "all 0.2s ease"
-          }}
-        >
-          Vecka
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewType("month")}
-          style={{
-            flex: 1,
-            padding: "8px 12px",
-            borderRadius: "6px",
-            border: "none",
-            background: viewType === "month" ? "#b8e6b8" : "transparent",
-            color: viewType === "month" ? "#2d5a2d" : "#6b6b6b",
-            fontWeight: viewType === "month" ? 600 : 400,
-            fontSize: "0.85rem",
-            cursor: "pointer",
-            transition: "all 0.2s ease"
-          }}
-        >
-          Månad
-        </button>
-      </div>
+          <div style={{ 
+            display: "flex", 
+            gap: "4px", 
+            padding: "4px",
+            background: "rgba(255, 255, 255, 0.6)",
+            borderRadius: "8px",
+            border: "1px solid rgba(220, 210, 200, 0.3)"
+          }}>
+            <button
+              type="button"
+              onClick={() => setViewType("rolling")}
+              style={{
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "none",
+                background: viewType === "rolling" ? "#b8e6b8" : "transparent",
+                color: viewType === "rolling" ? "#2d5a2d" : "#6b6b6b",
+                fontWeight: viewType === "rolling" ? 600 : 400,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              Rullande
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewType("week")}
+              style={{
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "none",
+                background: viewType === "week" ? "#b8e6b8" : "transparent",
+                color: viewType === "week" ? "#2d5a2d" : "#6b6b6b",
+                fontWeight: viewType === "week" ? 600 : 400,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              Vecka
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewType("month")}
+              style={{
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "none",
+                background: viewType === "month" ? "#b8e6b8" : "transparent",
+                color: viewType === "month" ? "#2d5a2d" : "#6b6b6b",
+                fontWeight: viewType === "month" ? 600 : 400,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              Månad
+            </button>
+          </div>
+          {/* Task/Event toggle - show in all views */}
+          <div style={{ 
+            display: "flex", 
+            gap: "4px", 
+            padding: "4px",
+            background: "rgba(255, 255, 255, 0.6)",
+            borderRadius: "8px",
+            border: "1px solid rgba(220, 210, 200, 0.3)"
+          }}>
+            <button
+              type="button"
+              onClick={() => setShowTasksOnly(false)}
+              style={{
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "none",
+                background: !showTasksOnly ? "#b8e6b8" : "transparent",
+                color: !showTasksOnly ? "#2d5a2d" : "#6b6b6b",
+                fontWeight: !showTasksOnly ? 600 : 400,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              Schema
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTasksOnly(true)}
+              style={{
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "none",
+                background: showTasksOnly ? "#b8e6b8" : "transparent",
+                color: showTasksOnly ? "#2d5a2d" : "#6b6b6b",
+                fontWeight: showTasksOnly ? 600 : 400,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              Dagens Att Göra
+            </button>
+          </div>
+          {showTasksOnly && (
+            <div
+              style={{
+                display: "flex",
+                gap: "4px",
+                padding: "4px",
+                background: "#f5f5f5",
+                borderRadius: "8px",
+                marginBottom: "12px"
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowAllMembers(false)}
+                style={{
+                  flex: 1,
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: !showAllMembers ? "#b8e6b8" : "transparent",
+                  color: !showAllMembers ? "#2d5a2d" : "#6b6b6b",
+                  fontWeight: !showAllMembers ? 600 : 400,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease"
+                }}
+              >
+                Endast mig
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAllMembers(true)}
+                style={{
+                  flex: 1,
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: showAllMembers ? "#b8e6b8" : "transparent",
+                  color: showAllMembers ? "#2d5a2d" : "#6b6b6b",
+                  fontWeight: showAllMembers ? 600 : 400,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease"
+                }}
+              >
+                Alla familjemedlemmar
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {error && <p className="error-text">{error}</p>}
@@ -411,12 +711,363 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
         <>
           {viewType === "rolling" && (
             <>
-              {sortedDates.length === 0 ? (
-                <section className="card">
-                  <p className="placeholder-text">Inga kommande events. Skapa ditt första event!</p>
-                </section>
+              {showTasksOnly ? (
+                // Show tasks view
+                <>
+                  {/* Date navigation buttons */}
+                  <div style={{ display: "flex", gap: "8px", marginBottom: "12px", justifyContent: "center" }}>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() => {
+                        const newDate = new Date(selectedDate);
+                        newDate.setDate(newDate.getDate() - 1);
+                        setSelectedDate(newDate);
+                      }}
+                      style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                    >
+                      {(() => {
+                        const prevDate = new Date(selectedDate);
+                        prevDate.setDate(prevDate.getDate() - 1);
+                        return prevDate.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+                      })()}
+                    </button>
+                    {selectedDate.toDateString() !== new Date().toDateString() && (
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => setSelectedDate(new Date())}
+                        style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                      >
+                        Idag
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() => {
+                        const newDate = new Date(selectedDate);
+                        newDate.setDate(newDate.getDate() + 1);
+                        setSelectedDate(newDate);
+                      }}
+                      style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                    >
+                      {(() => {
+                        const nextDate = new Date(selectedDate);
+                        nextDate.setDate(nextDate.getDate() + 1);
+                        return nextDate.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+                      })()}
+                    </button>
+                  </div>
+                  {/* Quick Add Input */}
+                  {showQuickAdd && (
+                    <section className="card" style={{ marginBottom: "12px" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <input
+                          type="text"
+                          value={quickAddTitle}
+                          onChange={(e) => setQuickAddTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              void handleQuickAddTask();
+                            } else if (e.key === "Escape") {
+                              setShowQuickAdd(false);
+                              setQuickAddTitle("");
+                            }
+                          }}
+                          placeholder="Skriv titel..."
+                          autoFocus
+                          style={{
+                            flex: 1,
+                            padding: "8px 12px",
+                            borderRadius: "6px",
+                            border: "1px solid #ddd",
+                            fontSize: "0.9rem",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="button-primary"
+                          onClick={() => void handleQuickAddTask()}
+                          style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                        >
+                          Lägg till
+                        </button>
+                        <button
+                          type="button"
+                          className="button-secondary"
+                          onClick={() => {
+                            setShowQuickAdd(false);
+                            setQuickAddTitle("");
+                          }}
+                          style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                        >
+                          Avbryt
+                        </button>
+                      </div>
+                    </section>
+                  )}
+
+                  {showAllMembers ? (
+                    // Show tasks grouped by member
+                    (() => {
+                      const hasTasks = Array.from(tasksByMember.values()).some(tasks => tasks.length > 0);
+                      return !hasTasks && !showQuickAdd ? (
+                        <section className="card">
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                            <div style={{ flex: 1 }}>
+                              <h3 style={{ marginTop: 0, marginBottom: "4px", fontSize: "1rem", fontWeight: 600 }}>
+                                {selectedDate.toDateString() === new Date().toDateString() ? "Dagens Att Göra" : "Att Göra"}
+                              </h3>
+                              <p style={{ margin: 0, fontSize: "0.9rem", color: "#6b6b6b" }}>
+                                {selectedDate.toLocaleDateString("sv-SE", {
+                                  weekday: "long",
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="placeholder-text" style={{ margin: 0 }}>
+                            Inga sysslor för någon familjemedlem.
+                          </p>
+                        </section>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                          {members.map((member) => {
+                            const memberTasks = tasksByMember.get(member.id) || [];
+                            if (memberTasks.length === 0 && !showQuickAdd) return null;
+                            
+                            return (
+                              <section key={member.id} className="card">
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                                  <div style={{ flex: 1 }}>
+                                    <h3 style={{ marginTop: 0, marginBottom: "4px", fontSize: "1rem", fontWeight: 600 }}>
+                                      {member.name}
+                                    </h3>
+                                  </div>
+                                </div>
+                                {memberTasks.length === 0 ? (
+                                  <p className="placeholder-text" style={{ margin: 0, fontSize: "0.9rem" }}>
+                                    Inga sysslor
+                                  </p>
+                                ) : (
+                                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                                    {memberTasks.map((task) => {
+                                      const bgColor = task.completed 
+                                        ? "#f0fff4" // Green for completed
+                                        : (task.event.isRequired ? "#f7fafc" : "#fff7ed"); // Gray for required, orange for extra
+                                      const borderColor = task.completed 
+                                        ? "#48bb78" // Green border for completed
+                                        : (task.event.isRequired ? "#e2e8f0" : "#fed7aa"); // Gray for required, orange for extra
+                                      
+                                      return (
+                                        <li
+                                          key={task.event.id}
+                                          style={{
+                                            background: bgColor,
+                                            borderColor: borderColor,
+                                            borderRadius: "8px",
+                                            padding: "12px",
+                                            marginBottom: "8px",
+                                            border: `1px solid ${borderColor}`,
+                                          }}
+                                        >
+                                          <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={task.completed}
+                                              onChange={() => void handleToggleTask(task.event.id, member.id)}
+                                              style={{ cursor: "pointer", width: "18px", height: "18px" }}
+                                            />
+                                            <div style={{ flex: 1 }}>
+                                              <span 
+                                                style={{ 
+                                                  color: "#2d3748",
+                                                  textDecoration: task.completed ? "line-through" : "none",
+                                                  fontWeight: task.completed ? 600 : 500
+                                                }}
+                                              >
+                                                {task.event.title}
+                                              </span>
+                                              {task.event.xpPoints && task.event.xpPoints > 0 && (
+                                                <span style={{
+                                                  fontSize: "0.75rem",
+                                                  padding: "2px 8px",
+                                                  borderRadius: "12px",
+                                                  background: "rgba(184, 230, 184, 0.3)",
+                                                  color: "#2d5a2d",
+                                                  fontWeight: 600,
+                                                  marginLeft: "8px"
+                                                }}>
+                                                  +{task.event.xpPoints} XP
+                                                </span>
+                                              )}
+                                              {task.event.description && (
+                                                <p style={{ 
+                                                  margin: "4px 0 0", 
+                                                  fontSize: "0.9rem", 
+                                                  color: "#6b6b6b",
+                                                  fontStyle: task.completed ? "italic" : "normal"
+                                                }}>
+                                                  {task.event.description}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </label>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
+                              </section>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    // Show tasks for current member only
+                    tasksWithCompletion.length === 0 && !showQuickAdd ? (
+                      <section className="card">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                          <div style={{ flex: 1 }}>
+                            <h3 style={{ marginTop: 0, marginBottom: "4px", fontSize: "1rem", fontWeight: 600 }}>
+                              {selectedDate.toDateString() === new Date().toDateString() ? "Dagens Att Göra" : "Att Göra"}
+                            </h3>
+                            <p style={{ margin: 0, fontSize: "0.9rem", color: "#6b6b6b" }}>
+                              {selectedDate.toLocaleDateString("sv-SE", {
+                                weekday: "long",
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="button-primary"
+                            onClick={() => setShowQuickAdd(true)}
+                            style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                          >
+                            Add
+                          </button>
+                        </div>
+                        <p className="placeholder-text" style={{ margin: 0 }}>
+                          {selectedDate.toDateString() === new Date().toDateString() 
+                            ? "Inga dagens att göra. Skapa ditt första task!"
+                            : `Inga sysslor för ${selectedDate.toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}.`}
+                        </p>
+                      </section>
+                    ) : (
+                      <section className="card">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                          <div style={{ flex: 1 }}>
+                            <h3 style={{ marginTop: 0, marginBottom: "4px", fontSize: "1rem", fontWeight: 600 }}>
+                              {selectedDate.toDateString() === new Date().toDateString() ? "Dagens Att Göra" : "Att Göra"}
+                            </h3>
+                            <p style={{ margin: 0, fontSize: "0.9rem", color: "#6b6b6b" }}>
+                              {selectedDate.toLocaleDateString("sv-SE", {
+                                weekday: "long",
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })}
+                            </p>
+                          </div>
+                          {!showQuickAdd && (
+                            <button
+                              type="button"
+                              className="button-primary"
+                              onClick={() => setShowQuickAdd(true)}
+                              style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                            >
+                              Add
+                            </button>
+                          )}
+                        </div>
+                        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                        {tasksWithCompletion.map((task) => {
+                          const bgColor = task.completed 
+                            ? "#f0fff4" // Green for completed
+                            : (task.event.isRequired ? "#f7fafc" : "#fff7ed"); // Gray for required, orange for extra
+                          const borderColor = task.completed 
+                            ? "#48bb78" // Green border for completed
+                            : (task.event.isRequired ? "#e2e8f0" : "#fed7aa"); // Gray for required, orange for extra
+                          
+                          return (
+                            <li
+                              key={task.event.id}
+                              style={{
+                                background: bgColor,
+                                borderColor: borderColor,
+                                borderRadius: "8px",
+                                padding: "12px",
+                                marginBottom: "8px",
+                                border: `1px solid ${borderColor}`,
+                              }}
+                            >
+                              <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={task.completed}
+                                  onChange={() => void handleToggleTask(task.event.id)}
+                                  style={{ cursor: "pointer", width: "18px", height: "18px" }}
+                                />
+                                <div style={{ flex: 1 }}>
+                                  <span 
+                                    style={{ 
+                                      color: "#2d3748",
+                                      textDecoration: task.completed ? "line-through" : "none",
+                                      fontWeight: task.completed ? 600 : 500
+                                    }}
+                                  >
+                                    {task.event.title}
+                                  </span>
+                                  {task.event.xpPoints && task.event.xpPoints > 0 && (
+                                    <span style={{
+                                      fontSize: "0.75rem",
+                                      padding: "2px 8px",
+                                      borderRadius: "12px",
+                                      background: "rgba(184, 230, 184, 0.3)",
+                                      color: "#2d5a2d",
+                                      fontWeight: 600,
+                                      marginLeft: "8px"
+                                    }}>
+                                      +{task.event.xpPoints} XP
+                                    </span>
+                                  )}
+                                  {task.event.description && (
+                                    <p style={{ 
+                                      margin: "4px 0 0", 
+                                      fontSize: "0.9rem", 
+                                      color: "#6b6b6b",
+                                      fontStyle: task.completed ? "italic" : "normal"
+                                    }}>
+                                      {task.event.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            </li>
+                          );
+                        })}
+                        </ul>
+                      </section>
+                    )
+                  )}
+                </>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                // Show events view
+                sortedDates.length === 0 ? (
+                  <section className="card">
+                    <p className="placeholder-text">
+                      Inga kommande events. Skapa ditt första event!
+                    </p>
+                  </section>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                   {sortedDates.map((dateKey) => {
                 const dateEvents = eventsByDate[dateKey];
                 const date = new Date(dateKey);
@@ -533,30 +1184,54 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
                 );
               })}
             </div>
+                )
+              )}
+            </>
           )}
-          </>)}
 
           {viewType === "week" && (
             <WeekView
-              events={events}
+              events={filteredEvents}
               categories={categories}
               members={members}
               currentWeek={currentWeek}
               onWeekChange={setCurrentWeek}
               onEventClick={(event) => setEditingEvent(event)}
               onEventDelete={handleDeleteEvent}
+              onDayClick={(date, hour) => {
+                // Format date and hour as YYYY-MM-DDTHH:mm
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const day = String(date.getDate()).padStart(2, "0");
+                const hourStr = hour !== undefined ? String(hour).padStart(2, "0") : "00";
+                const dateStr = `${year}-${month}-${day}T${hourStr}:00`;
+                setInitialStartDate(dateStr);
+                setEditingEvent(null);
+                setShowCreateForm(true);
+              }}
+              showTasksOnly={showTasksOnly}
             />
           )}
 
           {viewType === "month" && (
             <MonthView
-              events={events}
+              events={filteredEvents}
               categories={categories}
               members={members}
               currentMonth={currentMonth}
               onMonthChange={setCurrentMonth}
               onEventClick={(event) => setEditingEvent(event)}
               onEventDelete={handleDeleteEvent}
+              onDayClick={(date) => {
+                // Format date as YYYY-MM-DD (all-day event)
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const day = String(date.getDate()).padStart(2, "0");
+                const dateStr = `${year}-${month}-${day}`;
+                setInitialStartDate(dateStr);
+                setEditingEvent(null);
+                setShowCreateForm(true);
+              }}
             />
           )}
         </>
@@ -565,6 +1240,7 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
       {(showCreateForm || editingEvent) && (
         <EventForm
           event={editingEvent}
+          initialStartDate={initialStartDate}
           categories={categories}
           members={members}
           onSave={(eventData) => {
@@ -578,6 +1254,7 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
           onCancel={() => {
             setShowCreateForm(false);
             setEditingEvent(null);
+            setInitialStartDate(null);
           }}
         />
       )}
@@ -599,6 +1276,7 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
 
 type EventFormProps = {
   event?: CalendarEventResponse | null;
+  initialStartDate?: string | null;
   categories: CalendarEventCategoryResponse[];
   members: FamilyMemberResponse[];
   onSave: (eventData: {
@@ -614,12 +1292,15 @@ type EventFormProps = {
     recurringInterval?: number | null;
     recurringEndDate?: string | null; // Changed from Date to string
     recurringEndCount?: number | null;
+    isTask?: boolean;
+    xpPoints?: number | null;
+    isRequired?: boolean;
   }) => void;
   onDelete?: () => void;
   onCancel: () => void;
 };
 
-function EventForm({ event, categories, members, onSave, onDelete, onCancel }: EventFormProps) {
+function EventForm({ event, initialStartDate, categories, members, onSave, onDelete, onCancel }: EventFormProps) {
   const [title, setTitle] = useState(event?.title || "");
   const [description, setDescription] = useState(event?.description || "");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -673,7 +1354,7 @@ function EventForm({ event, categories, members, onSave, onDelete, onCancel }: E
   };
   
   const [startDate, setStartDate] = useState(
-    event ? isoToLocalDateTime(event.startDateTime, event.isAllDay) : ""
+    event ? isoToLocalDateTime(event.startDateTime, event.isAllDay) : (initialStartDate || "")
   );
   const [endDate, setEndDate] = useState(
     event?.endDateTime 
@@ -703,6 +1384,30 @@ function EventForm({ event, categories, members, onSave, onDelete, onCancel }: E
     event?.recurringEndDate ? "date" : event?.recurringEndCount ? "count" : "never"
   );
   const [showRecurringTypeDropdown, setShowRecurringTypeDropdown] = useState(false);
+  const [isTask, setIsTask] = useState(event?.isTask || false);
+  const [xpPoints, setXpPoints] = useState(event?.xpPoints?.toString() || "1");
+  const [isRequired, setIsRequired] = useState(event?.isRequired !== undefined ? event.isRequired : true);
+
+  // When isTask is true, automatically set isAllDay to true
+  useEffect(() => {
+    if (isTask) {
+      setIsAllDay(true);
+    }
+  }, [isTask]);
+
+  // Update startDate when initialStartDate changes (only for new events, not when editing)
+  useEffect(() => {
+    if (!event && initialStartDate) {
+      setStartDate(initialStartDate);
+      // Set isAllDay based on format: YYYY-MM-DD = all-day, YYYY-MM-DDTHH:mm = with time
+      const isAllDayFormat = !initialStartDate.includes("T");
+      setIsAllDay(isAllDayFormat);
+      // Also update endDate if it's a datetime (not all-day)
+      if (!isAllDayFormat) {
+        setEndDate(getDefaultEndDate(initialStartDate));
+      }
+    }
+  }, [initialStartDate, event]);
 
   // Update end date when start date changes (only for new events, not when editing)
   const handleStartDateChange = (newStartDate: string) => {
@@ -747,7 +1452,7 @@ function EventForm({ event, categories, members, onSave, onDelete, onCancel }: E
       description: description.trim() || undefined,
       startDateTime: startDateTimeStr,
       endDateTime: endDateTimeStr,
-      isAllDay,
+      isAllDay: isTask ? true : isAllDay, // Tasks are always all-day
       location: location.trim() || undefined,
       categoryId: categoryId || undefined,
       participantIds: Array.from(participantIds),
@@ -755,6 +1460,9 @@ function EventForm({ event, categories, members, onSave, onDelete, onCancel }: E
       recurringInterval: isRecurring && recurringType && recurringInterval ? parseInt(recurringInterval, 10) : null,
       recurringEndDate: isRecurring && recurringType && recurringEndType === "date" && recurringEndDate ? recurringEndDate : null,
       recurringEndCount: isRecurring && recurringType && recurringEndType === "count" && recurringEndCount ? parseInt(recurringEndCount, 10) : null,
+      isTask: isTask,
+      xpPoints: isTask ? (xpPoints ? parseInt(xpPoints, 10) : 1) : null,
+      isRequired: isTask ? isRequired : true,
     });
   };
 
@@ -801,28 +1509,30 @@ function EventForm({ event, categories, members, onSave, onDelete, onCancel }: E
           />
         </div>
 
-        <div>
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-            <input
-              type="checkbox"
-              checked={isAllDay}
-              onChange={(e) => {
-                setIsAllDay(e.target.checked);
-                // When switching to all-day, clear end date if it was set
-                // When switching from all-day, set default end date if not set
-                if (e.target.checked) {
-                  // Switching to all-day - keep end date if it exists, but user can clear it
-                } else {
-                  // Switching from all-day - set default end date if not set
-                  if (!endDate && startDate) {
-                    setEndDate(getDefaultEndDate(startDate));
+        {!isTask && (
+          <div>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <input
+                type="checkbox"
+                checked={isAllDay}
+                onChange={(e) => {
+                  setIsAllDay(e.target.checked);
+                  // When switching to all-day, clear end date if it was set
+                  // When switching from all-day, set default end date if not set
+                  if (e.target.checked) {
+                    // Switching to all-day - keep end date if it exists, but user can clear it
+                  } else {
+                    // Switching from all-day - set default end date if not set
+                    if (!endDate && startDate) {
+                      setEndDate(getDefaultEndDate(startDate));
+                    }
                   }
-                }
-              }}
-            />
-            <span>Hela dagen</span>
-          </label>
-        </div>
+                }}
+              />
+              <span>Hela dagen</span>
+            </label>
+          </div>
+        )}
 
         <div>
           <label htmlFor="startDate" style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
@@ -1092,6 +1802,55 @@ function EventForm({ event, categories, members, onSave, onDelete, onCancel }: E
         )}
 
         <div>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <input
+              type="checkbox"
+              checked={isTask}
+              onChange={(e) => {
+                setIsTask(e.target.checked);
+                if (!e.target.checked) {
+                  // Reset task-related fields when unchecked
+                  setXpPoints("1");
+                  setIsRequired(true);
+                }
+              }}
+            />
+            <span>Dagens Att Göra (ge poäng till djur)</span>
+          </label>
+        </div>
+
+        {isTask && (
+          <>
+            <div>
+              <label htmlFor="xpPoints" style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
+                XP-poäng
+              </label>
+              <input
+                id="xpPoints"
+                type="number"
+                min="0"
+                value={xpPoints}
+                onChange={(e) => setXpPoints(e.target.value)}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                <input
+                  type="checkbox"
+                  checked={isRequired}
+                  onChange={(e) => setIsRequired(e.target.checked)}
+                />
+                <span>Obligatorisk</span>
+              </label>
+              <p style={{ margin: "4px 0 0", fontSize: "0.85rem", color: "#718096" }}>
+                Om avmarkerad blir det en extra syssla (frivillig)
+              </p>
+            </div>
+          </>
+        )}
+
+        <div>
           <label htmlFor="location" style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
             Plats
           </label>
@@ -1258,9 +2017,10 @@ type WeekViewProps = {
   onWeekChange: (date: Date) => void;
   onEventClick: (event: CalendarEventResponse) => void;
   onEventDelete: (eventId: string) => void;
+  showTasksOnly: boolean;
 };
 
-function WeekView({ events, categories, members, currentWeek, onWeekChange, onEventClick, onEventDelete }: WeekViewProps) {
+function WeekView({ events, categories, members, currentWeek, onWeekChange, onEventClick, onEventDelete, onDayClick, showTasksOnly }: WeekViewProps) {
   // Get start of week (Monday)
   const getWeekStart = (date: Date): Date => {
     const d = new Date(date);
@@ -1312,7 +2072,8 @@ function WeekView({ events, categories, members, currentWeek, onWeekChange, onEv
 
     return events.filter(event => {
       // Skip all-day events - they should only appear in the all-day section
-      if (event.isAllDay) {
+      // Skip tasks - they appear in the tasks list
+      if (event.isAllDay || event.isTask) {
         return false;
       }
       const eventStart = new Date(event.startDateTime);
@@ -1354,9 +2115,9 @@ function WeekView({ events, categories, members, currentWeek, onWeekChange, onEv
         </button>
       </div>
 
-      {/* All-day events - show in a grid matching the week layout */}
+      {/* All-day events (non-tasks) - show in a grid matching the week layout */}
       {(() => {
-        const hasAllDayEvents = weekDays.some(day => getEventsForDay(day).filter(e => e.isAllDay).length > 0);
+        const hasAllDayEvents = weekDays.some(day => getEventsForDay(day).filter(e => e.isAllDay && !e.isTask).length > 0);
         if (!hasAllDayEvents) return null;
         
         return (
@@ -1385,16 +2146,26 @@ function WeekView({ events, categories, members, currentWeek, onWeekChange, onEv
               </div>
               {weekDays.map((day, dayIndex) => {
                 const isToday = day.toDateString() === new Date().toDateString();
-                const dayEvents = getEventsForDay(day).filter(e => e.isAllDay);
+                const dayEvents = getEventsForDay(day).filter(e => e.isAllDay && !e.isTask);
+                const handleDayClick = (e: React.MouseEvent) => {
+                  // Only trigger if clicking on the day container itself, not on events
+                  if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-event]') === null) {
+                    onDayClick?.(day);
+                    e.stopPropagation();
+                  }
+                };
                 return (
                   <div 
                     key={day.toISOString()} 
+                    onClick={handleDayClick}
                     style={{ 
                       flex: 1, 
                       minWidth: 0, 
                       borderRight: dayIndex < 6 ? "1px solid #ddd" : "none",
                       padding: "4px 2px",
-                      background: isToday ? "#b8e6b820" : "transparent"
+                      background: isToday ? "#b8e6b820" : "transparent",
+                      cursor: onDayClick ? "pointer" : "default",
+                      minHeight: "30px"
                     }}
                   >
                     {dayEvents.map(event => {
@@ -1430,7 +2201,159 @@ function WeekView({ events, categories, members, currentWeek, onWeekChange, onEv
         );
       })()}
 
-      {/* Hourly grid */}
+      {/* Tasks list - show as a list under each day */}
+      {(() => {
+        const hasTasks = weekDays.some(day => getEventsForDay(day).filter(e => e.isTask).length > 0);
+        if (!hasTasks) return null;
+        
+        return (
+          <div style={{ 
+            marginBottom: "12px", 
+            border: "1px solid #ddd", 
+            borderRadius: "8px", 
+            overflow: "hidden",
+            background: "white"
+          }}>
+            <div style={{ 
+              display: "flex", 
+              borderBottom: "1px solid #ddd",
+              background: "#f5f5f5"
+            }}>
+              <div style={{ 
+                width: "45px", 
+                flexShrink: 0, 
+                padding: "6px 2px",
+                fontSize: "0.7rem",
+                color: "#6b6b6b",
+                fontWeight: 600,
+                borderRight: "1px solid #ddd"
+              }}>
+                Tasks
+              </div>
+              {weekDays.map((day, dayIndex) => {
+                const isToday = day.toDateString() === new Date().toDateString();
+                const dayTasks = getEventsForDay(day).filter(e => e.isTask);
+                // Sort tasks: required first, then by title
+                const sortedTasks = [...dayTasks].sort((a, b) => {
+                  if (a.isRequired !== b.isRequired) {
+                    return a.isRequired ? -1 : 1; // Required first
+                  }
+                  return a.title.localeCompare(b.title);
+                });
+                
+                const handleDayClick = (e: React.MouseEvent) => {
+                  // Only trigger if clicking on the day container itself, not on tasks
+                  if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-event]') === null) {
+                    onDayClick?.(day);
+                    e.stopPropagation();
+                  }
+                };
+                
+                if (sortedTasks.length === 0) {
+                  return (
+                    <div 
+                      key={day.toISOString()} 
+                      onClick={handleDayClick}
+                      style={{ 
+                        flex: 1, 
+                        minWidth: 0, 
+                        borderRight: dayIndex < 6 ? "1px solid #ddd" : "none",
+                        padding: "4px 2px",
+                        background: isToday ? "#b8e6b820" : "transparent",
+                        cursor: onDayClick ? "pointer" : "default",
+                        minHeight: "40px"
+                      }}
+                    />
+                  );
+                }
+                
+                // Group tasks by member (each task can have multiple participants, so we'll show it for each)
+                const tasksByMember = new Map<string, typeof sortedTasks>();
+                sortedTasks.forEach(task => {
+                  task.participantIds.forEach(participantId => {
+                    if (!tasksByMember.has(participantId)) {
+                      tasksByMember.set(participantId, []);
+                    }
+                    tasksByMember.get(participantId)!.push(task);
+                  });
+                });
+                
+                // Filter members to only show those that have tasks
+                const membersWithTasks = members.filter(member => tasksByMember.has(member.id));
+                
+                return (
+                  <div 
+                    key={day.toISOString()} 
+                    onClick={handleDayClick}
+                    style={{ 
+                      flex: 1, 
+                      minWidth: 0, 
+                      borderRight: dayIndex < 6 ? "1px solid #ddd" : "none",
+                      padding: "4px 2px",
+                      background: isToday ? "#b8e6b820" : "transparent",
+                      cursor: onDayClick ? "pointer" : "default",
+                      minHeight: "40px"
+                    }}
+                  >
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      {membersWithTasks.map(member => {
+                        const memberTasks = tasksByMember.get(member.id) || [];
+                        
+                        return (
+                          <div key={member.id} style={{ marginBottom: "4px" }}>
+                            <div style={{
+                              fontSize: "0.65rem",
+                              fontWeight: 600,
+                              color: "#6b6b6b",
+                              marginBottom: "2px"
+                            }}>
+                              {member.name}
+                            </div>
+                            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                                {memberTasks.map(task => {
+                                  const category = categories.find(c => c.id === task.categoryId);
+                                  return (
+                                    <li
+                                      key={task.id}
+                                      data-event
+                                      onClick={(e) => {
+                                        onEventClick(task);
+                                        e.stopPropagation();
+                                      }}
+                                      style={{
+                                      padding: "4px 6px",
+                                      marginBottom: "2px",
+                                      background: category?.color || "#b8e6b8",
+                                      borderRadius: "4px",
+                                      fontSize: "0.75rem",
+                                      color: "#2d5a2d",
+                                      fontWeight: 500,
+                                      cursor: "pointer",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap"
+                                    }}
+                                    title={task.title}
+                                  >
+                                    {task.title}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Hourly grid - only show when not in tasks-only mode */}
+      {!showTasksOnly && (
       <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: "8px", width: "100%", overflow: "hidden" }}>
         {/* Time column */}
         <div style={{ width: "45px", flexShrink: 0, borderRight: "1px solid #ddd" }}>
@@ -1478,6 +2401,14 @@ function WeekView({ events, categories, members, currentWeek, onWeekChange, onEv
               {/* Hour slots */}
               {hours.map(hour => {
                 const hourEvents = getEventsForHour(day, hour);
+                
+                const handleHourClick = (e: React.MouseEvent) => {
+                  // Only trigger if clicking on the hour slot itself, not on events
+                  if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-event]') === null) {
+                    onDayClick?.(day, hour);
+                    e.stopPropagation();
+                  }
+                };
                 
                 // Group events that start in this hour and calculate their positions
                 // to handle overlapping events
@@ -1531,11 +2462,13 @@ function WeekView({ events, categories, members, currentWeek, onWeekChange, onEv
                 return (
                   <div
                     key={hour}
+                    onClick={handleHourClick}
                     style={{
                       height: "60px",
                       borderBottom: "1px solid #f0f0f0",
                       position: "relative",
-                      padding: "2px"
+                      padding: "2px",
+                      cursor: onDayClick ? "pointer" : "default"
                     }}
                   >
                     {eventGroups.map((group, groupIndex) => {
@@ -1581,6 +2514,7 @@ function WeekView({ events, categories, members, currentWeek, onWeekChange, onEv
           );
         })}
       </div>
+      )}
     </div>
   );
 }
@@ -1594,9 +2528,10 @@ type MonthViewProps = {
   onMonthChange: (date: Date) => void;
   onEventClick: (event: CalendarEventResponse) => void;
   onEventDelete: (eventId: string) => void;
+  onDayClick?: (date: Date) => void;
 };
 
-function MonthView({ events, categories, members, currentMonth, onMonthChange, onEventClick, onEventDelete }: MonthViewProps) {
+function MonthView({ events, categories, members, currentMonth, onMonthChange, onEventClick, onEventDelete, onDayClick }: MonthViewProps) {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
 
@@ -1719,12 +2654,22 @@ function MonthView({ events, categories, members, currentMonth, onMonthChange, o
           {/* Days of month */}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
+            const dayDate = new Date(year, month, day);
             const dayEvents = getEventsForDay(day);
             const todayClass = isToday(day);
+
+            const handleDayClick = (e: React.MouseEvent) => {
+              // Only trigger if clicking on the day container itself, not on events
+              if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-event]') === null) {
+                onDayClick?.(dayDate);
+                e.stopPropagation();
+              }
+            };
 
             return (
               <div
                 key={day}
+                onClick={handleDayClick}
                 style={{
                   borderRight: (startingDayOfWeek + day) % 7 !== 0 ? "1px solid #ddd" : "none",
                   borderBottom: "1px solid #ddd",
@@ -1734,7 +2679,8 @@ function MonthView({ events, categories, members, currentMonth, onMonthChange, o
                   display: "flex",
                   flexDirection: "column",
                   overflow: "hidden",
-                  height: "100%"
+                  height: "100%",
+                  cursor: onDayClick ? "pointer" : "default"
                 }}
               >
                 <div
@@ -1760,50 +2706,138 @@ function MonthView({ events, categories, members, currentMonth, onMonthChange, o
                   minHeight: 0,
                   width: "100%"
                 }}>
-                  {dayEvents.slice(0, 3).map(event => {
-                    const category = categories.find(c => c.id === event.categoryId);
-                    // Truncate long titles
-                    const truncatedTitle = event.title.length > 15 
-                      ? event.title.substring(0, 15) + "..." 
-                      : event.title;
+                  {(() => {
+                    // Separate tasks and non-task events
+                    const tasks = dayEvents.filter(e => e.isTask);
+                    const nonTasks = dayEvents.filter(e => !e.isTask);
+                    
+                    // Sort tasks: required first, then by title
+                    const sortedTasks = [...tasks].sort((a, b) => {
+                      if (a.isRequired !== b.isRequired) {
+                        return a.isRequired ? -1 : 1; // Required first
+                      }
+                      return a.title.localeCompare(b.title);
+                    });
+                    
+                    // Group tasks by member
+                    const tasksByMember = new Map<string, typeof sortedTasks>();
+                    sortedTasks.forEach(task => {
+                      task.participantIds.forEach(participantId => {
+                        if (!tasksByMember.has(participantId)) {
+                          tasksByMember.set(participantId, []);
+                        }
+                        tasksByMember.get(participantId)!.push(task);
+                      });
+                    });
+                    
+                    // Filter members to only show those that have tasks
+                    const membersWithTasks = members.filter(member => tasksByMember.has(member.id));
+                    
+                    // Show tasks grouped by member (limited due to space)
+                    const maxTasksToShow = 2;
+                    let tasksShown = 0;
+                    const taskElements: JSX.Element[] = [];
+                    
+                    membersWithTasks.forEach(member => {
+                      const memberTasks = tasksByMember.get(member.id) || [];
+                      if (memberTasks.length === 0 || tasksShown >= maxTasksToShow) return;
+                      
+                      memberTasks.slice(0, maxTasksToShow - tasksShown).forEach(task => {
+                        const category = categories.find(c => c.id === task.categoryId);
+                        const truncatedTitle = task.title.length > 12 
+                          ? task.title.substring(0, 12) + "..." 
+                          : task.title;
+                        taskElements.push(
+                          <div
+                            key={task.id}
+                            data-event
+                            onClick={(e) => {
+                              onEventClick(task);
+                              e.stopPropagation();
+                            }}
+                            style={{
+                              padding: "1px 2px",
+                              background: category?.color || "#b8e6b8",
+                              borderRadius: "2px",
+                              fontSize: "0.5rem",
+                              color: "#2d5a2d",
+                              fontWeight: 500,
+                              cursor: "pointer",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              lineHeight: "1.1",
+                              flexShrink: 0,
+                              width: "100%",
+                              maxWidth: "100%"
+                            }}
+                            title={task.title}
+                          >
+                            {truncatedTitle}
+                          </div>
+                        );
+                        tasksShown++;
+                      });
+                    });
+                    
+                    // Show non-task events
+                    const allEvents = [...taskElements, ...nonTasks.slice(0, 3 - tasksShown).map(event => {
+                      const category = categories.find(c => c.id === event.categoryId);
+                      const truncatedTitle = event.title.length > 15 
+                        ? event.title.substring(0, 15) + "..." 
+                        : event.title;
+                      return (
+                        <div
+                          key={event.id}
+                          data-event
+                          onClick={(e) => {
+                            onEventClick(event);
+                            e.stopPropagation();
+                          }}
+                          style={{
+                            padding: "1px 2px",
+                            background: category?.color || "#b8e6b8",
+                            borderRadius: "2px",
+                            fontSize: "0.5rem",
+                            color: "#2d5a2d",
+                            fontWeight: 500,
+                            cursor: "pointer",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            lineHeight: "1.1",
+                            flexShrink: 0,
+                            width: "100%",
+                            maxWidth: "100%"
+                          }}
+                          title={event.title}
+                        >
+                          {truncatedTitle}
+                        </div>
+                      );
+                    })];
+                    
+                    const totalShown = tasksShown + Math.min(nonTasks.length, 3 - tasksShown);
+                    const totalEvents = dayEvents.length;
+                    
                     return (
-                      <div
-                        key={event.id}
-                        onClick={() => onEventClick(event)}
-                        style={{
-                          padding: "1px 2px",
-                          background: category?.color || "#b8e6b8",
-                          borderRadius: "2px",
-                          fontSize: "0.5rem",
-                          color: "#2d5a2d",
-                          fontWeight: 500,
-                          cursor: "pointer",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          lineHeight: "1.1",
-                          flexShrink: 0,
-                          width: "100%",
-                          maxWidth: "100%"
-                        }}
-                        title={event.title} // Show full title on hover
-                      >
-                        {truncatedTitle}
-                      </div>
+                      <>
+                        {allEvents}
+                        {totalEvents > totalShown && (
+                          <div style={{ 
+                            fontSize: "0.5rem", 
+                            color: "#6b6b6b", 
+                            padding: "1px 2px", 
+                            lineHeight: "1.1",
+                            flexShrink: 0,
+                            whiteSpace: "nowrap"
+                          }}>
+                            +{totalEvents - totalShown}
+                          </div>
+                        )}
+                      </>
                     );
-                  })}
-                  {dayEvents.length > 3 && (
-                    <div style={{ 
-                      fontSize: "0.5rem", 
-                      color: "#6b6b6b", 
-                      padding: "1px 2px", 
-                      lineHeight: "1.1",
-                      flexShrink: 0,
-                      whiteSpace: "nowrap"
-                    }}>
-                      +{dayEvents.length - 3}
-                    </div>
-                  )}
+                  })()}
                 </div>
               </div>
             );

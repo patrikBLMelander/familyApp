@@ -21,6 +21,9 @@ public record CalendarEvent(
         Integer recurringInterval,
         LocalDate recurringEndDate,
         Integer recurringEndCount,
+        boolean isTask,  // TRUE = "Dagens Att Göra", FALSE = vanlig event
+        Integer xpPoints,  // NULL eller 0 om isTask = FALSE, annars XP-poäng
+        boolean isRequired,  // TRUE = obligatorisk, FALSE = extra (only used when isTask = TRUE)
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         Set<UUID> participantIds

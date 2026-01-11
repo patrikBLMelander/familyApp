@@ -72,6 +72,15 @@ public class CalendarEventEntity {
     @Column(name = "recurring_end_count")
     private Integer recurringEndCount;
 
+    @Column(name = "is_task", nullable = false)
+    private boolean isTask;
+
+    @Column(name = "xp_points")
+    private Integer xpPoints;
+
+    @Column(name = "is_required", nullable = false)
+    private boolean isRequired;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -196,6 +205,30 @@ public class CalendarEventEntity {
 
     public void setRecurringEndCount(Integer recurringEndCount) {
         this.recurringEndCount = recurringEndCount;
+    }
+
+    public boolean isTask() {
+        return isTask;
+    }
+
+    public void setTask(boolean task) {
+        isTask = task;
+    }
+
+    public Integer getXpPoints() {
+        return xpPoints;
+    }
+
+    public void setXpPoints(Integer xpPoints) {
+        this.xpPoints = xpPoints;
+    }
+
+    public boolean isRequired() {
+        return isRequired;
+    }
+
+    public void setRequired(boolean required) {
+        isRequired = required;
     }
 
     public OffsetDateTime getCreatedAt() {

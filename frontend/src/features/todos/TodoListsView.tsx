@@ -378,7 +378,7 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
             ←
           </button>
         )}
-        <h2 className="view-title" style={{ margin: 0, flex: 1 }}>To do-listor</h2>
+        <h2 className="view-title" style={{ margin: 0, flex: 1 }}>Listor</h2>
       </div>
 
       {error && <p className="error-text">{error}</p>}

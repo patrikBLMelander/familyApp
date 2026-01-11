@@ -2,8 +2,6 @@ import { useState, useEffect } from "react";
 import { Dashboard } from "./features/dashboard/Dashboard";
 import { ChildDashboard } from "./features/dashboard/ChildDashboard";
 import { TodoListsView } from "./features/todos/TodoListsView";
-import { DailyTasksView } from "./features/dailytasks/DailyTasksView";
-import { DailyTasksAdminView } from "./features/dailytasks/DailyTasksAdminView";
 import { FamilyMembersView } from "./features/familymembers/FamilyMembersView";
 import { InviteView } from "./features/invite/InviteView";
 import { CalendarView } from "./features/calendar/CalendarView";
@@ -20,7 +18,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "dailytasks" | "dailytasksadmin" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest";
 
 export function App() {
   console.log("=== FamilyApp Frontend Starting - XP System: 24 XP per level (5 levels) ===");
@@ -104,7 +102,7 @@ export function App() {
 
   // Navigate to correct view based on pet status when child logs in
   useEffect(() => {
-    if (!childLoading && isChild && isAuthenticated && currentView !== "dailytasks" && currentView !== "invite" && currentView !== "xp") {
+    if (!childLoading && isChild && isAuthenticated && currentView !== "invite" && currentView !== "xp") {
       if (hasPet === false) {
         setCurrentView("eggselection");
       } else if (hasPet === true && currentView === "eggselection") {
@@ -189,8 +187,6 @@ export function App() {
       switch (currentView) {
         case "eggselection":
           return <EggSelectionView onEggSelected={handleEggSelected} />;
-        case "dailytasks":
-          return <DailyTasksView onNavigate={handleNavigate} />;
         case "xp":
           return <XpDashboard onNavigate={handleNavigate} />;
         case "dashboard":
@@ -223,10 +219,6 @@ export function App() {
         return null;
       case "todos":
         return <TodoListsView onNavigate={handleNavigate} />;
-      case "dailytasks":
-        return <DailyTasksView onNavigate={handleNavigate} />;
-      case "dailytasksadmin":
-        return <DailyTasksAdminView onNavigate={handleNavigate} />;
       case "familymembers":
         return <FamilyMembersView onNavigate={handleNavigate} />;
       case "schedule":
@@ -264,7 +256,7 @@ export function App() {
 
       <nav className={`side-menu ${menuOpen ? "side-menu-open" : ""}`}>
         {isChild ? (
-          // Child menu - only show daily tasks
+          // Child menu - only show dashboard and install app
           <>
             <button
               type="button"
@@ -272,13 +264,6 @@ export function App() {
               onClick={() => handleNavigate("dashboard")}
             >
               Dashboard
-            </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("dailytasks")}
-            >
-              Dagliga sysslor
             </button>
             {/* PWA Install button - show if not installed */}
             {!isInstalled && (
@@ -315,21 +300,14 @@ export function App() {
               className="side-menu-item"
               onClick={() => handleNavigate("todos")}
             >
-              To do-listor
+              Listor
             </button>
             <button
               type="button"
               className="side-menu-item"
               onClick={() => handleNavigate("schedule")}
             >
-              Schema
-            </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("dailytasks")}
-            >
-              Dagliga sysslor
+              Kalender
             </button>
             <button
               type="button"
