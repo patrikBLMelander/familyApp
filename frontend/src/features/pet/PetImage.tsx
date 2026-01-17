@@ -58,10 +58,12 @@ export function PetImage({ petType, growthStage, size = 100 }: PetImageProps) {
     <img
       src={imagePath}
       alt={`${petType} at growth stage ${validStage}`}
-      width={size}
-      height={size}
       style={{
         display: "block",
+        maxWidth: `${size}px`,
+        maxHeight: `${size}px`,
+        width: "auto",
+        height: "auto",
         objectFit: "contain",
         imageRendering: "crisp-edges", // Keep sharp edges for pixel art style if needed
       }}

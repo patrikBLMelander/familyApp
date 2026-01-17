@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { selectEgg, getAvailableEggTypes, PetResponse } from "../../shared/api/pets";
+import { selectEgg, getAvailableEggTypes, fetchPetHistory, PetResponse } from "../../shared/api/pets";
 import { PetImage } from "./PetImage";
 import { EggImage } from "./EggImage";
 
@@ -15,6 +15,10 @@ const EGG_EMOJIS: Record<string, string> = {
   yellow_egg: "🟡",
   purple_egg: "🟣",
   orange_egg: "🟠",
+  brown_egg: "🟤",
+  black_egg: "⚫",
+  gray_egg: "⚪",
+  teal_egg: "🔷",
 };
 
 // Friendly names for egg types (in Swedish)
@@ -25,6 +29,10 @@ const EGG_NAMES: Record<string, string> = {
   yellow_egg: "Gult ägg",
   purple_egg: "Lila ägg",
   orange_egg: "Orange ägg",
+  brown_egg: "Brunt ägg",
+  black_egg: "Svart ägg",
+  gray_egg: "Grått ägg",
+  teal_egg: "Turkost ägg",
 };
 
 // Color mapping for each egg type
@@ -35,6 +43,10 @@ const EGG_COLORS: Record<string, { base: string; spots: string; glow: string }> 
   yellow_egg: { base: "#fff9c4", spots: "#f9a825", glow: "#ffd700" },
   purple_egg: { base: "#e1bee7", spots: "#ab47bc", glow: "#ffd700" },
   orange_egg: { base: "#ffe0b2", spots: "#ff9800", glow: "#ffd700" },
+  brown_egg: { base: "#d7ccc8", spots: "#8d6e63", glow: "#ffd700" },
+  black_egg: { base: "#bdbdbd", spots: "#424242", glow: "#ffd700" },
+  gray_egg: { base: "#e0e0e0", spots: "#757575", glow: "#ffd700" },
+  teal_egg: { base: "#b2dfdb", spots: "#26a69a", glow: "#ffd700" },
 };
 
 // Map egg types to pet types (must match backend)
@@ -45,6 +57,10 @@ const EGG_TO_PET: Record<string, string> = {
   yellow_egg: "bird",
   purple_egg: "rabbit",
   orange_egg: "bear",
+  brown_egg: "snake",
+  black_egg: "panda",
+  gray_egg: "slot",
+  teal_egg: "hydra",
 };
 
 // Pet names in Swedish
@@ -55,6 +71,10 @@ const PET_NAMES: Record<string, string> = {
   bird: "Fågel",
   rabbit: "Kanin",
   bear: "Björn",
+  snake: "Orm",
+  panda: "Panda",
+  slot: "Sengångare",
+  hydra: "Hydra",
 };
 
 type HatchingStage = "idle" | "selecting" | "eggStage2" | "eggStage3" | "eggStage4" | "eggStage5" | "showingPet" | "namingPet";
@@ -72,8 +92,21 @@ export function EggSelectionView({ onEggSelected }: EggSelectionViewProps) {
     const loadEggs = async () => {
       try {
         setLoading(true);
-        const eggs = await getAvailableEggTypes();
-        setAvailableEggs(eggs);
+        // Load both available eggs and pet history in parallel
+        const [allEggs, petHistory] = await Promise.all([
+          getAvailableEggTypes(),
+          fetchPetHistory().catch(() => []) // If history fails, just use empty array
+        ]);
+        
+        // Get all egg types that have been selected before
+        const usedEggTypes = new Set(
+          petHistory.map(history => history.selectedEggType)
+        );
+        
+        // Filter out eggs that have been used before
+        const availableEggs = allEggs.filter(eggType => !usedEggTypes.has(eggType));
+        
+        setAvailableEggs(availableEggs);
       } catch (e) {
         console.error("Error loading available eggs:", e);
         setError("Kunde inte ladda ägg. Försök igen.");

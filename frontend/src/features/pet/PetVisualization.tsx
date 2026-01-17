@@ -10,7 +10,7 @@ type PetVisualizationProps = {
 const BASE_SIZES = {
   small: 60,
   medium: 120,
-  large: 200,
+  large: 300, // Increased to show full pet
 };
 
 export function PetVisualization({ petType, growthStage, size = "medium" }: PetVisualizationProps) {

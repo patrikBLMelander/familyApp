@@ -3,6 +3,7 @@ import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/fa
 import { fetchMemberXpProgress, fetchMemberXpHistory, awardBonusXp, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
 import { fetchMemberPet, fetchMemberPetHistory, PetResponse, PetHistoryResponse } from "../../shared/api/pets";
 import { PetVisualization } from "../pet/PetVisualization";
+import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish } from "../pet/petImageUtils";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
 
@@ -28,6 +29,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
   const [childrenXpData, setChildrenXpData] = useState<Map<string, ChildXpData>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasIntegratedImage, setHasIntegratedImage] = useState<Map<string, boolean>>(new Map());
   const [bonusXpDialog, setBonusXpDialog] = useState<{ childId: string; childName: string } | null>(null);
   const [bonusXpAmount, setBonusXpAmount] = useState<string>("10");
   const [awardingXp, setAwardingXp] = useState(false);
@@ -42,6 +44,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
 
         // Load XP data for each child
         const xpDataMap = new Map<string, ChildXpData>();
+        const integratedImageMap = new Map<string, boolean>();
         
         for (const child of childrenMembers) {
           try {
@@ -61,6 +64,12 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               loading: false,
               error: null
             });
+            
+            // Check if integrated image exists for this pet
+            if (pet) {
+              const integratedExists = await checkIntegratedImageExists(pet.petType, pet.growthStage);
+              integratedImageMap.set(child.id, integratedExists);
+            }
           } catch (e) {
             xpDataMap.set(child.id, {
               member: child,
@@ -75,6 +84,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
         }
 
         setChildrenXpData(xpDataMap);
+        setHasIntegratedImage(integratedImageMap);
       } catch (e) {
         console.error("Error loading children XP data:", e);
         setError("Kunde inte ladda data.");
@@ -111,12 +121,24 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           const newMap = new Map(prev);
           const childData = newMap.get(bonusXpDialog.childId);
           if (childData) {
+            const updatedPet = pet || childData.pet;
             newMap.set(bonusXpDialog.childId, {
               ...childData,
               progress: updatedProgress,
-              pet: pet || childData.pet,
+              pet: updatedPet,
               petHistory: petHistory.length > 0 ? petHistory : childData.petHistory
             });
+            
+            // Check if integrated image exists for updated pet
+            if (updatedPet) {
+              checkIntegratedImageExists(updatedPet.petType, updatedPet.growthStage).then(exists => {
+                setHasIntegratedImage(prev => {
+                  const newMap = new Map(prev);
+                  newMap.set(bonusXpDialog.childId, exists);
+                  return newMap;
+                });
+              });
+            }
           }
           return newMap;
         });
@@ -279,9 +301,15 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
 
           const progressPercentage = (progress.xpInCurrentLevel / XP_PER_LEVEL) * 100;
 
+          const hasIntegrated = hasIntegratedImage.get(child.id) || false;
+          
           return (
             <section key={child.id} className="card" style={{ 
-              background: pet ? `url(/pets/${pet.petType}/${pet.petType}-background.png)` : "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)",
+              background: pet 
+                ? (hasIntegrated 
+                    ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
+                    : `url(${getPetBackgroundImagePath(pet.petType)})`)
+                : "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)",
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
@@ -321,11 +349,14 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 <div style={{ textAlign: "center", marginBottom: "20px" }}>
                   {pet ? (
                     <>
-                      <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center" }}>
-                        <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="medium" />
-                      </div>
+                      {/* Only show PetVisualization if integrated image doesn't exist */}
+                      {!hasIntegrated && (
+                        <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center" }}>
+                          <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="medium" />
+                        </div>
+                      )}
                       <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#2d5a2d", marginBottom: "4px" }}>
-                        {pet.name || (pet.petType === "dragon" ? "Drake" : pet.petType === "cat" ? "Katt" : pet.petType === "dog" ? "Hund" : pet.petType === "bird" ? "Fågel" : pet.petType === "bear" ? "Björn" : "Kanin")}
+                        {pet.name || getPetNameSwedish(pet.petType)}
                       </div>
                       <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
                         Växtsteg {pet.growthStage} av 5
@@ -456,7 +487,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                             </div>
                             {matchingPet && (
                               <div style={{ fontSize: "0.7rem", color: "#6b6b6b", marginBottom: "2px" }}>
-                                {matchingPet.petType === "dragon" ? "Drake" : matchingPet.petType === "cat" ? "Katt" : matchingPet.petType === "dog" ? "Hund" : matchingPet.petType === "bird" ? "Fågel" : matchingPet.petType === "bear" ? "Björn" : "Kanin"} • Växtsteg {matchingPet.finalGrowthStage}
+                                {getPetNameSwedish(matchingPet.petType)} • Växtsteg {matchingPet.finalGrowthStage}
                               </div>
                             )}
                             <div style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>

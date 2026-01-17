@@ -4,6 +4,7 @@ import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp"
 import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse } from "../../shared/api/calendar";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
+import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
 
 type ViewKey = "dailytasks" | "xp";
 
@@ -21,6 +22,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
   const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasIntegratedImage, setHasIntegratedImage] = useState<boolean>(false);
 
   useEffect(() => {
     const load = async () => {
@@ -46,6 +48,13 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
 
         setPet(petData);
         setXpProgress(xpData);
+        
+        // Check if integrated image exists for this pet
+        if (petData) {
+          const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
+          setHasIntegratedImage(integratedExists);
+        }
+        
         // Sort tasks: required first, then by title
         const sortedTasks = [...tasksData].sort((a, b) => {
           if (a.event.isRequired !== b.event.isRequired) {
@@ -84,12 +93,19 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
       await toggleTaskCompletion(eventId, member.id);
       
       // Reload data to get updated state
-      const [xpData, tasksData] = await Promise.all([
+      const [xpData, tasksData, petData] = await Promise.all([
         fetchCurrentXpProgress().catch(() => null),
         fetchTasksForToday(member.id).catch(() => []),
+        fetchCurrentPet().catch(() => null),
       ]);
       setXpProgress(xpData);
       setTasks(tasksData);
+      if (petData) {
+        setPet(petData);
+        // Check if integrated image exists for updated pet
+        const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
+        setHasIntegratedImage(integratedExists);
+      }
     } catch (e) {
       console.error("Error toggling task:", e);
       // Revert on error by reloading
@@ -173,7 +189,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
               Hej {childName}! 👋
             </h2>
             <p style={{ margin: 0, fontSize: "1rem", color: "#4a5568" }}>
-              Ta hand om din {pet.petType === "dragon" ? "drake" : pet.petType === "cat" ? "katt" : pet.petType === "dog" ? "hund" : pet.petType === "bird" ? "fågel" : pet.petType === "bear" ? "björn" : "kanin"}!
+              Ta hand om din {getPetNameSwedishLowercase(pet.petType)}!
             </p>
           </div>
           <button
@@ -189,8 +205,10 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
 
       {/* Pet Visualization Card */}
       <section className="card" style={{
-        backgroundImage: `url(/pets/${pet.petType}/${pet.petType}-background.png)`,
-        backgroundSize: "cover",
+        backgroundImage: hasIntegratedImage 
+          ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
+          : `url(${getPetBackgroundImagePath(pet.petType)})`,
+        backgroundSize: hasIntegratedImage ? "contain" : "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
         backgroundColor: "white", // Fallback if image doesn't load
@@ -200,37 +218,39 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         textAlign: "center",
         boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
         position: "relative",
-        overflow: "hidden",
+        overflow: "visible",
+        minHeight: hasIntegratedImage ? "400px" : "auto",
       }}>
-        {/* Semi-transparent overlay for text readability */}
+        {/* Only show PetVisualization if integrated image doesn't exist */}
+        {!hasIntegratedImage && (
+          <div style={{ marginBottom: "20px" }}>
+            <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
+          </div>
+        )}
+        
+        {/* Text overlay at bottom with solid background for readability */}
         <div style={{
           position: "absolute",
-          top: 0,
+          bottom: 0,
           left: 0,
           right: 0,
-          bottom: 0,
-          background: "linear-gradient(to bottom, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.7) 100%)",
-          pointerEvents: "none",
-          borderRadius: "24px",
-        }} />
-        
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
-          
+          background: "rgba(255, 255, 255, 0.95)",
+          padding: "16px 20px",
+          borderRadius: "0 0 24px 24px",
+          borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+        }}>
           <h3 style={{
-            margin: "20px 0 8px",
+            margin: "0 0 4px",
             fontSize: "1.5rem",
             fontWeight: 700,
             color: "#2d3748",
-            textShadow: "0 1px 2px rgba(255, 255, 255, 0.8)",
           }}>
-            {pet.name || (pet.petType === "dragon" ? "Drak" : pet.petType === "cat" ? "Katt" : pet.petType === "dog" ? "Hund" : pet.petType === "bird" ? "Fågel" : pet.petType === "bear" ? "Björn" : "Kanin")}
+            {pet.name || getPetNameSwedish(pet.petType)}
           </h3>
           <p style={{
             margin: 0,
             fontSize: "1rem",
             color: "#4a5568",
-            textShadow: "0 1px 2px rgba(255, 255, 255, 0.8)",
           }}>
             Växtsteg {pet.growthStage} av 5
           </p>
