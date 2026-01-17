@@ -40,6 +40,8 @@ export default defineConfig({
       icon: "public/icon.svg",
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        globIgnores: ["**/pets/**/*.png"], // Exclude large pet images from precaching
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB limit (for other large files if needed)
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.railway\.app\/api\/v1\/.*/i,
@@ -49,6 +51,21 @@ export default defineConfig({
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 5 * 60 // 5 minutes
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            // Cache pet images at runtime (not precached)
+            urlPattern: /\/pets\/.*\.png$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "pet-images-cache",
+              expiration: {
+                maxEntries: 100, // Cache up to 100 pet images
+                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
               },
               cacheableResponse: {
                 statuses: [0, 200]

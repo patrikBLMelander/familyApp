@@ -21,7 +21,7 @@ public class FamilyController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public FamilyRegistrationResponse register(@RequestBody RegisterFamilyRequest request) {
-        var result = service.registerFamily(request.familyName(), request.adminName(), request.adminEmail());
+        var result = service.registerFamily(request.familyName(), request.adminName(), request.adminEmail(), request.password());
         return new FamilyRegistrationResponse(
                 toResponse(result.family()),
                 toResponse(result.admin()),
@@ -31,7 +31,7 @@ public class FamilyController {
 
     @PostMapping("/login-by-email")
     public EmailLoginResponse loginByEmail(@RequestBody LoginByEmailRequest request) {
-        var result = service.loginByEmail(request.email());
+        var result = service.loginByEmailAndPassword(request.email(), request.password());
         return new EmailLoginResponse(
                 toResponse(result.member()),
                 result.deviceToken()
@@ -78,13 +78,17 @@ public class FamilyController {
             @NotBlank(message = "Admin name is required")
             String adminName,
             @NotBlank(message = "Email is required")
-            String adminEmail
+            String adminEmail,
+            @NotBlank(message = "Password is required")
+            String password
     ) {
     }
 
     public record LoginByEmailRequest(
             @NotBlank(message = "Email is required")
-            String email
+            String email,
+            @NotBlank(message = "Password is required")
+            String password
     ) {
     }
 

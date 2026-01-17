@@ -14,8 +14,9 @@ public record FamilyMember(
         OffsetDateTime updatedAt
 ) {
     public enum Role {
-        CHILD,
-        PARENT
+        CHILD,      // Yngre barn - enkel vy, bara tasks
+        ASSISTANT,  // Äldre barn - kan skapa events, få djur, men inte hantera familj
+        PARENT      // Vuxna - full access
     }
 }
 

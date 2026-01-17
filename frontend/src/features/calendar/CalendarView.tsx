@@ -14,6 +14,7 @@ import {
   fetchTasksForDate,
   toggleTaskCompletion,
   CalendarTaskWithCompletionResponse,
+  getTaskCompletionsForMember,
 } from "../../shared/api/calendar";
 import { fetchAllFamilyMembers, FamilyMemberResponse, getMemberByDeviceToken } from "../../shared/api/familyMembers";
 
@@ -46,11 +47,17 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddTitle, setQuickAddTitle] = useState("");
   const [initialStartDate, setInitialStartDate] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<"CHILD" | "ASSISTANT" | "PARENT" | null>(null);
 
   useEffect(() => {
     void loadData();
     void loadCurrentMember();
   }, []);
+
+  // Reload events when view type changes to optimize data fetching
+  useEffect(() => {
+    void loadData();
+  }, [viewType, currentWeek, currentMonth]);
 
   useEffect(() => {
     if (showTasksOnly && viewType === "rolling") {
@@ -68,6 +75,7 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
       try {
         const member = await getMemberByDeviceToken(deviceToken);
         setCurrentMemberId(member.id);
+        setCurrentUserRole(member.role);
       } catch (e) {
         console.error("Error loading current member:", e);
       }
@@ -96,10 +104,45 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
     try {
       const allTasks = new Map<string, CalendarTaskWithCompletionResponse[]>();
       
-      // Fetch tasks for each member
-      for (const member of members) {
+      // Optimize: Fetch events once for the date (shared across all members)
+      const dateStart = new Date(selectedDate);
+      dateStart.setHours(0, 0, 0, 0);
+      const dateEnd = new Date(selectedDate);
+      dateEnd.setHours(23, 59, 59, 999);
+      
+      // Fetch events and completions in parallel
+      const [events, ...completionPromises] = await Promise.all([
+        fetchCalendarEvents(dateStart, dateEnd),
+        ...members.map(member => getTaskCompletionsForMember(member.id))
+      ]);
+      
+      // Get all completions
+      const allCompletions = await Promise.all(completionPromises);
+      const dateStr = selectedDate.toISOString().split("T")[0]; // YYYY-MM-DD
+      
+      // Process tasks for each member in parallel
+      const memberTasksPromises = members.map(async (member, index) => {
         try {
-          const tasks = await fetchTasksForDate(member.id, selectedDate);
+          // Filter to only tasks where member is a participant
+          const taskEvents = events.filter(event => 
+            event.isTask && event.participantIds.includes(member.id)
+          );
+          
+          // Get completions for this member for the selected date
+          const memberCompletions = allCompletions[index];
+          const completionMap = new Map<string, CalendarEventTaskCompletionResponse>();
+          memberCompletions.forEach(completion => {
+            if (completion.occurrenceDate === dateStr) {
+              completionMap.set(completion.eventId, completion);
+            }
+          });
+          
+          // Map events to tasks with completion status
+          const tasks = taskEvents.map(event => ({
+            event,
+            completed: completionMap.has(event.id),
+          }));
+          
           // Sort tasks: required first, then by title
           const sortedTasks = [...tasks].sort((a, b) => {
             if (a.event.isRequired !== b.event.isRequired) {
@@ -107,13 +150,23 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
             }
             return a.event.title.localeCompare(b.event.title);
           });
-          if (sortedTasks.length > 0) {
-            allTasks.set(member.id, sortedTasks);
-          }
+          
+          return { memberId: member.id, tasks: sortedTasks };
         } catch (e) {
-          console.error(`Error loading tasks for member ${member.id}:`, e);
+          console.error(`Error processing tasks for member ${member.id}:`, e);
+          return { memberId: member.id, tasks: [] };
         }
-      }
+      });
+      
+      // Wait for all members to be processed
+      const memberTasksResults = await Promise.all(memberTasksPromises);
+      
+      // Build the map
+      memberTasksResults.forEach(({ memberId, tasks }) => {
+        if (tasks.length > 0) {
+          allTasks.set(memberId, tasks);
+        }
+      });
       
       setTasksByMember(allTasks);
     } catch (e) {
@@ -216,8 +269,53 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      // Optimize: For rolling view, only fetch events from today up to 30 days ahead
+      // For week/month view, fetch a wider range to allow navigation
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+      
+      if (viewType === "rolling") {
+        // Rolling view: today to 30 days ahead
+        startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date();
+        endDate.setDate(endDate.getDate() + 30);
+        endDate.setHours(23, 59, 59, 999);
+      } else if (viewType === "week") {
+        // Week view: 7 days before current week to 7 days after (3 weeks total)
+        const weekStart = new Date(currentWeek);
+        const day = weekStart.getDay();
+        const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
+        weekStart.setDate(diff);
+        weekStart.setHours(0, 0, 0, 0);
+        
+        startDate = new Date(weekStart);
+        startDate.setDate(startDate.getDate() - 7);
+        
+        endDate = new Date(weekStart);
+        endDate.setDate(endDate.getDate() + 14); // 7 days before + 7 days week + 7 days after
+        endDate.setHours(23, 59, 59, 999);
+      } else if (viewType === "month") {
+        // Month view: first day of current month to last day (with some buffer)
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        startDate = new Date(year, month, 1);
+        startDate.setHours(0, 0, 0, 0);
+        
+        endDate = new Date(year, month + 1, 0); // Last day of month
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        // Default: if viewType is not set yet, use rolling view logic (today to 30 days)
+        startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date();
+        endDate.setDate(endDate.getDate() + 30);
+        endDate.setHours(23, 59, 59, 999);
+      }
+      
       const [eventsData, categoriesData, membersData] = await Promise.all([
-        fetchCalendarEvents(),
+        fetchCalendarEvents(startDate, endDate),
         fetchCalendarCategories(),
         fetchAllFamilyMembers(),
       ]);
@@ -511,14 +609,16 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
         <h2 className="view-title" style={{ margin: 0, flex: 1 }}>Kalender</h2>
         {!showCreateForm && !editingEvent && (
           <div style={{ display: "flex", gap: "8px" }}>
-            <button
-              type="button"
-              className="todo-action-button"
-              onClick={() => setShowCategoryManager(true)}
-              style={{ fontSize: "0.85rem", padding: "8px 12px" }}
-            >
-              Kategorier
-            </button>
+            {currentUserRole === "PARENT" && (
+              <button
+                type="button"
+                className="todo-action-button"
+                onClick={() => setShowCategoryManager(true)}
+                style={{ fontSize: "0.85rem", padding: "8px 12px" }}
+              >
+                Kategorier
+              </button>
+            )}
             <button
               type="button"
               className="button-primary"
@@ -1243,6 +1343,8 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
           initialStartDate={initialStartDate}
           categories={categories}
           members={members}
+          currentUserRole={currentUserRole}
+          currentUserId={currentMemberId}
           onSave={(eventData) => {
             if (editingEvent) {
               void handleUpdateEvent(editingEvent.id, eventData);
@@ -1259,7 +1361,7 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
         />
       )}
 
-      {showCategoryManager && (
+      {showCategoryManager && currentUserRole === "PARENT" && (
         <CategoryManager
           categories={categories}
           onClose={() => setShowCategoryManager(false)}
@@ -1279,6 +1381,8 @@ type EventFormProps = {
   initialStartDate?: string | null;
   categories: CalendarEventCategoryResponse[];
   members: FamilyMemberResponse[];
+  currentUserRole?: "CHILD" | "ASSISTANT" | "PARENT" | null;
+  currentUserId?: string | null;
   onSave: (eventData: {
     title: string;
     startDateTime: string; // Changed from Date to string
@@ -1300,7 +1404,7 @@ type EventFormProps = {
   onCancel: () => void;
 };
 
-function EventForm({ event, initialStartDate, categories, members, onSave, onDelete, onCancel }: EventFormProps) {
+function EventForm({ event, initialStartDate, categories, members, currentUserRole, currentUserId, onSave, onDelete, onCancel }: EventFormProps) {
   const [title, setTitle] = useState(event?.title || "");
   const [description, setDescription] = useState(event?.description || "");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -1993,14 +2097,17 @@ function EventForm({ event, initialStartDate, categories, members, onSave, onDel
             </button>
           </div>
           {event && onDelete && (
-            <button 
-              type="button" 
-              onClick={() => onDelete()} 
-              className="todo-action-button-danger"
-              style={{ borderRadius: "10px" }}
-            >
-              Ta bort
-            </button>
+            // ASSISTANT can only delete events they created, PARENT can delete any
+            (currentUserRole === "PARENT" || (currentUserRole === "ASSISTANT" && event.createdById === currentUserId)) && (
+              <button 
+                type="button" 
+                onClick={() => onDelete()} 
+                className="todo-action-button-danger"
+                style={{ borderRadius: "10px" }}
+              >
+                Ta bort
+              </button>
+            )
           )}
         </div>
       </form>

@@ -67,9 +67,50 @@ public class FamilyMemberController {
     @PatchMapping("/{memberId}")
     public FamilyMemberResponse updateMember(
             @PathVariable("memberId") UUID memberId,
-            @RequestBody UpdateFamilyMemberRequest request
+            @RequestBody UpdateFamilyMemberRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         var member = service.updateMember(memberId, request.name());
+        return toResponse(member);
+    }
+
+    @PatchMapping("/{memberId}/password")
+    public FamilyMemberResponse updatePassword(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody UpdatePasswordRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID requesterId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = service.getMemberByDeviceToken(deviceToken);
+                requesterId = requester.id();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        var member = service.updatePassword(memberId, request.password(), requesterId);
+        return toResponse(member);
+    }
+
+    @PatchMapping("/{memberId}/email")
+    public FamilyMemberResponse updateEmail(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody UpdateEmailRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID requesterId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = service.getMemberByDeviceToken(deviceToken);
+                requesterId = requester.id();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        var member = service.updateEmail(memberId, request.email(), requesterId);
         return toResponse(member);
     }
 
@@ -96,6 +137,7 @@ public class FamilyMemberController {
                 member.id(),
                 member.name(),
                 member.deviceToken(),
+                member.email(),
                 member.role(),
                 member.familyId() != null ? member.familyId().toString() : null
         );
@@ -114,10 +156,22 @@ public class FamilyMemberController {
     ) {
     }
 
+    public record UpdatePasswordRequest(
+            @NotBlank(message = "Password is required")
+            String password
+    ) {
+    }
+
+    public record UpdateEmailRequest(
+            String email  // Can be null/empty to remove email
+    ) {
+    }
+
     public record FamilyMemberResponse(
             UUID id,
             String name,
             String deviceToken,
+            String email,
             Role role,
             String familyId
     ) {

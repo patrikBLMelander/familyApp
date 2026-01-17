@@ -5,6 +5,7 @@ import com.familyapp.domain.familymember.FamilyMember.Role;
 import com.familyapp.infrastructure.familymember.FamilyMemberEntity;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,13 +19,16 @@ public class FamilyMemberService {
 
     private final FamilyMemberJpaRepository repository;
     private final FamilyJpaRepository familyRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public FamilyMemberService(
             FamilyMemberJpaRepository repository,
-            FamilyJpaRepository familyRepository
+            FamilyJpaRepository familyRepository,
+            PasswordEncoder passwordEncoder
     ) {
         this.repository = repository;
         this.familyRepository = familyRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -75,6 +79,97 @@ public class FamilyMemberService {
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
         
         entity.setName(name);
+        entity.setUpdatedAt(OffsetDateTime.now());
+        
+        var saved = repository.save(entity);
+        return toDomain(saved);
+    }
+
+    public FamilyMember updateEmail(UUID memberId, String email, UUID requesterId) {
+        var entity = repository.findById(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+        
+        // Only allow email updates for PARENT or ASSISTANT role
+        if (!Role.PARENT.name().equals(entity.getRole()) && !Role.ASSISTANT.name().equals(entity.getRole())) {
+            throw new IllegalArgumentException("Email can only be set for parent or assistant users");
+        }
+        
+        // Validate that requester is in the same family and has permission
+        if (requesterId != null) {
+            var requester = repository.findById(requesterId)
+                    .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
+            
+            // Requester must be in the same family
+            if (entity.getFamily() == null || requester.getFamily() == null ||
+                !entity.getFamily().getId().equals(requester.getFamily().getId())) {
+                throw new IllegalArgumentException("Cannot update email for member in different family");
+            }
+            
+            // Requester must be PARENT, or ASSISTANT updating their own email
+            boolean isParent = Role.PARENT.name().equals(requester.getRole());
+            boolean isAssistantUpdatingSelf = Role.ASSISTANT.name().equals(requester.getRole()) && 
+                                             requester.getId().equals(memberId);
+            
+            if (!isParent && !isAssistantUpdatingSelf) {
+                throw new IllegalArgumentException("Only parents can update email for others, or assistants can update their own");
+            }
+        }
+        
+        // Validate email format (basic check)
+        if (email != null && !email.trim().isEmpty()) {
+            if (!email.contains("@") || !email.contains(".")) {
+                throw new IllegalArgumentException("Invalid email format");
+            }
+        }
+        
+        entity.setEmail(email != null && !email.trim().isEmpty() ? email.trim() : null);
+        entity.setUpdatedAt(OffsetDateTime.now());
+        
+        var saved = repository.save(entity);
+        return toDomain(saved);
+    }
+
+    public FamilyMember updatePassword(UUID memberId, String newPassword, UUID requesterId) {
+        var entity = repository.findById(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+        
+        // Only allow password updates for PARENT or ASSISTANT role
+        if (!Role.PARENT.name().equals(entity.getRole()) && !Role.ASSISTANT.name().equals(entity.getRole())) {
+            throw new IllegalArgumentException("Password can only be set for parent or assistant users");
+        }
+        
+        // Validate that requester is in the same family and has permission
+        if (requesterId != null) {
+            var requester = repository.findById(requesterId)
+                    .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
+            
+            // Requester must be in the same family
+            if (entity.getFamily() == null || requester.getFamily() == null ||
+                !entity.getFamily().getId().equals(requester.getFamily().getId())) {
+                throw new IllegalArgumentException("Cannot update password for member in different family");
+            }
+            
+            // Requester must be PARENT, or ASSISTANT updating their own password
+            boolean isParent = Role.PARENT.name().equals(requester.getRole());
+            boolean isAssistantUpdatingSelf = Role.ASSISTANT.name().equals(requester.getRole()) && 
+                                             requester.getId().equals(memberId);
+            
+            if (!isParent && !isAssistantUpdatingSelf) {
+                throw new IllegalArgumentException("Only parents can update passwords for others, or assistants can update their own");
+            }
+        }
+        
+        // Validate password
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password is required");
+        }
+        if (newPassword.length() < 6) {
+            throw new IllegalArgumentException("Password must be at least 6 characters long");
+        }
+        
+        // Hash and set password
+        String hashedPassword = passwordEncoder.encode(newPassword);
+        entity.setPasswordHash(hashedPassword);
         entity.setUpdatedAt(OffsetDateTime.now());
         
         var saved = repository.save(entity);

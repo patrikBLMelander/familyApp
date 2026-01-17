@@ -19,8 +19,8 @@ export function useIsChild() {
 
         // Try to get member by device token
         const member = await getMemberByDeviceToken(deviceToken);
-        // Only set as child if role is CHILD
-        if (member.role === "CHILD") {
+        // Set as child if role is CHILD or ASSISTANT (both can have pets)
+        if (member.role === "CHILD" || member.role === "ASSISTANT") {
           setIsChild(true);
           setChildMember(member);
         } else {

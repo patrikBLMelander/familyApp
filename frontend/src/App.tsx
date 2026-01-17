@@ -182,8 +182,15 @@ export function App() {
       return <LoginRegisterView onLogin={handleLogin} />;
     }
 
-    // If child is logged in, only show child-accessible views
+    // If child or assistant is logged in, show appropriate views
     if (isChild) {
+      const isAssistant = childMember?.role === "ASSISTANT";
+      
+      // ASSISTANT can see calendar, CHILD cannot
+      if (isAssistant && currentView === "schedule") {
+        return <CalendarView onNavigate={handleNavigate} />;
+      }
+      
       switch (currentView) {
         case "eggselection":
           return <EggSelectionView onEggSelected={handleEggSelected} />;
@@ -256,7 +263,7 @@ export function App() {
 
       <nav className={`side-menu ${menuOpen ? "side-menu-open" : ""}`}>
         {isChild ? (
-          // Child menu - only show dashboard and install app
+          // Child/Assistant menu
           <>
             <button
               type="button"
@@ -265,6 +272,15 @@ export function App() {
             >
               Dashboard
             </button>
+            {childMember?.role === "ASSISTANT" && (
+              <button
+                type="button"
+                className="side-menu-item"
+                onClick={() => handleNavigate("schedule")}
+              >
+                Kalender
+              </button>
+            )}
             {/* PWA Install button - show if not installed */}
             {!isInstalled && (
               <button

@@ -1,11 +1,12 @@
 import { API_BASE_URL } from "../config";
 
-export type FamilyMemberRole = "CHILD" | "PARENT";
+export type FamilyMemberRole = "CHILD" | "ASSISTANT" | "PARENT";
 
 export type FamilyMemberResponse = {
   id: string;
   name: string;
   deviceToken: string | null;
+  email: string | null;
   role: FamilyMemberRole;
   familyId?: string;
 };
@@ -52,6 +53,30 @@ export async function updateFamilyMember(
     method: "PATCH",
     headers: getHeaders(),
     body: JSON.stringify({ name }),
+  });
+  return handleJson<FamilyMemberResponse>(response);
+}
+
+export async function updateFamilyMemberPassword(
+  memberId: string,
+  password: string
+): Promise<FamilyMemberResponse> {
+  const response = await fetch(`${API_BASE_URL}/family-members/${memberId}/password`, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify({ password }),
+  });
+  return handleJson<FamilyMemberResponse>(response);
+}
+
+export async function updateFamilyMemberEmail(
+  memberId: string,
+  email: string
+): Promise<FamilyMemberResponse> {
+  const response = await fetch(`${API_BASE_URL}/family-members/${memberId}/email`, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify({ email }),
   });
   return handleJson<FamilyMemberResponse>(response);
 }

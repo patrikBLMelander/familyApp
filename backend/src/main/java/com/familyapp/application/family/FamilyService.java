@@ -7,6 +7,7 @@ import com.familyapp.infrastructure.family.FamilyEntity;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberEntity;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,17 +20,28 @@ public class FamilyService {
 
     private final FamilyJpaRepository familyRepository;
     private final FamilyMemberJpaRepository memberRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public FamilyService(
             FamilyJpaRepository familyRepository,
-            FamilyMemberJpaRepository memberRepository
+            FamilyMemberJpaRepository memberRepository,
+            PasswordEncoder passwordEncoder
     ) {
         this.familyRepository = familyRepository;
         this.memberRepository = memberRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
-    public FamilyRegistrationResult registerFamily(String familyName, String adminName, String adminEmail) {
+    public FamilyRegistrationResult registerFamily(String familyName, String adminName, String adminEmail, String password) {
         var now = OffsetDateTime.now();
+        
+        // Validate password
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password is required");
+        }
+        if (password.length() < 6) {
+            throw new IllegalArgumentException("Password must be at least 6 characters long");
+        }
         
         // Create family
         var familyEntity = new FamilyEntity();
@@ -48,6 +60,10 @@ public class FamilyService {
         adminEntity.setFamily(savedFamily);
         adminEntity.setCreatedAt(now);
         adminEntity.setUpdatedAt(now);
+        
+        // Hash password
+        String hashedPassword = passwordEncoder.encode(password);
+        adminEntity.setPasswordHash(hashedPassword);
         
         // Generate device token for admin
         String deviceToken = UUID.randomUUID().toString();
@@ -77,13 +93,23 @@ public class FamilyService {
         return toDomain(saved);
     }
 
-    public EmailLoginResult loginByEmail(String email) {
+    public EmailLoginResult loginByEmailAndPassword(String email, String password) {
         var member = memberRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("No account found with this email"));
         
-        // Only allow email login for PARENT role (admin)
-        if (!Role.PARENT.name().equals(member.getRole())) {
-            throw new IllegalArgumentException("Email login is only available for admin users");
+        // Only allow email login for PARENT or ASSISTANT role
+        if (!Role.PARENT.name().equals(member.getRole()) && !Role.ASSISTANT.name().equals(member.getRole())) {
+            throw new IllegalArgumentException("Email login is only available for parent or assistant users");
+        }
+        
+        // Check if password is set
+        if (member.getPasswordHash() == null || member.getPasswordHash().isEmpty()) {
+            throw new IllegalArgumentException("Password not set for this account. Please set a password first.");
+        }
+        
+        // Verify password
+        if (!passwordEncoder.matches(password, member.getPasswordHash())) {
+            throw new IllegalArgumentException("Invalid password");
         }
         
         // Generate a new device token for this login
