@@ -32,10 +32,16 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+# Cache logging (uncomment to see cache hits/misses in logs)
+# logging:
+#   level:
+#     org.springframework.cache: DEBUG
+
 logging:
   level:
     root: INFO
     org.springframework.web.cors: DEBUG
     org.springframework.web.filter: DEBUG
+    org.springframework.cache: DEBUG  # Enable cache logging to see hits/misses
 
 

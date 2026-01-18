@@ -9,9 +9,11 @@ import com.familyapp.infrastructure.calendar.CalendarEventCategoryJpaRepository;
 import com.familyapp.infrastructure.calendar.CalendarEventEntity;
 import com.familyapp.infrastructure.calendar.CalendarEventJpaRepository;
 import com.familyapp.infrastructure.calendar.CalendarEventTaskCompletionEntity;
+import com.familyapp.application.cache.CacheService;
 import com.familyapp.infrastructure.calendar.CalendarEventTaskCompletionJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class CalendarService {
     private final FamilyJpaRepository familyRepository;
     private final CalendarEventTaskCompletionJpaRepository completionRepository;
     private final XpService xpService;
+    private final CacheService cacheService;
 
     public CalendarService(
             CalendarEventJpaRepository eventRepository,
@@ -40,7 +43,8 @@ public class CalendarService {
             FamilyMemberJpaRepository memberRepository,
             FamilyJpaRepository familyRepository,
             CalendarEventTaskCompletionJpaRepository completionRepository,
-            XpService xpService
+            XpService xpService,
+            CacheService cacheService
     ) {
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
@@ -48,6 +52,7 @@ public class CalendarService {
         this.familyRepository = familyRepository;
         this.completionRepository = completionRepository;
         this.xpService = xpService;
+        this.cacheService = cacheService;
     }
 
     @Transactional(readOnly = true)
@@ -401,12 +406,24 @@ public class CalendarService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "categories", key = "#familyId != null ? #familyId.toString() : 'all'")
     public List<CalendarEventCategory> getAllCategories(UUID familyId) {
         return categoryRepository.findByFamilyIdOrderByNameAsc(familyId).stream()
                 .map(this::toDomainCategory)
                 .toList();
     }
 
+    /**
+     * Creates a new calendar category.
+     * 
+     * Cache behavior:
+     * - Evicts "categories" cache for this family
+     * 
+     * @param familyId The family ID
+     * @param name The category name
+     * @param color The category color
+     * @return The created category
+     */
     public CalendarEventCategory createCategory(UUID familyId, String name, String color) {
         var now = OffsetDateTime.now();
         var entity = new CalendarEventCategoryEntity();
@@ -422,9 +439,25 @@ public class CalendarService {
         entity.setUpdatedAt(now);
         
         var saved = categoryRepository.save(entity);
-        return toDomainCategory(saved);
+        var result = toDomainCategory(saved);
+        
+        // Evict categories cache for this specific family (targeted eviction)
+        cacheService.evictCategories(familyId);
+        
+        return result;
     }
 
+    /**
+     * Updates a calendar category.
+     * 
+     * Cache behavior:
+     * - Evicts "categories" cache for this category's family
+     * 
+     * @param categoryId The category to update
+     * @param name The new name
+     * @param color The new color
+     * @return The updated category
+     */
     public CalendarEventCategory updateCategory(UUID categoryId, String name, String color) {
         var entity = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
@@ -436,11 +469,33 @@ public class CalendarService {
         entity.setUpdatedAt(OffsetDateTime.now());
         
         var saved = categoryRepository.save(entity);
-        return toDomainCategory(saved);
+        var result = toDomainCategory(saved);
+        
+        // Evict categories cache for this specific family (targeted eviction)
+        UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
+        cacheService.evictCategories(familyId);
+        
+        return result;
     }
 
+    /**
+     * Deletes a calendar category.
+     * 
+     * Cache behavior:
+     * - Evicts "categories" cache for this category's family
+     * 
+     * @param categoryId The category to delete
+     */
     public void deleteCategory(UUID categoryId) {
+        // Get category before deletion to evict cache
+        var entity = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
+        UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
+        
         categoryRepository.deleteById(categoryId);
+        
+        // Evict categories cache for this specific family (targeted eviction)
+        cacheService.evictCategories(familyId);
     }
 
     private CalendarEvent toDomain(CalendarEventEntity entity) {

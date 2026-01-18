@@ -26,5 +26,12 @@ public interface FamilyMemberJpaRepository extends JpaRepository<FamilyMemberEnt
      */
     @Query("SELECT m FROM FamilyMemberEntity m WHERE m.family.id = :familyId")
     List<FamilyMemberEntity> findByFamilyId(@Param("familyId") UUID familyId);
+    
+    /**
+     * Find all members by family ID, ordered by name.
+     * Optimized query for getAllMembers.
+     */
+    @Query("SELECT m FROM FamilyMemberEntity m WHERE m.family.id = :familyId ORDER BY m.name ASC")
+    List<FamilyMemberEntity> findByFamilyIdOrderByNameAsc(@Param("familyId") UUID familyId);
 }
 

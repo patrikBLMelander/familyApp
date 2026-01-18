@@ -1,5 +1,6 @@
 package com.familyapp.application.family;
 
+import com.familyapp.application.cache.CacheService;
 import com.familyapp.domain.family.Family;
 import com.familyapp.domain.familymember.FamilyMember;
 import com.familyapp.domain.familymember.FamilyMember.Role;
@@ -21,15 +22,18 @@ public class FamilyService {
     private final FamilyJpaRepository familyRepository;
     private final FamilyMemberJpaRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CacheService cacheService;
 
     public FamilyService(
             FamilyJpaRepository familyRepository,
             FamilyMemberJpaRepository memberRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            CacheService cacheService
     ) {
         this.familyRepository = familyRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
+        this.cacheService = cacheService;
     }
 
     public FamilyRegistrationResult registerFamily(String familyName, String adminName, String adminEmail, String password) {
@@ -70,11 +74,21 @@ public class FamilyService {
         adminEntity.setDeviceToken(deviceToken);
         var savedAdmin = memberRepository.save(adminEntity);
         
-        return new FamilyRegistrationResult(
+        var adminMember = toDomain(savedAdmin);
+        var result = new FamilyRegistrationResult(
                 toDomain(savedFamily),
-                toDomain(savedAdmin),
+                adminMember,
                 deviceToken
         );
+        
+        // Evict familyMembers cache for this new family (targeted eviction)
+        cacheService.evictFamilyMembers(savedFamily.getId());
+        
+        // Cache the new member and device token
+        cacheService.putMember(savedAdmin.getId(), adminMember);
+        cacheService.putDeviceToken(deviceToken, adminMember);
+        
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -112,16 +126,29 @@ public class FamilyService {
             throw new IllegalArgumentException("Invalid password");
         }
         
-        // Generate a new device token for this login
-        String deviceToken = UUID.randomUUID().toString();
-        member.setDeviceToken(deviceToken);
-        member.setUpdatedAt(OffsetDateTime.now());
-        var saved = memberRepository.save(member);
+        // Get old token to evict from cache
+        String oldToken = member.getDeviceToken();
         
-        return new EmailLoginResult(
-                toDomain(saved),
-                deviceToken
+        // Generate new device token for login
+        String newDeviceToken = UUID.randomUUID().toString();
+        member.setDeviceToken(newDeviceToken);
+        member.setUpdatedAt(OffsetDateTime.now());
+        memberRepository.save(member);
+        
+        var memberDomain = toDomain(member);
+        var result = new EmailLoginResult(
+                memberDomain,
+                newDeviceToken
         );
+        
+        // Evict old device token from cache (targeted eviction)
+        cacheService.evictDeviceToken(oldToken);
+        
+        // Cache new member and device token
+        cacheService.putMember(member.getId(), memberDomain);
+        cacheService.putDeviceToken(newDeviceToken, memberDomain);
+        
+        return result;
     }
 
     private Family toDomain(FamilyEntity entity) {
