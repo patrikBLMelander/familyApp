@@ -8,7 +8,8 @@ import com.familyapp.infrastructure.family.FamilyEntity;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberEntity;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
-import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,24 +21,23 @@ import java.util.UUID;
 @Transactional
 public class FamilyService {
 
+    private static final Logger log = LoggerFactory.getLogger(FamilyService.class);
+
     private final FamilyJpaRepository familyRepository;
     private final FamilyMemberJpaRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final CacheService cacheService;
-    private final EntityManager entityManager;
 
     public FamilyService(
             FamilyJpaRepository familyRepository,
             FamilyMemberJpaRepository memberRepository,
             PasswordEncoder passwordEncoder,
-            CacheService cacheService,
-            EntityManager entityManager
+            CacheService cacheService
     ) {
         this.familyRepository = familyRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.cacheService = cacheService;
-        this.entityManager = entityManager;
     }
 
     public FamilyRegistrationResult registerFamily(String familyName, String adminName, String adminEmail, String password) {
@@ -136,10 +136,6 @@ public class FamilyService {
         var member = memberRepository.findByEmail(email.trim())
                 .orElseThrow(() -> new IllegalArgumentException("No account found with this email"));
         
-        // Refresh entity to ensure we have the latest data from database
-        // This is important to avoid stale entity state issues
-        entityManager.refresh(member);
-        
         // Only allow email login for PARENT or ASSISTANT role
         if (!Role.PARENT.name().equals(member.getRole()) && !Role.ASSISTANT.name().equals(member.getRole())) {
             throw new IllegalArgumentException("Email login is only available for parent or assistant users");
@@ -154,8 +150,18 @@ public class FamilyService {
         // Verify password
         // Note: passwordEncoder.matches() handles BCrypt verification
         // It returns false if password doesn't match the hash
+        // BCrypt hashes always start with $2a$, $2b$, or $2y$
         boolean passwordMatches = passwordEncoder.matches(password, passwordHash);
         if (!passwordMatches) {
+            // Log for debugging (without exposing sensitive data)
+            if (passwordHash != null && passwordHash.length() > 0) {
+                String hashPrefix = passwordHash.length() > 4 ? passwordHash.substring(0, 4) : "unknown";
+                // Only log hash prefix for debugging, not the full hash
+                log.warn("Password verification failed for email: {}, hash prefix: {}, hash length: {}", 
+                    email.trim(), hashPrefix, passwordHash.length());
+            } else {
+                log.warn("Password verification failed for email: {}, password hash is null or empty", email.trim());
+            }
             throw new IllegalArgumentException("Invalid password");
         }
         
