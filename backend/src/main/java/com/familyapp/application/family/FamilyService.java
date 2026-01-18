@@ -8,6 +8,7 @@ import com.familyapp.infrastructure.family.FamilyEntity;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberEntity;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
+import jakarta.persistence.EntityManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,17 +24,20 @@ public class FamilyService {
     private final FamilyMemberJpaRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final CacheService cacheService;
+    private final EntityManager entityManager;
 
     public FamilyService(
             FamilyJpaRepository familyRepository,
             FamilyMemberJpaRepository memberRepository,
             PasswordEncoder passwordEncoder,
-            CacheService cacheService
+            CacheService cacheService,
+            EntityManager entityManager
     ) {
         this.familyRepository = familyRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.cacheService = cacheService;
+        this.entityManager = entityManager;
     }
 
     public FamilyRegistrationResult registerFamily(String familyName, String adminName, String adminEmail, String password) {
@@ -107,9 +111,34 @@ public class FamilyService {
         return toDomain(saved);
     }
 
+    /**
+     * Logs in a user with email and password.
+     * 
+     * Cache behavior:
+     * - Evicts old device token from cache
+     * - Caches new member and device token
+     * 
+     * @param email The user's email
+     * @param password The user's password
+     * @return Login result with member and new device token
+     * @throws IllegalArgumentException if email not found, password invalid, or user not authorized
+     */
     public EmailLoginResult loginByEmailAndPassword(String email, String password) {
-        var member = memberRepository.findByEmail(email)
+        // Validate input
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email is required");
+        }
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password is required");
+        }
+        
+        // Find member by email (not cached - always fresh from database)
+        var member = memberRepository.findByEmail(email.trim())
                 .orElseThrow(() -> new IllegalArgumentException("No account found with this email"));
+        
+        // Refresh entity to ensure we have the latest data from database
+        // This is important to avoid stale entity state issues
+        entityManager.refresh(member);
         
         // Only allow email login for PARENT or ASSISTANT role
         if (!Role.PARENT.name().equals(member.getRole()) && !Role.ASSISTANT.name().equals(member.getRole())) {
@@ -117,12 +146,16 @@ public class FamilyService {
         }
         
         // Check if password is set
-        if (member.getPasswordHash() == null || member.getPasswordHash().isEmpty()) {
+        String passwordHash = member.getPasswordHash();
+        if (passwordHash == null || passwordHash.isEmpty()) {
             throw new IllegalArgumentException("Password not set for this account. Please set a password first.");
         }
         
         // Verify password
-        if (!passwordEncoder.matches(password, member.getPasswordHash())) {
+        // Note: passwordEncoder.matches() handles BCrypt verification
+        // It returns false if password doesn't match the hash
+        boolean passwordMatches = passwordEncoder.matches(password, passwordHash);
+        if (!passwordMatches) {
             throw new IllegalArgumentException("Invalid password");
         }
         
