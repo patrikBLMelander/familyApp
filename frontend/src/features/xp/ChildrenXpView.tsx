@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/familyMembers";
 import { fetchMemberXpProgress, fetchMemberXpHistory, awardBonusXp, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
 import { fetchMemberPet, fetchMemberPetHistory, PetResponse, PetHistoryResponse } from "../../shared/api/pets";
-import { PetVisualization } from "../pet/PetVisualization";
-import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish } from "../pet/petImageUtils";
+import { getIntegratedPetImagePath, getPetNameSwedish } from "../pet/petImageUtils";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
 
@@ -29,8 +28,6 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
   const [childrenXpData, setChildrenXpData] = useState<Map<string, ChildXpData>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasIntegratedImage, setHasIntegratedImage] = useState<Map<string, boolean>>(new Map());
-  const [imageLoadErrors, setImageLoadErrors] = useState<Map<string, boolean>>(new Map());
   const [bonusXpDialog, setBonusXpDialog] = useState<{ childId: string; childName: string } | null>(null);
   const [bonusXpAmount, setBonusXpAmount] = useState<string>("10");
   const [awardingXp, setAwardingXp] = useState(false);
@@ -43,11 +40,11 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
         const childrenMembers = members.filter(m => m.role === "CHILD");
         setChildren(childrenMembers);
 
-        // Load XP data for each child
+        // Load XP data for all children in parallel (same approach as ChildDashboard)
         const xpDataMap = new Map<string, ChildXpData>();
-        const integratedImageMap = new Map<string, boolean>();
         
-        for (const child of childrenMembers) {
+        // Create all API calls in parallel for all children
+        const childDataPromises = childrenMembers.map(async (child) => {
           try {
             const [progress, history, pet, petHistory] = await Promise.all([
               fetchMemberXpProgress(child.id).catch(() => null),
@@ -56,43 +53,43 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               fetchMemberPetHistory(child.id).catch(() => [])
             ]);
             
-            xpDataMap.set(child.id, {
-              member: child,
-              progress,
-              history,
-              pet,
-              petHistory,
-              loading: false,
-              error: null
-            });
-            
-            // Check if integrated image exists for this pet
-            if (pet) {
-              try {
-                const integratedExists = await checkIntegratedImageExists(pet.petType, pet.growthStage);
-                integratedImageMap.set(child.id, integratedExists);
-              } catch (e) {
-                console.warn(`Failed to check integrated image for ${pet.petType} stage ${pet.growthStage}:`, e);
-                integratedImageMap.set(child.id, false);
+            return {
+              childId: child.id,
+              data: {
+                member: child,
+                progress,
+                history,
+                pet,
+                petHistory,
+                loading: false,
+                error: null
               }
-            } else {
-              integratedImageMap.set(child.id, false);
-            }
+            };
           } catch (e) {
-            xpDataMap.set(child.id, {
-              member: child,
-              progress: null,
-              history: [],
-              pet: null,
-              petHistory: [],
-              loading: false,
-              error: "Kunde inte ladda XP-data"
-            });
+            return {
+              childId: child.id,
+              data: {
+                member: child,
+                progress: null,
+                history: [],
+                pet: null,
+                petHistory: [],
+                loading: false,
+                error: "Kunde inte ladda XP-data"
+              }
+            };
           }
+        });
+        
+        // Wait for all children's data to load in parallel
+        const childDataResults = await Promise.all(childDataPromises);
+        
+        // Populate map with results
+        for (const result of childDataResults) {
+          xpDataMap.set(result.childId, result.data);
         }
 
         setChildrenXpData(xpDataMap);
-        setHasIntegratedImage(integratedImageMap);
       } catch (e) {
         console.error("Error loading children XP data:", e);
         setError("Kunde inte ladda data.");
@@ -136,17 +133,6 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               pet: updatedPet,
               petHistory: petHistory.length > 0 ? petHistory : childData.petHistory
             });
-            
-            // Check if integrated image exists for updated pet
-            if (updatedPet) {
-              checkIntegratedImageExists(updatedPet.petType, updatedPet.growthStage).then(exists => {
-                setHasIntegratedImage(prev => {
-                  const newMap = new Map(prev);
-                  newMap.set(bonusXpDialog.childId, exists);
-                  return newMap;
-                });
-              });
-            }
           }
           return newMap;
         });
@@ -295,10 +281,6 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           const petHistory = xpData?.petHistory || [];
 
           // Show pet even if no XP progress exists yet
-          // Default to false if not set (safer fallback)
-          // Also check if image failed to load
-          const imageLoadError = imageLoadErrors.get(child.id) || false;
-          const hasIntegrated = pet && !imageLoadError ? (hasIntegratedImage.get(child.id) ?? false) : false;
           const progressPercentage = progress ? (progress.xpInCurrentLevel / XP_PER_LEVEL) * 100 : 0;
 
           // If no progress and no pet, show simple message
@@ -315,107 +297,82 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
             );
           }
           
-          // Handle image load error for integrated images
-          const handleImageError = () => {
-            if (hasIntegrated && !imageLoadErrors.get(child.id)) {
-              setImageLoadErrors(prev => {
-                const newMap = new Map(prev);
-                newMap.set(child.id, true);
-                return newMap;
-              });
-            }
-          };
 
+          // All pets have integrated images, so always use them (EXACT same as ChildDashboard)
+          const imagePath = pet ? getIntegratedPetImagePath(pet.petType, pet.growthStage) : undefined;
+          
           return (
-            <section key={child.id} className="card" style={{ 
-              backgroundImage: pet && hasIntegrated
-                ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
-                : pet && !hasIntegrated
-                ? `url(${getPetBackgroundImagePath(pet.petType)})`
-                : undefined,
-              background: !pet 
-                ? "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)"
-                : undefined,
-              backgroundSize: pet && hasIntegrated ? "contain" : "cover",
-              backgroundPosition: "center",
-              backgroundRepeat: "no-repeat",
-              backgroundColor: pet ? "white" : "transparent",
-              border: "2px solid rgba(184, 230, 184, 0.3)",
-              borderRadius: "24px",
-              position: "relative",
-              overflow: "visible",
-              minHeight: pet && hasIntegrated ? "400px" : "auto",
-              padding: pet && hasIntegrated ? "40px 20px" : "20px",
-            }}>
-              {/* Hidden image to detect load errors for integrated images */}
-              {pet && hasIntegrated && (
-                <img
-                  src={getIntegratedPetImagePath(pet.petType, pet.growthStage)}
-                  alt=""
-                  onError={handleImageError}
-                  style={{ display: "none" }}
-                />
-              )}
-              {/* Header with name and XP button - positioned at top */}
+            <div key={child.id} style={{ marginBottom: "24px" }}>
+              {/* Header with name and XP button - above the card, not over the image */}
               <div style={{ 
-                position: "relative", 
-                zIndex: 1,
                 display: "flex", 
                 justifyContent: "space-between", 
-                alignItems: "flex-start", 
-                marginBottom: pet && hasIntegrated ? "20px" : "16px",
+                alignItems: "center", 
+                marginBottom: "12px",
+                gap: "8px",
               }}>
-                <h3 style={{ marginTop: 0, marginBottom: 0, fontSize: "1.1rem", fontWeight: 600 }}>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600, color: "#2d3748" }}>
                   {child.name}
                 </h3>
                 <button
                   type="button"
                   className="button-primary"
                   onClick={() => setBonusXpDialog({ childId: child.id, childName: child.name })}
-                  style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap" }}
+                  style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap", flexShrink: 0 }}
                 >
                   + Ge XP
                 </button>
               </div>
-
-              {/* Pet visualization - show if no integrated image or if integrated image failed to load */}
-              {pet && !hasIntegrated && (
-                <div style={{ 
-                  textAlign: "center", 
-                  marginBottom: "20px",
-                  position: "relative",
-                  zIndex: 1,
-                  minHeight: "120px", // Ensure space for pet visualization
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}>
-                  <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="medium" />
-                </div>
-              )}
-
-              {/* XP info - positioned in middle if no pet, or will be moved to bottom if pet exists */}
-              <div style={{ 
-                textAlign: "center", 
-                marginBottom: pet ? "0" : "20px",
-                position: pet ? "absolute" : "relative",
-                bottom: pet ? 0 : undefined,
-                left: pet ? 0 : undefined,
-                right: pet ? 0 : undefined,
-                zIndex: pet ? 2 : 1,
-                background: pet ? "rgba(255, 255, 255, 0.95)" : undefined,
-                padding: pet ? "16px 20px" : undefined,
-                borderRadius: pet ? "0 0 24px 24px" : undefined,
-                borderTop: pet ? "1px solid rgba(0, 0, 0, 0.1)" : undefined,
+              
+              {/* Pet card with image */}
+              <section className="card" style={{
+                backgroundImage: imagePath ? `url(${imagePath})` : undefined,
+                backgroundSize: pet ? "contain" : undefined,
+                backgroundPosition: "center top", // Position image at top to show more of it
+                backgroundRepeat: "no-repeat",
+                backgroundColor: "white", // Fallback if image doesn't load (same as ChildDashboard)
+                borderRadius: "24px",
+                padding: "20px 16px", // Standard padding, text overlay handles bottom spacing
+                paddingBottom: pet ? "100px" : "20px", // Extra bottom padding for text overlay
+                textAlign: "center",
+                boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
+                position: "relative",
+                overflow: "visible", // So image isn't cropped
+                minHeight: pet ? "380px" : "auto", // Increased to show more of the image
+                width: "100%",
+                maxWidth: "100%",
+                boxSizing: "border-box",
+              }}>
+              
+              {/* Text overlay at bottom with solid background for readability (EXACT same as ChildDashboard) */}
+              <div style={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                background: "rgba(255, 255, 255, 0.95)",
+                padding: "12px 16px", // Reduced padding for mobile
+                borderRadius: "0 0 24px 24px",
+                borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+                zIndex: 1, // Above image but below header
               }}>
                 {pet ? (
                   <>
-                    <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#2d5a2d", marginBottom: "4px" }}>
+                    <h3 style={{
+                      margin: "0 0 4px",
+                      fontSize: "1.3rem", // Reduced from 1.5rem for mobile
+                      fontWeight: 700,
+                      color: "#2d3748",
+                    }}>
                       {pet.name || getPetNameSwedish(pet.petType)}
-                    </div>
-                    <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "8px" }}>
+                    </h3>
+                    <p style={{
+                      margin: "0 0 6px", // Reduced margin
+                      fontSize: "0.9rem", // Reduced from 1rem for mobile
+                      color: "#4a5568",
+                    }}>
                       Växtsteg {pet.growthStage} av 5
-                    </div>
+                    </p>
                   </>
                 ) : (
                   <div style={{ fontSize: "2.5rem", marginBottom: "6px" }}>
@@ -424,10 +381,10 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 )}
                 {progress ? (
                   <>
-                    <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#2d5a2d", marginBottom: "4px" }}>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#2d5a2d", marginBottom: "4px" }}>
                       Level {progress.currentLevel}
                     </div>
-                    <div style={{ fontSize: "0.95rem", color: "#6b6b6b" }}>
+                    <div style={{ fontSize: "0.85rem", color: "#6b6b6b" }}>
                       {progress.currentXp} XP • {monthNames[progress.month - 1]} {progress.year}
                     </div>
                   </>
@@ -438,13 +395,12 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 )}
               </div>
 
-              {/* Progress Bar - only show if pet doesn't exist or if not using integrated image, and if progress exists */}
-              {progress && (!pet || !hasIntegrated) && (
+              {/* Progress Bar - only show if no pet (to avoid covering integrated image) */}
+              {progress && !pet && (
               <div style={{ 
                 marginBottom: "16px",
                 position: "relative",
                 zIndex: 1,
-                marginTop: pet ? "20px" : undefined
               }}>
                 <div style={{ 
                   display: "flex", 
@@ -487,8 +443,8 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               </div>
               )}
 
-              {/* Stats - only show if pet doesn't exist or if not using integrated image, and if progress exists */}
-              {progress && (!pet || !hasIntegrated) && (
+              {/* Stats - only show if no pet (to avoid covering integrated image) */}
+              {progress && !pet && (
               <div style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
@@ -518,8 +474,8 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               </div>
               )}
 
-              {/* History - only show if pet doesn't exist or if not using integrated image */}
-              {(!pet || !hasIntegrated) && (history.length > 0 || petHistory.length > 0) && (
+              {/* History - only show if no pet (to avoid covering integrated image) */}
+              {!pet && (history.length > 0 || petHistory.length > 0) && (
                 <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid rgba(200, 190, 180, 0.3)" }}>
                   <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "12px", color: "#6b6b6b" }}>
                     Tidigare månader
@@ -582,7 +538,8 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   </div>
                 </div>
               )}
-            </section>
+              </section>
+            </div>
           );
         })}
       </div>
