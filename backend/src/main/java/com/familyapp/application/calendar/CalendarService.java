@@ -1,6 +1,7 @@
 package com.familyapp.application.calendar;
 
 import com.familyapp.application.xp.XpService;
+import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.domain.calendar.CalendarEvent;
 import com.familyapp.domain.calendar.CalendarEventCategory;
 import com.familyapp.domain.calendar.CalendarEventTaskCompletion;
@@ -32,6 +33,7 @@ public class CalendarService {
     private final CalendarEventJpaRepository eventRepository;
     private final CalendarEventCategoryJpaRepository categoryRepository;
     private final FamilyMemberJpaRepository memberRepository;
+    private final FamilyMemberService memberService;
     private final FamilyJpaRepository familyRepository;
     private final CalendarEventTaskCompletionJpaRepository completionRepository;
     private final XpService xpService;
@@ -41,6 +43,7 @@ public class CalendarService {
             CalendarEventJpaRepository eventRepository,
             CalendarEventCategoryJpaRepository categoryRepository,
             FamilyMemberJpaRepository memberRepository,
+            FamilyMemberService memberService,
             FamilyJpaRepository familyRepository,
             CalendarEventTaskCompletionJpaRepository completionRepository,
             XpService xpService,
@@ -49,6 +52,7 @@ public class CalendarService {
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
         this.memberRepository = memberRepository;
+        this.memberService = memberService;
         this.familyRepository = familyRepository;
         this.completionRepository = completionRepository;
         this.xpService = xpService;
@@ -561,12 +565,24 @@ public class CalendarService {
             throw new IllegalArgumentException("Event is not a task (isTask=false)");
         }
         
+        // Use memberService to get member (uses cache and proper domain conversion)
+        // This ensures we get a properly loaded entity with all relations
+        var memberDomain = memberService.getMemberById(memberId);
+        
+        // Get member entity for validation (need to check family relation)
+        // Use memberService to ensure cache is used and entity is properly loaded
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Member not found: " + memberId));
         
+        // Ensure family is loaded (prevent lazy loading issues with cached entities)
+        if (member.getFamily() != null) {
+            member.getFamily().getId(); // Trigger lazy load within transaction
+        }
+        
         // Validate: Member must be in the same family as the event
-        if (eventEntity.getFamily() == null || member.getFamily() == null ||
-            !eventEntity.getFamily().getId().equals(member.getFamily().getId())) {
+        // Use memberDomain.familyId() which is already loaded (from cache or DB)
+        if (eventEntity.getFamily() == null || memberDomain.familyId() == null ||
+            !eventEntity.getFamily().getId().equals(memberDomain.familyId())) {
             throw new IllegalArgumentException("Member is not in the same family as the event");
         }
         
@@ -592,8 +608,20 @@ public class CalendarService {
         // Award XP if xpPoints is set (only for children, handled by XpService)
         Integer xpPoints = eventEntity.getXpPoints();
         if (xpPoints != null && xpPoints > 0) {
-            xpService.awardXp(memberId, xpPoints);
+            try {
+                xpService.awardXp(memberId, xpPoints);
+            } catch (Exception e) {
+                // Log error but don't fail the task completion
+                // XP award failure shouldn't prevent task from being marked as complete
+                System.err.println("Failed to award XP for task completion: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
+        
+        // Ensure event and member are loaded before converting to domain
+        // This prevents lazy loading issues
+        saved.getEvent().getId(); // Trigger lazy load
+        saved.getMember().getId(); // Trigger lazy load
         
         return toDomainCompletion(saved);
     }

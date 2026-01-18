@@ -610,14 +610,14 @@ export function CalendarView({ onNavigate }: CalendarViewProps) {
         {!showCreateForm && !editingEvent && (
           <div style={{ display: "flex", gap: "8px" }}>
             {currentUserRole === "PARENT" && (
-              <button
-                type="button"
-                className="todo-action-button"
-                onClick={() => setShowCategoryManager(true)}
-                style={{ fontSize: "0.85rem", padding: "8px 12px" }}
-              >
-                Kategorier
-              </button>
+            <button
+              type="button"
+              className="todo-action-button"
+              onClick={() => setShowCategoryManager(true)}
+              style={{ fontSize: "0.85rem", padding: "8px 12px" }}
+            >
+              Kategorier
+            </button>
             )}
             <button
               type="button"
@@ -2099,14 +2099,14 @@ function EventForm({ event, initialStartDate, categories, members, currentUserRo
           {event && onDelete && (
             // ASSISTANT can only delete events they created, PARENT can delete any
             (currentUserRole === "PARENT" || (currentUserRole === "ASSISTANT" && event.createdById === currentUserId)) && (
-              <button 
-                type="button" 
-                onClick={() => onDelete()} 
-                className="todo-action-button-danger"
-                style={{ borderRadius: "10px" }}
-              >
-                Ta bort
-              </button>
+            <button 
+              type="button" 
+              onClick={() => onDelete()} 
+              className="todo-action-button-danger"
+              style={{ borderRadius: "10px" }}
+            >
+              Ta bort
+            </button>
             )
           )}
         </div>

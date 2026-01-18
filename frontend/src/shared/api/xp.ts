@@ -54,11 +54,21 @@ export async function fetchXpHistory(): Promise<XpHistoryResponse[]> {
   return handleJson<XpHistoryResponse[]>(response);
 }
 
-export async function fetchMemberXpProgress(memberId: string): Promise<XpProgressResponse> {
+export async function fetchMemberXpProgress(memberId: string): Promise<XpProgressResponse | null> {
   const response = await fetch(`${API_BASE_URL}/xp/members/${memberId}/current`, {
     headers: getHeaders()
   });
-  return handleJson<XpProgressResponse>(response);
+  if (response.status === 404 || response.status === 204) {
+    return null; // No progress for this member
+  }
+  if (!response.ok) {
+    throw new Error(`Failed to fetch XP progress: ${response.statusText}`);
+  }
+  const text = await response.text();
+  if (!text || text.trim() === '' || text === 'null') {
+    return null; // Empty or null response
+  }
+  return JSON.parse(text) as XpProgressResponse;
 }
 
 export async function fetchMemberXpHistory(memberId: string): Promise<XpHistoryResponse[]> {

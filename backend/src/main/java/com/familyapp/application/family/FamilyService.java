@@ -132,8 +132,12 @@ public class FamilyService {
             throw new IllegalArgumentException("Password is required");
         }
         
+        // Normalize input (trim whitespace)
+        String normalizedEmail = email.trim();
+        String normalizedPassword = password.trim();
+        
         // Find member by email (not cached - always fresh from database)
-        var member = memberRepository.findByEmail(email.trim())
+        var member = memberRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new IllegalArgumentException("No account found with this email"));
         
         // Only allow email login for PARENT or ASSISTANT role
@@ -151,16 +155,18 @@ public class FamilyService {
         // Note: passwordEncoder.matches() handles BCrypt verification
         // It returns false if password doesn't match the hash
         // BCrypt hashes always start with $2a$, $2b$, or $2y$
-        boolean passwordMatches = passwordEncoder.matches(password, passwordHash);
+        // Use normalized password (trimmed) to avoid whitespace issues
+        boolean passwordMatches = passwordEncoder.matches(normalizedPassword, passwordHash);
         if (!passwordMatches) {
             // Log for debugging (without exposing sensitive data)
             if (passwordHash != null && passwordHash.length() > 0) {
                 String hashPrefix = passwordHash.length() > 4 ? passwordHash.substring(0, 4) : "unknown";
                 // Only log hash prefix for debugging, not the full hash
-                log.warn("Password verification failed for email: {}, hash prefix: {}, hash length: {}", 
-                    email.trim(), hashPrefix, passwordHash.length());
+                // Log password length (not content) to help diagnose whitespace issues
+                log.warn("Password verification failed for email: {}, hash prefix: {}, hash length: {}, password length: {}", 
+                    normalizedEmail, hashPrefix, passwordHash.length(), normalizedPassword.length());
             } else {
-                log.warn("Password verification failed for email: {}, password hash is null or empty", email.trim());
+                log.warn("Password verification failed for email: {}, password hash is null or empty", normalizedEmail);
             }
             throw new IllegalArgumentException("Invalid password");
         }

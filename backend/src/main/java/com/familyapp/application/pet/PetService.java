@@ -114,7 +114,7 @@ public class PetService {
      * Get current month's pet for a member
      * Also updates growth stage based on current XP level
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<ChildPet> getCurrentPet(UUID memberId) {
         LocalDate now = LocalDate.now();
         int year = now.getYear();

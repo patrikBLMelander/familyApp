@@ -166,17 +166,17 @@ export function LoginRegisterView({ onLogin }: LoginRegisterViewProps) {
               </>
             ) : (
               <>
-                <div className="form-group">
-                  <label htmlFor="email">E-postadress</label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="din@epost.se"
-                    required
-                    disabled={loading}
-                  />
+              <div className="form-group">
+                <label htmlFor="email">E-postadress</label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="din@epost.se"
+                  required
+                  disabled={loading}
+                />
                 </div>
                 <div className="form-group">
                   <label htmlFor="password">Lösenord</label>

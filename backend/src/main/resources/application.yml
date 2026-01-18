@@ -43,5 +43,8 @@ logging:
     org.springframework.web.cors: DEBUG
     org.springframework.web.filter: DEBUG
     org.springframework.cache: DEBUG  # Enable cache logging to see hits/misses
+    com.familyapp: DEBUG  # Enable debug logging for our application
+    org.hibernate: WARN  # Reduce Hibernate noise
+    org.springframework.transaction: DEBUG  # See transaction boundaries
 
 

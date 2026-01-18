@@ -85,10 +85,10 @@ public class XpController {
             }
         }
 
-        var progress = xpService.getCurrentProgress(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("No XP progress found for member"));
-
-        return toResponse(progress);
+        // Return null if no progress exists (frontend handles this gracefully)
+        return xpService.getCurrentProgress(memberId)
+                .map(this::toResponse)
+                .orElse(null);
     }
 
     @GetMapping("/members/{memberId}/history")

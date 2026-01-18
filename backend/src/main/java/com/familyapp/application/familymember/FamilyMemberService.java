@@ -65,11 +65,18 @@ public class FamilyMemberService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "members", key = "#memberId.toString()", unless = "#result == null")
+    @Cacheable(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
     public FamilyMember getMemberById(UUID memberId) {
+        if (memberId == null) {
+            throw new IllegalArgumentException("Member ID cannot be null");
+        }
         return repository.findById(memberId)
                 .map(this::toDomain)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> {
+                    // Evict from cache if member doesn't exist (prevents caching null)
+                    cacheService.evictMember(memberId);
+                    return new IllegalArgumentException("Family member not found: " + memberId);
+                });
     }
 
     /**
