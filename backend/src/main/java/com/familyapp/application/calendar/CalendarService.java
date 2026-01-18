@@ -56,10 +56,24 @@ public class CalendarService {
                 .map(this::toDomain)
                 .toList();
         
-        // Also get recurring events that might generate instances in this range
+        // Get recurring events that might generate instances in this range
+        // Optimized: Only get recurring events that could potentially generate instances in the date range
+        // (events that start before or during the range, or have no end date)
         var allRecurringEvents = eventRepository.findByFamilyIdOrderByStartDateTimeAsc(familyId).stream()
                 .map(this::toDomain)
                 .filter(CalendarEvent::isRecurring)
+                .filter(event -> {
+                    // Only include recurring events that could generate instances in the range
+                    var eventStart = event.startDateTime();
+                    var eventEndDate = event.recurringEndDate();
+                    
+                    // Include if:
+                    // 1. Event starts before or during the range (could generate instances in range)
+                    // 2. Event has no end date (could generate instances indefinitely)
+                    // 3. Event's end date is after range start (could still generate instances)
+                    return eventStart.isBefore(endDate) || eventStart.isEqual(endDate) ||
+                           (eventEndDate == null || eventEndDate.isAfter(startDate.toLocalDate()));
+                })
                 .toList();
         
         // Filter out recurring base events since we'll generate instances for them
@@ -69,7 +83,7 @@ public class CalendarService {
         
         var result = new java.util.ArrayList<CalendarEvent>(nonRecurringBaseEvents);
         
-        // Generate recurring instances
+        // Generate recurring instances only for events that could match the range
         for (var recurringEvent : allRecurringEvents) {
             var instances = generateRecurringInstances(recurringEvent, startDate, endDate);
             result.addAll(instances);
@@ -82,30 +96,13 @@ public class CalendarService {
 
     @Transactional(readOnly = true)
     public List<CalendarEvent> getAllEvents(UUID familyId) {
-        var baseEvents = eventRepository.findByFamilyIdOrderByStartDateTimeAsc(familyId).stream()
-                .map(this::toDomain)
-                .toList();
-        
-        var result = new java.util.ArrayList<CalendarEvent>();
+        // Optimized: Use reasonable default range (3 months) instead of 2 years
+        // This prevents generating thousands of recurring instances in memory
         var now = LocalDateTime.now();
-        var futureLimit = now.plusYears(2); // Generate instances up to 2 years in the future
+        var defaultEndDate = now.plusMonths(3); // 3 months ahead is reasonable for most use cases
         
-        for (var event : baseEvents) {
-            if (event.isRecurring()) {
-                // Generate recurring instances from now to future
-                // Use the event's start date as the earliest possible date (in case it's in the future)
-                var rangeStart = event.startDateTime().isAfter(now) ? event.startDateTime() : now;
-                var instances = generateRecurringInstances(event, rangeStart, futureLimit);
-                result.addAll(instances);
-            } else {
-                // Non-recurring event, add as-is (even if in the past, for now)
-                result.add(event);
-            }
-        }
-        
-        return result.stream()
-                .sorted((a, b) -> a.startDateTime().compareTo(b.startDateTime()))
-                .toList();
+        // Reuse getEventsForDateRange with default range
+        return getEventsForDateRange(familyId, now, defaultEndDate);
     }
     
     private List<CalendarEvent> generateRecurringInstances(

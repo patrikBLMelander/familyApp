@@ -21,5 +21,19 @@ public interface DailyTaskJpaRepository extends JpaRepository<DailyTaskEntity, U
     List<DailyTaskEntity> findByDayOfWeek(@Param("day") String day);
     
     List<DailyTaskEntity> findAllByOrderByPositionAsc();
+    
+    /**
+     * Find all tasks by family ID, ordered by position.
+     * Optimized query to avoid fetching all tasks and filtering in memory.
+     */
+    @Query("SELECT t FROM DailyTaskEntity t WHERE t.family.id = :familyId ORDER BY t.position ASC")
+    List<DailyTaskEntity> findByFamilyIdOrderByPositionAsc(@Param("familyId") UUID familyId);
+    
+    /**
+     * Find maximum position for tasks in a family.
+     * Optimized query to avoid fetching all tasks just to find max position.
+     */
+    @Query("SELECT COALESCE(MAX(t.position), 0) FROM DailyTaskEntity t WHERE t.family.id = :familyId")
+    Integer findMaxPositionByFamilyId(@Param("familyId") UUID familyId);
 }
 

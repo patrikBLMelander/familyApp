@@ -20,5 +20,12 @@ public interface DailyTaskCompletionJpaRepository extends JpaRepository<DailyTas
     @Query("SELECT c FROM DailyTaskCompletionEntity c WHERE c.completedDate = :date")
     List<DailyTaskCompletionEntity> findByCompletedDate(@Param("date") LocalDate date);
     
+    /**
+     * Find all completions for a specific date and family.
+     * Optimized query to avoid fetching all completions and filtering in memory.
+     */
+    @Query("SELECT c FROM DailyTaskCompletionEntity c WHERE c.completedDate = :date AND c.member.family.id = :familyId")
+    List<DailyTaskCompletionEntity> findByCompletedDateAndFamilyId(@Param("date") LocalDate date, @Param("familyId") UUID familyId);
+    
 }
 

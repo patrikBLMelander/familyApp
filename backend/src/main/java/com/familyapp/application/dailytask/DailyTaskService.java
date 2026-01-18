@@ -117,27 +117,36 @@ public class DailyTaskService {
                 .toList();
         
         // Get all children in the family (members with role CHILD)
-        var allChildren = memberRepository.findAll().stream()
-                .filter(m -> familyId == null || (m.getFamily() != null && m.getFamily().getId().equals(familyId)))
-                .filter(m -> "CHILD".equals(m.getRole()))
-                .toList();
+        // Optimized: Use query instead of fetching all and filtering in memory
+        List<com.familyapp.infrastructure.familymember.FamilyMemberEntity> allChildren;
+        if (familyId != null) {
+            allChildren = memberRepository.findByFamilyIdAndRole(familyId, "CHILD");
+        } else {
+            // Fallback for legacy code (should not happen in production)
+            allChildren = memberRepository.findByRole("CHILD");
+        }
         
         // Get all completions for today (filtered by family)
-        var allCompletions = completionRepository.findByCompletedDate(today).stream()
-                .filter(c -> {
-                    if (familyId == null) return true;
-                    if (c.getMember() == null || c.getMember().getFamily() == null) return false;
-                    return c.getMember().getFamily().getId().equals(familyId);
-                })
-                .toList();
+        // Optimized: Query completions by family if possible
+        List<com.familyapp.infrastructure.dailytask.DailyTaskCompletionEntity> allCompletions;
+        if (familyId != null) {
+            allCompletions = completionRepository.findByCompletedDateAndFamilyId(today, familyId);
+        } else {
+            // Fallback: fetch all and filter (should not happen in production)
+            allCompletions = completionRepository.findByCompletedDate(today);
+        }
         
         var result = new java.util.ArrayList<DailyTaskWithChildrenCompletion>();
         
         // Get all parents in the family for checking parent tasks
-        var allParents = memberRepository.findAll().stream()
-                .filter(m -> familyId == null || (m.getFamily() != null && m.getFamily().getId().equals(familyId)))
-                .filter(m -> "PARENT".equals(m.getRole()))
-                .toList();
+        // Optimized: Use query instead of fetching all and filtering in memory
+        List<com.familyapp.infrastructure.familymember.FamilyMemberEntity> allParents;
+        if (familyId != null) {
+            allParents = memberRepository.findByFamilyIdAndRole(familyId, "PARENT");
+        } else {
+            // Fallback for legacy code (should not happen in production)
+            allParents = memberRepository.findByRole("PARENT");
+        }
         
         for (var task : allTasks) {
             boolean appliesToAll = task.getMembers().isEmpty();
@@ -190,8 +199,15 @@ public class DailyTaskService {
 
     @Transactional(readOnly = true)
     public List<DailyTask> getAllTasks(UUID familyId) {
-        return taskRepository.findAllByOrderByPositionAsc().stream()
-                .filter(task -> familyId == null || (task.getFamily() != null && task.getFamily().getId().equals(familyId)))
+        // Optimized: Query by family ID instead of fetching all and filtering
+        List<DailyTaskEntity> tasks;
+        if (familyId != null) {
+            tasks = taskRepository.findByFamilyIdOrderByPositionAsc(familyId);
+        } else {
+            // Fallback for legacy code (should not happen in production)
+            tasks = taskRepository.findAllByOrderByPositionAsc();
+        }
+        return tasks.stream()
                 .map(this::toDomain)
                 .toList();
     }
@@ -221,11 +237,21 @@ public class DailyTaskService {
             entity.setMembers(members);
         }
         
-        var existing = taskRepository.findAll();
-        var maxPosition = existing.stream()
-                .mapToInt(DailyTaskEntity::getPosition)
-                .max()
-                .orElse(-1);
+        // Optimized: Query max position directly instead of fetching all tasks
+        Integer maxPosition;
+        if (familyId != null) {
+            maxPosition = taskRepository.findMaxPositionByFamilyId(familyId);
+            if (maxPosition == null) {
+                maxPosition = -1;
+            }
+        } else {
+            // Fallback for legacy code (should not happen in production)
+            var existing = taskRepository.findAll();
+            maxPosition = existing.stream()
+                    .mapToInt(DailyTaskEntity::getPosition)
+                    .max()
+                    .orElse(-1);
+        }
         entity.setPosition(maxPosition + 1);
         entity.setRequired(isRequired);
         entity.setXpPoints(xpPoints);
@@ -311,7 +337,8 @@ public class DailyTaskService {
     }
 
     public List<DailyTask> reorderTasks(List<UUID> orderedTaskIds) {
-        var tasks = taskRepository.findAll();
+        // Optimized: Only fetch the tasks we need, not all tasks
+        var tasks = taskRepository.findAllById(orderedTaskIds);
         var idToTask = tasks.stream()
                 .collect(Collectors.toMap(DailyTaskEntity::getId, t -> t));
         
