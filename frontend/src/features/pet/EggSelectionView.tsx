@@ -19,6 +19,8 @@ const EGG_EMOJIS: Record<string, string> = {
   black_egg: "⚫",
   gray_egg: "⚪",
   teal_egg: "🔷",
+  pink_egg: "🩷",
+  cyan_egg: "🔵",
 };
 
 // Friendly names for egg types (in Swedish)
@@ -33,6 +35,8 @@ const EGG_NAMES: Record<string, string> = {
   black_egg: "Svart ägg",
   gray_egg: "Grått ägg",
   teal_egg: "Turkost ägg",
+  pink_egg: "Rosa ägg",
+  cyan_egg: "Cyan ägg",
 };
 
 // Color mapping for each egg type
@@ -47,6 +51,8 @@ const EGG_COLORS: Record<string, { base: string; spots: string; glow: string }> 
   black_egg: { base: "#bdbdbd", spots: "#424242", glow: "#ffd700" },
   gray_egg: { base: "#e0e0e0", spots: "#757575", glow: "#ffd700" },
   teal_egg: { base: "#b2dfdb", spots: "#26a69a", glow: "#ffd700" },
+  pink_egg: { base: "#f8bbd0", spots: "#e91e63", glow: "#ffd700" },
+  cyan_egg: { base: "#b2ebf2", spots: "#00bcd4", glow: "#ffd700" },
 };
 
 // Map egg types to pet types (must match backend)
@@ -61,6 +67,8 @@ const EGG_TO_PET: Record<string, string> = {
   black_egg: "panda",
   gray_egg: "slot",
   teal_egg: "hydra",
+  pink_egg: "unicorn",
+  cyan_egg: "kapybara",
 };
 
 // Pet names in Swedish
@@ -75,6 +83,8 @@ const PET_NAMES: Record<string, string> = {
   panda: "Panda",
   slot: "Sengångare",
   hydra: "Hydra",
+  unicorn: "Enhörning",
+  kapybara: "Kapybara",
 };
 
 type HatchingStage = "idle" | "selecting" | "eggStage2" | "eggStage3" | "eggStage4" | "eggStage5" | "showingPet" | "namingPet";

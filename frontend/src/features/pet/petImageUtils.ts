@@ -54,6 +54,8 @@ export function getPetNameSwedish(petType: string): string {
     panda: "Panda",
     slot: "Sengångare",
     hydra: "Hydra",
+    unicorn: "Enhörning",
+    kapybara: "Kapybara",
   };
   return petNames[normalizedPetType] || petType;
 }
@@ -75,6 +77,8 @@ export function getPetNameSwedishLowercase(petType: string): string {
     panda: "panda",
     slot: "sengångare",
     hydra: "hydra",
+    unicorn: "enhörning",
+    kapybara: "kapybara",
   };
   return petNames[normalizedPetType] || petType;
 }
