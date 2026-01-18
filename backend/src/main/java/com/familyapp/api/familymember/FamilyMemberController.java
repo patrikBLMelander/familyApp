@@ -31,8 +31,13 @@ public class FamilyMemberController {
                 familyId = member.familyId();
             } catch (IllegalArgumentException e) {
                 // Invalid token, return empty list
+                // This prevents unauthorized access to family members
                 return List.of();
             }
+        } else {
+            // No device token provided, return empty list
+            // This ensures only authenticated users can see family members
+            return List.of();
         }
         return service.getAllMembers(familyId).stream()
                 .map(this::toResponse)

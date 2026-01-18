@@ -54,8 +54,11 @@ public class FamilyMemberService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "deviceTokens", key = "#deviceToken", unless = "#result == null")
+    @Cacheable(value = "deviceTokens", key = "#p0", unless = "#result == null || #p0 == null || #p0.isEmpty()")
     public FamilyMember getMemberByDeviceToken(String deviceToken) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token cannot be null or empty");
+        }
         return repository.findByDeviceToken(deviceToken)
                 .map(this::toDomain)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found for device token"));
