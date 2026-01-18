@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   fetchAllFamilyMembers,
@@ -33,10 +33,25 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
   const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
   const [emailEditingId, setEmailEditingId] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const qrCodeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void loadMembers();
   }, []);
+
+  // Scroll to QR code when it's displayed
+  useEffect(() => {
+    if (inviteToken && qrCodeRef.current) {
+      // Small delay to ensure the element is rendered
+      const timeoutId = setTimeout(() => {
+        qrCodeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
+      
+      // Cleanup timeout if component unmounts or inviteToken changes
+      return () => clearTimeout(timeoutId);
+    }
+  }, [inviteToken]);
 
   const loadMembers = async () => {
     try {
@@ -44,7 +59,16 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       const data = await fetchAllFamilyMembers();
       setMembers(data);
     } catch (e) {
-      setError("Kunde inte hämta familjemedlemmar.");
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte hämta familjemedlemmar.";
+      if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        setError("Du är inte inloggad. Logga in och försök igen.");
+      } else if (errorMessage.includes("403") || errorMessage.includes("Forbidden")) {
+        setError("Du har inte behörighet att se familjemedlemmar.");
+      } else if (errorMessage.includes("Network") || errorMessage.includes("Failed to fetch")) {
+        setError("Kunde inte ansluta till servern. Kontrollera din internetanslutning.");
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -63,8 +87,15 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       setMemberRole("CHILD");
       setShowCreateForm(false);
       setError(null);
-    } catch {
-      setError("Kunde inte skapa familjemedlem.");
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte skapa familjemedlem.";
+      if (errorMessage.includes("already exists") || errorMessage.includes("finns redan")) {
+        setError("En familjemedlem med detta namn finns redan.");
+      } else if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        setError("Du är inte inloggad. Logga in och försök igen.");
+      } else {
+        setError(errorMessage);
+      }
     }
   };
 
@@ -75,13 +106,32 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
     }
 
     try {
-      await updateFamilyMember(memberId, memberName.trim());
-      await loadMembers();
+      // Update backend first and use the returned updated member
+      const updatedMember = await updateFamilyMember(memberId, memberName.trim());
+      
+      // Update state with the returned member data (bypasses cache issues)
+      setMembers(prevMembers => 
+        prevMembers.map(m => 
+          m.id === memberId ? updatedMember : m
+        )
+      );
+      
+      // Close edit mode
       setEditingId(null);
       setMemberName("");
       setError(null);
-    } catch {
-      setError("Kunde inte uppdatera familjemedlem.");
+    } catch (e) {
+      // Reload on error to get correct state
+      await loadMembers();
+      
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte uppdatera familjemedlem.";
+      if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        setError("Du är inte inloggad. Logga in och försök igen.");
+      } else if (errorMessage.includes("404") || errorMessage.includes("Not Found")) {
+        setError("Familjemedlemmen hittades inte. Den kan ha tagits bort.");
+      } else {
+        setError(errorMessage);
+      }
     }
   };
 
@@ -93,8 +143,17 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
     try {
       await deleteFamilyMember(memberId);
       await loadMembers();
-    } catch {
-      setError("Kunde inte ta bort familjemedlem.");
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte ta bort familjemedlem.";
+      if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        setError("Du är inte inloggad. Logga in och försök igen.");
+      } else if (errorMessage.includes("403") || errorMessage.includes("Forbidden")) {
+        setError("Du har inte behörighet att ta bort denna familjemedlem.");
+      } else if (errorMessage.includes("404") || errorMessage.includes("Not Found")) {
+        setError("Familjemedlemmen hittades inte. Den kan redan ha tagits bort.");
+      } else {
+        setError(errorMessage);
+      }
     }
   };
 
@@ -103,8 +162,17 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       const token = await generateInviteToken(memberId);
       setInviteToken(token);
       setInviteMemberId(memberId);
-    } catch {
-      setError("Kunde inte generera inbjudan.");
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte generera inbjudan.";
+      if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        setError("Du är inte inloggad. Logga in och försök igen.");
+      } else if (errorMessage.includes("403") || errorMessage.includes("Forbidden")) {
+        setError("Du har inte behörighet att generera inbjudningar.");
+      } else if (errorMessage.includes("404") || errorMessage.includes("Not Found")) {
+        setError("Familjemedlemmen hittades inte.");
+      } else {
+        setError(errorMessage);
+      }
     }
   };
 
@@ -119,8 +187,16 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
     }
 
     try {
-      await updateFamilyMemberPassword(memberId, newPassword);
-      await loadMembers();
+      // Update backend first and use the returned updated member
+      const updatedMember = await updateFamilyMemberPassword(memberId, newPassword);
+      
+      // Update state with the returned member data (bypasses cache issues)
+      setMembers(prevMembers => 
+        prevMembers.map(m => 
+          m.id === memberId ? updatedMember : m
+        )
+      );
+      
       setPasswordEditingId(null);
       setNewPassword("");
       setNewPasswordConfirm("");
@@ -128,26 +204,53 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       setShowNewPasswordConfirm(false);
       setError(null);
     } catch (e) {
-      setError("Kunde inte uppdatera lösenord.");
+      // Reload on error to get correct state
+      await loadMembers();
+      
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte uppdatera lösenord.";
+      setError(errorMessage);
       console.error("Password update error:", e);
     }
   };
 
   const handleUpdateEmail = async (memberId: string) => {
-    // Basic email validation
-    if (newEmail && newEmail.trim() && (!newEmail.includes("@") || !newEmail.includes("."))) {
-      setError("Ogiltig e-postadress.");
-      return;
+    // Improved email validation using regex
+    const trimmedEmail = newEmail.trim();
+    if (trimmedEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        setError("Ogiltig e-postadress. Ange en giltig e-postadress (t.ex. namn@exempel.se).");
+        return;
+      }
     }
 
     try {
-      await updateFamilyMemberEmail(memberId, newEmail.trim() || "");
-      await loadMembers();
+      // Update backend first and use the returned updated member
+      const updatedMember = await updateFamilyMemberEmail(memberId, trimmedEmail || "");
+      
+      // Update state with the returned member data (bypasses cache issues)
+      setMembers(prevMembers => 
+        prevMembers.map(m => 
+          m.id === memberId ? updatedMember : m
+        )
+      );
+      
       setEmailEditingId(null);
       setNewEmail("");
       setError(null);
     } catch (e) {
-      setError("Kunde inte uppdatera e-postadress.");
+      // Reload on error to get correct state
+      await loadMembers();
+      
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte uppdatera e-postadress.";
+      // Check for specific error messages from backend
+      if (errorMessage.includes("already in use") || errorMessage.includes("används redan")) {
+        setError("Denna e-postadress används redan av ett annat konto.");
+      } else if (errorMessage.includes("Invalid") || errorMessage.includes("Ogiltig")) {
+        setError("Ogiltig e-postadress. Kontrollera att adressen är korrekt.");
+      } else {
+        setError(errorMessage);
+      }
       console.error("Email update error:", e);
     }
   };
@@ -269,7 +372,7 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       )}
 
       {inviteToken && inviteUrl && (
-        <section className="card">
+        <section className="card" ref={qrCodeRef}>
           <h3>QR-kod för inbjudan</h3>
           <p>
             {(() => {
@@ -480,102 +583,256 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                 ) : (
                   <>
                     <div className="family-member-content">
-                      <div>
-                        <h4>{member.name}</h4>
-                        <span className={`role-badge role-badge-${member.role.toLowerCase()}`}>
-                          {isAdmin ? "Huvudanvändare" : member.role === "PARENT" ? "Förälder" : member.role === "ASSISTANT" ? "Äldre barn" : "Barn"}
-                        </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+                        {/* Role icon with visual hierarchy - simple monochrome */}
+                        <div style={{ 
+                          display: "flex", 
+                          flexDirection: "column", 
+                          alignItems: "center", 
+                          justifyContent: "flex-end",
+                          gap: "2px",
+                          minWidth: "32px"
+                        }}>
+                          {(() => {
+                            const role = isAdmin ? "PARENT" : member.role;
+                            if (role === "PARENT") {
+                              return (
+                                <div style={{ 
+                                  fontSize: "1.8rem", 
+                                  lineHeight: 1,
+                                  color: "#3a3a3a",
+                                  fontWeight: 300
+                                }} title="Förälder">
+                                  ●
+                                </div>
+                              );
+                            } else if (role === "ASSISTANT") {
+                              return (
+                                <div style={{ 
+                                  fontSize: "1.4rem", 
+                                  lineHeight: 1,
+                                  color: "#3a3a3a",
+                                  fontWeight: 300
+                                }} title="Äldre barn">
+                                  ●
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <div style={{ 
+                                  fontSize: "1.1rem", 
+                                  lineHeight: 1,
+                                  color: "#3a3a3a",
+                                  fontWeight: 300
+                                }} title="Barn">
+                                  ●
+                                </div>
+                              );
+                            }
+                          })()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h4 style={{ margin: 0, marginBottom: "4px" }}>{member.name}</h4>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            {/* Email icon */}
+                            {member.email && (
+                              <span style={{ 
+                                fontSize: "0.75rem", 
+                                color: "#666",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px"
+                              }} title={member.email}>
+                                <span style={{ fontSize: "0.7rem", color: "#666" }}>@</span>
+                                <span style={{ maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{member.email}</span>
+                              </span>
+                            )}
+                            {/* Device status icon */}
+                            <span style={{ 
+                              fontSize: "0.75rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px"
+                            }} title={member.deviceToken ? "Enhet kopplad" : "Enhet ej kopplad"}>
+                              <span style={{ 
+                                fontSize: "0.6rem",
+                                color: member.deviceToken ? "#2d5a2d" : "#999",
+                                fontWeight: 600
+                              }}>
+                                {member.deviceToken ? "●" : "○"}
+                              </span>
+                              <span style={{ color: member.deviceToken ? "#2d5a2d" : "#8b4a3a", fontSize: "0.7rem" }}>
+                                {member.deviceToken ? "Kopplad" : "Ej kopplad"}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      {member.email && (
-                        <p className="device-token-info" style={{ fontSize: "0.85rem", color: "#666" }}>
-                          📧 {member.email}
-                        </p>
-                      )}
-                      {member.deviceToken && (
-                        <p className="device-token-info">Enhet kopplad</p>
-                      )}
                     </div>
-                    <div className="family-member-actions">
-                      <button
-                        type="button"
-                        className="button-secondary"
-                        onClick={() => {
-                          setEditingId(member.id);
-                          setMemberName(member.name);
-                          setShowCreateForm(false);
-                        }}
-                      >
-                        Redigera
-                      </button>
-                      {!isAdmin && member.role === "CHILD" && (
-                        <button
-                          type="button"
-                          className="button-secondary"
-                          onClick={() => void handleGenerateInvite(member.id)}
-                        >
-                          Visa QR-kod
-                        </button>
-                      )}
-                      {!isAdmin && (member.role === "PARENT" || member.role === "ASSISTANT") && (
-                        <>
+                    <div className="family-member-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                      {/* Left side - Primary actions */}
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        {!isAdmin && (
+                          <>
+                            {/* QR/Invite button with text */}
+                            {(member.role === "CHILD" || member.role === "PARENT" || member.role === "ASSISTANT") && (
+                              <button
+                                type="button"
+                                className="button-secondary"
+                                onClick={() => void handleGenerateInvite(member.id)}
+                                style={{ 
+                                  padding: "8px 14px",
+                                  fontSize: "0.85rem",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px"
+                                }}
+                              >
+                                <span style={{ fontSize: "0.9rem", color: "#3a3a3a" }}>◉</span>
+                                <span>{member.role === "ASSISTANT" ? "QR-kod" : member.role === "PARENT" ? "Bjud in" : "QR-kod"}</span>
+                              </button>
+                            )}
+                          </>
+                        )}
+                        
+                        {/* Edit menu button - clean icon */}
+                        <div style={{ position: "relative" }}>
                           <button
                             type="button"
                             className="button-secondary"
-                            onClick={() => void handleGenerateInvite(member.id)}
-                          >
-                            {member.role === "ASSISTANT" ? "Visa QR-kod" : "Bjud in"}
-                          </button>
-                          <button
-                            type="button"
-                            className="button-secondary"
-                            onClick={() => {
-                              setEmailEditingId(member.id);
-                              setEditingId(null);
-                              setPasswordEditingId(null);
-                              setShowCreateForm(false);
-                              setNewEmail(member.email || "");
+                            onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
+                            title="Redigera"
+                            aria-label="Redigera familjemedlem"
+                            aria-expanded={openMenuId === member.id}
+                            aria-haspopup="true"
+                            style={{ 
+                              width: "44px", 
+                              height: "44px",
+                              padding: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "1.1rem",
+                              color: "#2563eb",
+                              borderColor: "rgba(37, 99, 235, 0.3)",
+                              backgroundColor: "rgba(37, 99, 235, 0.05)",
+                              fontWeight: 300
                             }}
                           >
-                            {member.email ? "Ändra e-post" : "Lägg till e-post"}
+                            ✎
                           </button>
-                          <button
-                            type="button"
-                            className="button-secondary"
-                            onClick={() => {
-                              setPasswordEditingId(member.id);
-                              setEditingId(null);
-                              setEmailEditingId(null);
-                              setShowCreateForm(false);
-                              setNewPassword("");
-                              setNewPasswordConfirm("");
-                            }}
-                          >
-                            Ändra lösenord
-                          </button>
-                        </>
-                      )}
-                      {member.role === "PARENT" && isAdmin && (
-                        <button
-                          type="button"
-                          className="button-secondary"
-                          onClick={() => {
-                            setPasswordEditingId(member.id);
-                            setEditingId(null);
-                            setShowCreateForm(false);
-                            setNewPassword("");
-                            setNewPasswordConfirm("");
-                          }}
-                        >
-                          Ändra lösenord
-                        </button>
-                      )}
+                          {openMenuId === member.id && (
+                            <>
+                              <div 
+                                className="todo-menu-backdrop" 
+                                onClick={() => setOpenMenuId(null)} 
+                              />
+                              <div className="todo-menu-dropdown" style={{ right: 0, left: "auto", minWidth: "180px" }}>
+                                {/* Edit name */}
+                                <button
+                                  type="button"
+                                  className="todo-menu-item"
+                                  onClick={() => {
+                                    setEditingId(member.id);
+                                    setMemberName(member.name);
+                                    setShowCreateForm(false);
+                                    setOpenMenuId(null);
+                                  }}
+                                >
+                                  <span style={{ marginRight: "8px", color: "#666" }}>✎</span>
+                                  Redigera namn
+                                </button>
+                                
+                                {/* Email options - only for PARENT and ASSISTANT */}
+                                {(member.role === "PARENT" || member.role === "ASSISTANT" || (member.role === "PARENT" && isAdmin)) && (
+                                  <button
+                                    type="button"
+                                    className="todo-menu-item"
+                                    onClick={() => {
+                                      setEmailEditingId(member.id);
+                                      setEditingId(null);
+                                      setPasswordEditingId(null);
+                                      setShowCreateForm(false);
+                                      setNewEmail(member.email || "");
+                                      setOpenMenuId(null);
+                                    }}
+                                  >
+                                    <span style={{ marginRight: "8px", color: "#666" }}>@</span>
+                                    {member.email ? "Ändra e-post" : "Lägg till e-post"}
+                                  </button>
+                                )}
+                                
+                                {/* Password options - only for PARENT and ASSISTANT */}
+                                {(member.role === "PARENT" || member.role === "ASSISTANT" || (member.role === "PARENT" && isAdmin)) && (
+                                  <button
+                                    type="button"
+                                    className="todo-menu-item"
+                                    onClick={() => {
+                                      setPasswordEditingId(member.id);
+                                      setEditingId(null);
+                                      setEmailEditingId(null);
+                                      setShowCreateForm(false);
+                                      setNewPassword("");
+                                      setNewPasswordConfirm("");
+                                      setOpenMenuId(null);
+                                    }}
+                                  >
+                                    <span style={{ marginRight: "8px", color: "#666" }}>🔐</span>
+                                    Ändra lösenord
+                                  </button>
+                                )}
+                                
+                                {/* Delete option in menu */}
+                                {!isAdmin && (
+                                  <button
+                                    type="button"
+                                    className="todo-menu-item todo-menu-item-danger"
+                                    onClick={() => {
+                                      void handleDelete(member.id);
+                                      setOpenMenuId(null);
+                                    }}
+                                  >
+                                    <span style={{ marginRight: "8px" }}>×</span>
+                                    Ta bort
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Right side - Delete button, right-aligned */}
                       {!isAdmin && (
                         <button
                           type="button"
-                          className="button-danger"
+                          className="button-secondary"
                           onClick={() => void handleDelete(member.id)}
+                          title="Ta bort"
+                          aria-label={`Ta bort familjemedlem ${member.name}`}
+                          style={{ 
+                            padding: "8px 12px",
+                            fontSize: "1.3rem",
+                            minWidth: "44px",
+                            opacity: 0.6,
+                            borderColor: "rgba(200, 100, 100, 0.2)",
+                            marginLeft: "auto",
+                            color: "#999",
+                            fontWeight: 300,
+                            lineHeight: 1
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.opacity = "1";
+                            e.currentTarget.style.borderColor = "rgba(200, 100, 100, 0.5)";
+                            e.currentTarget.style.color = "#c55a5a";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.opacity = "0.6";
+                            e.currentTarget.style.borderColor = "rgba(200, 100, 100, 0.2)";
+                            e.currentTarget.style.color = "#999";
+                          }}
                         >
-                          Ta bort
+                          ×
                         </button>
                       )}
                     </div>

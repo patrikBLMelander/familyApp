@@ -1248,21 +1248,21 @@ body {
 
 .family-member-actions {
   display: flex;
-  gap: 6px;
-  flex-wrap: nowrap;
+  gap: 8px;
+  flex-wrap: wrap;
   flex: 1;
   min-width: 0;
 }
 
 .family-member-actions .button-secondary,
 .family-member-actions .button-danger {
-  padding: 7px 12px;
-  font-size: 0.8rem;
-  flex: 1;
-  min-width: 0;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  flex: 0 1 auto;
+  min-width: fit-content;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .qr-code-container {

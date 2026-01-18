@@ -8,6 +8,7 @@ import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -132,7 +133,7 @@ public class FamilyMemberService {
      * @param name The new name
      * @return Updated member (cached)
      */
-    @CachePut(value = "members", key = "#memberId.toString()")
+    @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
     public FamilyMember updateMember(UUID memberId, String name) {
         var entity = repository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
@@ -163,7 +164,7 @@ public class FamilyMemberService {
      * @param requesterId The requester ID (for permission check)
      * @return Updated member (cached)
      */
-    @CachePut(value = "members", key = "#memberId.toString()")
+    @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
     public FamilyMember updateEmail(UUID memberId, String email, UUID requesterId) {
         var entity = repository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
@@ -201,18 +202,33 @@ public class FamilyMemberService {
             if (!email.contains("@") || !email.contains(".")) {
                 throw new IllegalArgumentException("Invalid email format");
             }
+            
+            // Check if email is already in use by another member
+            String trimmedEmail = email.trim();
+            var existingMember = repository.findByEmail(trimmedEmail);
+            if (existingMember.isPresent() && !existingMember.get().getId().equals(memberId)) {
+                throw new IllegalArgumentException("Email is already in use by another account");
+            }
         }
         
         entity.setEmail(email != null && !email.trim().isEmpty() ? email.trim() : null);
         entity.setUpdatedAt(OffsetDateTime.now());
         
-        var saved = repository.save(entity);
-        var result = toDomain(saved);
-        
-        // Evict familyMembers cache for this specific family (targeted eviction)
-        cacheService.evictFamilyMembers(familyId);
-        
-        return result;
+        try {
+            var saved = repository.save(entity);
+            var result = toDomain(saved);
+            
+            // Evict familyMembers cache for this specific family (targeted eviction)
+            cacheService.evictFamilyMembers(familyId);
+            
+            return result;
+        } catch (DataIntegrityViolationException e) {
+            // Handle unique constraint violation (email already exists)
+            if (e.getMessage() != null && e.getMessage().contains("email")) {
+                throw new IllegalArgumentException("Email is already in use by another account");
+            }
+            throw e;
+        }
     }
 
     /**
@@ -227,7 +243,7 @@ public class FamilyMemberService {
      * @param requesterId The requester ID (for permission check)
      * @return Updated member (cached)
      */
-    @CachePut(value = "members", key = "#memberId.toString()")
+    @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
     public FamilyMember updatePassword(UUID memberId, String newPassword, UUID requesterId) {
         var entity = repository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));

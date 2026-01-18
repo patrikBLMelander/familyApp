@@ -205,38 +205,44 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
 
       {/* Pet Visualization Card */}
       <section className="card" style={{
-        backgroundImage: hasIntegratedImage 
-          ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
-          : `url(${getPetBackgroundImagePath(pet.petType)})`,
-        backgroundSize: hasIntegratedImage ? "contain" : "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        backgroundColor: "white", // Fallback if image doesn't load
-        borderRadius: "24px",
-        padding: "40px 20px",
+        padding: 0,
         marginBottom: "24px",
-        textAlign: "center",
+        borderRadius: "24px",
         boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
-        position: "relative",
-        overflow: "visible",
-        minHeight: hasIntegratedImage ? "400px" : "auto",
+        overflow: "hidden",
+        backgroundColor: "white",
       }}>
-        {/* Only show PetVisualization if integrated image doesn't exist */}
-        {!hasIntegratedImage && (
-          <div style={{ marginBottom: "20px" }}>
-            <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
-          </div>
-        )}
-        
-        {/* Text overlay at bottom with solid background for readability */}
+        {/* Image container with 3:2 aspect ratio (1440×960) */}
         <div style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          background: "rgba(255, 255, 255, 0.95)",
-          padding: "16px 20px",
-          borderRadius: "0 0 24px 24px",
+          backgroundImage: hasIntegratedImage 
+            ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
+            : `url(${getPetBackgroundImagePath(pet.petType)})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundColor: "white",
+          width: "100%",
+          aspectRatio: "3 / 2", // 1440×960 aspect ratio
+          position: "relative",
+        }}>
+          {/* Only show PetVisualization if integrated image doesn't exist */}
+          {!hasIntegratedImage && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              padding: "20px",
+            }}>
+              <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
+            </div>
+          )}
+        </div>
+        
+        {/* Text below image */}
+        <div style={{
+          padding: "20px",
+          textAlign: "center",
           borderTop: "1px solid rgba(0, 0, 0, 0.1)",
         }}>
           <h3 style={{
@@ -359,7 +365,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {tasks.slice(0, 3).map((task) => {
+            {tasks.map((task) => {
               // Different background colors for required vs extra tasks (only when not completed)
               const bgColor = task.completed 
                 ? "#f0fff4" // Same green for all completed tasks
