@@ -305,78 +305,106 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           
           return (
             <section key={child.id} className="card" style={{ 
-              background: pet 
+              backgroundImage: pet 
                 ? (hasIntegrated 
                     ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
                     : `url(${getPetBackgroundImagePath(pet.petType)})`)
-                : "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)",
-              backgroundSize: "cover",
+                : undefined,
+              background: !pet 
+                ? "linear-gradient(135deg, rgba(184, 230, 184, 0.1) 0%, rgba(184, 230, 184, 0.05) 100%)"
+                : undefined,
+              backgroundSize: pet && hasIntegrated ? "contain" : "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
               backgroundColor: pet ? "white" : "transparent",
               border: "2px solid rgba(184, 230, 184, 0.3)",
+              borderRadius: "24px",
               position: "relative",
-              overflow: "hidden"
+              overflow: "visible",
+              minHeight: pet && hasIntegrated ? "400px" : "auto",
+              padding: pet && hasIntegrated ? "40px 20px" : undefined,
             }}>
-              {/* Overlay for text readability if background image */}
-              {pet && (
-                <div style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                  background: "linear-gradient(to bottom, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.9) 100%)",
-                  zIndex: 0,
-                }} />
+              {/* Header with name and XP button - positioned at top */}
+              <div style={{ 
+                position: "relative", 
+                zIndex: 1,
+                display: "flex", 
+                justifyContent: "space-between", 
+                alignItems: "flex-start", 
+                marginBottom: pet && hasIntegrated ? "20px" : "16px",
+                padding: pet && hasIntegrated ? "0" : undefined
+              }}>
+                <h3 style={{ marginTop: 0, marginBottom: 0, fontSize: "1.1rem", fontWeight: 600 }}>
+                  {child.name}
+                </h3>
+                <button
+                  type="button"
+                  className="button-primary"
+                  onClick={() => setBonusXpDialog({ childId: child.id, childName: child.name })}
+                  style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap" }}
+                >
+                  + Ge XP
+                </button>
+              </div>
+
+              {/* Pet visualization - only if integrated image doesn't exist */}
+              {pet && !hasIntegrated && (
+                <div style={{ 
+                  textAlign: "center", 
+                  marginBottom: "20px",
+                  position: "relative",
+                  zIndex: 1
+                }}>
+                  <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center" }}>
+                    <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="medium" />
+                  </div>
+                </div>
               )}
-              
-              <div style={{ position: "relative", zIndex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-                  <h3 style={{ marginTop: 0, marginBottom: 0, fontSize: "1.1rem", fontWeight: 600 }}>
-                    {child.name}
-                  </h3>
-                  <button
-                    type="button"
-                    className="button-primary"
-                    onClick={() => setBonusXpDialog({ childId: child.id, childName: child.name })}
-                    style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap" }}
-                  >
-                    + Ge XP
-                  </button>
-                </div>
 
-                <div style={{ textAlign: "center", marginBottom: "20px" }}>
-                  {pet ? (
-                    <>
-                      {/* Only show PetVisualization if integrated image doesn't exist */}
-                      {!hasIntegrated && (
-                        <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center" }}>
-                          <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="medium" />
-                        </div>
-                      )}
-                      <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#2d5a2d", marginBottom: "4px" }}>
-                        {pet.name || getPetNameSwedish(pet.petType)}
-                      </div>
-                      <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
-                        Växtsteg {pet.growthStage} av 5
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: "2.5rem", marginBottom: "6px" }}>
-                      🥚
+              {/* XP info - positioned in middle if no pet, or will be moved to bottom if pet exists */}
+              <div style={{ 
+                textAlign: "center", 
+                marginBottom: pet ? "0" : "20px",
+                position: pet ? "absolute" : "relative",
+                bottom: pet ? 0 : undefined,
+                left: pet ? 0 : undefined,
+                right: pet ? 0 : undefined,
+                zIndex: pet ? 2 : 1,
+                background: pet ? "rgba(255, 255, 255, 0.95)" : undefined,
+                padding: pet ? "16px 20px" : undefined,
+                borderRadius: pet ? "0 0 24px 24px" : undefined,
+                borderTop: pet ? "1px solid rgba(0, 0, 0, 0.1)" : undefined,
+              }}>
+                {pet ? (
+                  <>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#2d5a2d", marginBottom: "4px" }}>
+                      {pet.name || getPetNameSwedish(pet.petType)}
                     </div>
-                  )}
-                  <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#2d5a2d", marginBottom: "4px" }}>
-                    Level {progress.currentLevel}
+                    <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "8px" }}>
+                      Växtsteg {pet.growthStage} av 5
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: "2.5rem", marginBottom: "6px" }}>
+                    🥚
                   </div>
-                  <div style={{ fontSize: "0.95rem", color: "#6b6b6b" }}>
-                    {progress.currentXp} XP • {monthNames[progress.month - 1]} {progress.year}
-                  </div>
+                )}
+                <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#2d5a2d", marginBottom: "4px" }}>
+                  Level {progress.currentLevel}
                 </div>
+                <div style={{ fontSize: "0.95rem", color: "#6b6b6b" }}>
+                  {progress.currentXp} XP • {monthNames[progress.month - 1]} {progress.year}
+                </div>
+              </div>
 
-              {/* Progress Bar */}
-              <div style={{ marginBottom: "16px" }}>
+              {/* Progress Bar - only show if pet doesn't exist or if not using integrated image */}
+              {(!pet || !hasIntegrated) && (
+              <div style={{ 
+                marginBottom: "16px",
+                position: "relative",
+                zIndex: 1,
+                marginTop: pet ? "20px" : undefined
+              }}>
                 <div style={{ 
                   display: "flex", 
                   justifyContent: "space-between", 
@@ -416,15 +444,19 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   </p>
                 )}
               </div>
+              )}
 
-              {/* Stats */}
+              {/* Stats - only show if pet doesn't exist or if not using integrated image */}
+              {(!pet || !hasIntegrated) && (
               <div style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
                 gap: "12px",
                 marginTop: "16px",
                 paddingTop: "16px",
-                borderTop: "1px solid rgba(200, 190, 180, 0.3)"
+                borderTop: "1px solid rgba(200, 190, 180, 0.3)",
+                position: "relative",
+                zIndex: 1
               }}>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "#2d5a2d" }}>
@@ -443,9 +475,10 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* History */}
-              {(history.length > 0 || petHistory.length > 0) && (
+              {/* History - only show if pet doesn't exist or if not using integrated image */}
+              {(!pet || !hasIntegrated) && (history.length > 0 || petHistory.length > 0) && (
                 <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid rgba(200, 190, 180, 0.3)" }}>
                   <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "12px", color: "#6b6b6b" }}>
                     Tidigare månader
@@ -508,7 +541,6 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   </div>
                 </div>
               )}
-              </div>
             </section>
           );
         })}
