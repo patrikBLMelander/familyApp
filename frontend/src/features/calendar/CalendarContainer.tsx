@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   CalendarEventResponse,
 } from "../../shared/api/calendar";
@@ -7,6 +7,9 @@ import { WeekView } from "./components/WeekView";
 import { MonthView } from "./components/MonthView";
 import { CategoryManager } from "./components/CategoryManager";
 import { RollingView } from "./components/RollingView";
+import { CalendarHeader } from "./components/CalendarHeader";
+import { CalendarViewSelector } from "./components/CalendarViewSelector";
+import { CalendarFilters } from "./components/CalendarFilters";
 import { useCalendarData } from "./hooks/useCalendarData";
 import { useCalendarEvents } from "./hooks/useCalendarEvents";
 import { formatDateForEventForm } from "./utils/dateFormatters";
@@ -18,6 +21,19 @@ type CalendarContainerProps = {
   onNavigate?: (view: ViewKey) => void;
 };
 
+/**
+ * Main container component for the calendar feature.
+ * Manages all state, data fetching, and coordinates between different calendar views.
+ * 
+ * Handles:
+ * - View type switching (rolling, week, month)
+ * - Event CRUD operations
+ * - Task completion
+ * - Category management
+ * - Filtering (tasks/events, members)
+ * 
+ * @param onNavigate - Optional callback for navigation to other views
+ */
 export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEventResponse | null>(null);
@@ -60,6 +76,12 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
     currentMemberId
   );
 
+  // Use ref to maintain stable reference to members array
+  const membersRef = useRef(members);
+  useEffect(() => {
+    membersRef.current = members;
+  }, [members]);
+
   // Use events hook
   const {
     handleCreateEvent,
@@ -100,12 +122,13 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
   useEffect(() => {
     if (showTasksOnly && viewType === CALENDAR_VIEW_TYPES.ROLLING) {
       if (showAllMembers) {
-        void loadTasksForAllMembers(members, selectedDate);
+        // Use ref to avoid unnecessary re-runs when members array reference changes
+        void loadTasksForAllMembers(membersRef.current, selectedDate);
       } else if (currentMemberId) {
         void loadTasks(currentMemberId, selectedDate);
       }
     }
-  }, [showTasksOnly, viewType, currentMemberId, selectedDate, showAllMembers, members, loadTasks, loadTasksForAllMembers]);
+  }, [showTasksOnly, viewType, currentMemberId, selectedDate, showAllMembers, loadTasks, loadTasksForAllMembers]);
 
   // Filter events for week/month views (rolling view handles its own filtering)
   const filteredEvents = useMemo(() => {
@@ -130,50 +153,26 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
     };
   }, [handleToggleTask, currentMemberId, selectedDate, showAllMembers]);
 
+  const handleBackClick = () => {
+    if (showCreateForm || editingEvent) {
+      setShowCreateForm(false);
+      setEditingEvent(null);
+    } else if (onNavigate) {
+      onNavigate("dashboard");
+    }
+  };
+
   return (
     <div className="calendar-view">
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-        {onNavigate && (
-          <button
-            type="button"
-            className="back-button"
-            onClick={() => {
-              // If form is open, close it; otherwise go to dashboard
-              if (showCreateForm || editingEvent) {
-                setShowCreateForm(false);
-                setEditingEvent(null);
-              } else {
-                onNavigate("dashboard");
-              }
-            }}
-            aria-label="Tillbaka"
-          >
-            ←
-          </button>
-        )}
-        <h2 className="view-title" style={{ margin: 0, flex: 1 }}>Kalender</h2>
-        {!showCreateForm && !editingEvent && (
-          <div style={{ display: "flex", gap: "8px" }}>
-            {currentUserRole === "PARENT" && (
-            <button
-              type="button"
-              className="todo-action-button"
-              onClick={() => setShowCategoryManager(true)}
-              style={{ fontSize: "0.85rem", padding: "8px 12px" }}
-            >
-              Kategorier
-            </button>
-            )}
-            <button
-              type="button"
-              className="button-primary"
-              onClick={() => setShowCreateForm(true)}
-            >
-              + Nytt event
-            </button>
-          </div>
-        )}
-      </div>
+      <CalendarHeader
+        onNavigate={onNavigate}
+        onOpenCategoryManager={() => setShowCategoryManager(true)}
+        onOpenQuickAdd={() => setShowCreateForm(true)}
+        onBackClick={handleBackClick}
+        currentUserRole={currentUserRole}
+        showCreateForm={showCreateForm}
+        editingEvent={!!editingEvent}
+      />
 
       {/* View type toggle and filters - only show when not in form */}
       {!showCreateForm && !editingEvent && (
@@ -183,164 +182,16 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
           gap: "8px",
           marginBottom: "16px"
         }}>
-          <div style={{ 
-            display: "flex", 
-            gap: "4px", 
-            padding: "4px",
-            background: "rgba(255, 255, 255, 0.6)",
-            borderRadius: "8px",
-            border: "1px solid rgba(220, 210, 200, 0.3)"
-          }}>
-            <button
-              type="button"
-              onClick={() => setViewType(CALENDAR_VIEW_TYPES.ROLLING)}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "none",
-                background: viewType === CALENDAR_VIEW_TYPES.ROLLING ? "#b8e6b8" : "transparent",
-                color: viewType === CALENDAR_VIEW_TYPES.ROLLING ? "#2d5a2d" : "#6b6b6b",
-                fontWeight: viewType === CALENDAR_VIEW_TYPES.ROLLING ? 600 : 400,
-                fontSize: "0.85rem",
-                cursor: "pointer",
-                transition: "all 0.2s ease"
-              }}
-            >
-              Rullande
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewType(CALENDAR_VIEW_TYPES.WEEK)}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "none",
-                background: viewType === CALENDAR_VIEW_TYPES.WEEK ? "#b8e6b8" : "transparent",
-                color: viewType === CALENDAR_VIEW_TYPES.WEEK ? "#2d5a2d" : "#6b6b6b",
-                fontWeight: viewType === CALENDAR_VIEW_TYPES.WEEK ? 600 : 400,
-                fontSize: "0.85rem",
-                cursor: "pointer",
-                transition: "all 0.2s ease"
-              }}
-            >
-              Vecka
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewType(CALENDAR_VIEW_TYPES.MONTH)}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "none",
-                background: viewType === CALENDAR_VIEW_TYPES.MONTH ? "#b8e6b8" : "transparent",
-                color: viewType === CALENDAR_VIEW_TYPES.MONTH ? "#2d5a2d" : "#6b6b6b",
-                fontWeight: viewType === CALENDAR_VIEW_TYPES.MONTH ? 600 : 400,
-                fontSize: "0.85rem",
-                cursor: "pointer",
-                transition: "all 0.2s ease"
-              }}
-            >
-              Månad
-            </button>
-          </div>
-          {/* Task/Event toggle - show in all views */}
-          <div style={{ 
-            display: "flex", 
-            gap: "4px", 
-            padding: "4px",
-            background: "rgba(255, 255, 255, 0.6)",
-            borderRadius: "8px",
-            border: "1px solid rgba(220, 210, 200, 0.3)"
-          }}>
-            <button
-              type="button"
-              onClick={() => setShowTasksOnly(false)}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "none",
-                background: !showTasksOnly ? "#b8e6b8" : "transparent",
-                color: !showTasksOnly ? "#2d5a2d" : "#6b6b6b",
-                fontWeight: !showTasksOnly ? 600 : 400,
-                fontSize: "0.85rem",
-                cursor: "pointer",
-                transition: "all 0.2s ease"
-              }}
-            >
-              Schema
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowTasksOnly(true)}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "none",
-                background: showTasksOnly ? "#b8e6b8" : "transparent",
-                color: showTasksOnly ? "#2d5a2d" : "#6b6b6b",
-                fontWeight: showTasksOnly ? 600 : 400,
-                fontSize: "0.85rem",
-                cursor: "pointer",
-                transition: "all 0.2s ease"
-              }}
-            >
-              Dagens Att Göra
-            </button>
-          </div>
-          {showTasksOnly && (
-            <div
-              style={{
-                display: "flex",
-                gap: "4px",
-                padding: "4px",
-                background: "#f5f5f5",
-                borderRadius: "8px",
-                marginBottom: "12px"
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setShowAllMembers(false)}
-                style={{
-                  flex: 1,
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  border: "none",
-                  background: !showAllMembers ? "#b8e6b8" : "transparent",
-                  color: !showAllMembers ? "#2d5a2d" : "#6b6b6b",
-                  fontWeight: !showAllMembers ? 600 : 400,
-                  fontSize: "0.85rem",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease"
-                }}
-              >
-                Endast mig
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAllMembers(true)}
-                style={{
-                  flex: 1,
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  border: "none",
-                  background: showAllMembers ? "#b8e6b8" : "transparent",
-                  color: showAllMembers ? "#2d5a2d" : "#6b6b6b",
-                  fontWeight: showAllMembers ? 600 : 400,
-                  fontSize: "0.85rem",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease"
-                }}
-              >
-                Alla familjemedlemmar
-              </button>
-            </div>
-          )}
+          <CalendarViewSelector
+            viewType={viewType}
+            setViewType={setViewType}
+          />
+          <CalendarFilters
+            showTasksOnly={showTasksOnly}
+            setShowTasksOnly={setShowTasksOnly}
+            showAllMembers={showAllMembers}
+            setShowAllMembers={setShowAllMembers}
+          />
         </div>
       )}
 

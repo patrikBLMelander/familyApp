@@ -12,7 +12,31 @@ import {
 } from "../../../shared/api/calendar";
 import { fetchAllFamilyMembers, FamilyMemberResponse, getMemberByDeviceToken } from "../../../shared/api/familyMembers";
 import { CalendarViewType, CALENDAR_VIEW_TYPES } from "../constants";
+import { extractErrorMessage } from "../utils/errorHandling";
 
+/**
+ * Custom hook for managing calendar data fetching and state.
+ * 
+ * Handles:
+ * - Loading events, categories, and members
+ * - Loading tasks with completion status
+ * - Task completion toggling
+ * - Current user role detection
+ * 
+ * Optimizes data fetching based on view type:
+ * - Rolling view: Today to 30 days ahead
+ * - Week view: 7 days before to 7 days after current week
+ * - Month view: Full month range
+ * 
+ * @param viewType - Current calendar view type
+ * @param currentWeek - Current week date (for week view)
+ * @param currentMonth - Current month date (for month view)
+ * @param selectedDate - Selected date (for rolling view)
+ * @param showTasksOnly - Whether to show only tasks
+ * @param showAllMembers - Whether to show tasks for all members
+ * @param currentMemberId - Current logged-in member ID
+ * @returns Calendar data, loading state, error state, and data loading functions
+ */
 export function useCalendarData(
   viewType: CalendarViewType,
   currentWeek: Date,
@@ -196,7 +220,8 @@ export function useCalendarData(
       setCategories(categoriesData);
       setMembers(membersData);
     } catch (e) {
-      setError("Kunde inte hämta kalenderdata.");
+      const errorMessage = extractErrorMessage(e, "Kunde inte hämta kalenderdata.");
+      setError(errorMessage);
       console.error("Error loading calendar data:", e);
     } finally {
       setLoading(false);
@@ -260,18 +285,14 @@ export function useCalendarData(
     try {
       const categoriesData = await fetchCalendarCategories();
       setCategories(categoriesData);
-      // Clear any previous errors when successfully loading
-      setError((prevError) => {
-        if (prevError) {
-          return null;
-        }
-        return prevError;
-      });
+      // Clear error on success
+      setError(null);
     } catch (e) {
       console.error("Error loading categories:", e);
-      setError("Kunde inte ladda kategorier. Försök igen.");
+      const errorMessage = extractErrorMessage(e, "Kunde inte ladda kategorier. Försök igen.");
+      setError(errorMessage);
     }
-  }, [setError]);
+  }, []);
 
   return {
     events,

@@ -7,6 +7,7 @@ import {
 } from "../../../shared/api/calendar";
 import { EventFormData } from "../types/eventForm";
 import { formatDateForEventForm } from "../utils/dateFormatters";
+import { extractErrorMessage } from "../utils/errorHandling";
 
 type LoadDataCallback = () => Promise<void>;
 type SetErrorCallback = (error: string | null) => void;
@@ -17,6 +18,30 @@ type SetShowQuickAddCallback = (show: boolean) => void;
 type LoadTasksCallback = () => Promise<void>;
 type LoadTasksForAllMembersCallback = () => Promise<void>;
 
+/**
+ * Custom hook for managing calendar event CRUD operations.
+ * 
+ * Handles:
+ * - Creating new events
+ * - Updating existing events
+ * - Deleting events
+ * - Quick add functionality (creating tasks quickly)
+ * 
+ * All operations include error handling and automatic data reloading.
+ * 
+ * @param loadData - Callback to reload all calendar data
+ * @param setError - Callback to set error state
+ * @param setShowCreateForm - Callback to show/hide create form
+ * @param setEditingEvent - Callback to set event being edited
+ * @param currentMemberId - Current logged-in member ID
+ * @param selectedDate - Selected date for quick add
+ * @param showAllMembers - Whether showing tasks for all members
+ * @param loadTasks - Callback to reload tasks for current member
+ * @param loadTasksForAllMembers - Callback to reload tasks for all members
+ * @param setQuickAddTitle - Callback to set quick add title
+ * @param setShowQuickAdd - Callback to show/hide quick add form
+ * @returns Event CRUD operation handlers
+ */
 export function useCalendarEvents(
   loadData: LoadDataCallback,
   setError: SetErrorCallback,
@@ -52,7 +77,8 @@ export function useCalendarEvents(
       await loadData();
       setShowCreateForm(false);
     } catch (e) {
-      setError("Kunde inte skapa event.");
+      const errorMessage = extractErrorMessage(e, "Kunde inte skapa event.");
+      setError(errorMessage);
       console.error("Error creating event:", e);
     }
   }, [loadData, setError, setShowCreateForm]);
@@ -83,7 +109,8 @@ export function useCalendarEvents(
       await loadData();
       setEditingEvent(null);
     } catch (e) {
-      setError("Kunde inte uppdatera event.");
+      const errorMessage = extractErrorMessage(e, "Kunde inte uppdatera event.");
+      setError(errorMessage);
       console.error("Error updating event:", e);
     }
   }, [loadData, setError, setEditingEvent]);
@@ -98,7 +125,8 @@ export function useCalendarEvents(
       setEditingEvent(null);
       setShowCreateForm(false);
     } catch (e) {
-      setError("Kunde inte ta bort event.");
+      const errorMessage = extractErrorMessage(e, "Kunde inte ta bort event.");
+      setError(errorMessage);
       console.error("Error deleting event:", e);
     }
   }, [loadData, setError, setEditingEvent, setShowCreateForm]);
@@ -132,14 +160,22 @@ export function useCalendarEvents(
       // Clear input and reload tasks
       setQuickAddTitle("");
       setShowQuickAdd(false);
-      if (showAllMembers) {
-        await loadTasksForAllMembers();
-      } else {
-        await loadTasks();
+      try {
+        if (showAllMembers) {
+          await loadTasksForAllMembers();
+        } else {
+          await loadTasks();
+        }
+      } catch (reloadError) {
+        console.error("Error reloading tasks after quick add:", reloadError);
+        // Task was created successfully, but reload failed
+        const reloadErrorMessage = extractErrorMessage(reloadError, "Task skapad, men kunde inte uppdatera listan. Ladda om sidan.");
+        setError(reloadErrorMessage);
       }
     } catch (e) {
       console.error("Error creating quick task:", e);
-      setError("Kunde inte skapa task.");
+      const errorMessage = extractErrorMessage(e, "Kunde inte skapa task.");
+      setError(errorMessage);
     }
   }, [
     currentMemberId,
