@@ -68,3 +68,25 @@ export function formatDateTimeRange(
     return `${formatDateTime(startDateTime, false)} - ${formatDateTime(endDateTime, false)}`;
   }
 }
+
+/**
+ * Formats a date for use in event forms.
+ * Returns date string in YYYY-MM-DD format for all-day events,
+ * or YYYY-MM-DDTHH:mm format for timed events.
+ * 
+ * @param date - Date object to format
+ * @param hour - Optional hour (0-23) for timed events
+ * @returns Formatted date string (YYYY-MM-DD or YYYY-MM-DDTHH:mm)
+ */
+export function formatDateForEventForm(date: Date, hour?: number): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  
+  if (hour !== undefined) {
+    const hourStr = String(hour).padStart(2, "0");
+    return `${year}-${month}-${day}T${hourStr}:00`;
+  }
+  
+  return `${year}-${month}-${day}`;
+}

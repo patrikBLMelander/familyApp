@@ -11,8 +11,7 @@ import {
   CalendarEventTaskCompletionResponse,
 } from "../../../shared/api/calendar";
 import { fetchAllFamilyMembers, FamilyMemberResponse, getMemberByDeviceToken } from "../../../shared/api/familyMembers";
-
-type CalendarViewType = "rolling" | "week" | "month";
+import { CalendarViewType, CALENDAR_VIEW_TYPES } from "../constants";
 
 export function useCalendarData(
   viewType: CalendarViewType,
@@ -149,14 +148,14 @@ export function useCalendarData(
       let startDate: Date | undefined;
       let endDate: Date | undefined;
       
-      if (viewType === "rolling") {
+      if (viewType === CALENDAR_VIEW_TYPES.ROLLING) {
         // Rolling view: today to 30 days ahead
         startDate = new Date();
         startDate.setHours(0, 0, 0, 0);
         endDate = new Date();
         endDate.setDate(endDate.getDate() + 30);
         endDate.setHours(23, 59, 59, 999);
-      } else if (viewType === "week") {
+      } else if (viewType === CALENDAR_VIEW_TYPES.WEEK) {
         // Week view: 7 days before current week to 7 days after (3 weeks total)
         const weekStart = new Date(currentWeek);
         const day = weekStart.getDay();
@@ -170,7 +169,7 @@ export function useCalendarData(
         endDate = new Date(weekStart);
         endDate.setDate(endDate.getDate() + 14); // 7 days before + 7 days week + 7 days after
         endDate.setHours(23, 59, 59, 999);
-      } else if (viewType === "month") {
+      } else if (viewType === CALENDAR_VIEW_TYPES.MONTH) {
         // Month view: first day of current month to last day (with some buffer)
         const year = currentMonth.getFullYear();
         const month = currentMonth.getMonth();
@@ -257,6 +256,23 @@ export function useCalendarData(
     }
   }, [members, loadTasks, loadTasksForAllMembers]);
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const categoriesData = await fetchCalendarCategories();
+      setCategories(categoriesData);
+      // Clear any previous errors when successfully loading
+      setError((prevError) => {
+        if (prevError) {
+          return null;
+        }
+        return prevError;
+      });
+    } catch (e) {
+      console.error("Error loading categories:", e);
+      setError("Kunde inte ladda kategorier. Försök igen.");
+    }
+  }, [setError]);
+
   return {
     events,
     categories,
@@ -267,6 +283,7 @@ export function useCalendarData(
     tasksByMember,
     currentUserRole,
     loadData,
+    loadCategories,
     loadTasks,
     loadTasksForAllMembers,
     loadCurrentMember,

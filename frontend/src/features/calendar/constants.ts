@@ -24,3 +24,19 @@ export const MAX_TASKS_TO_SHOW_IN_MONTH = 2;
  * Safety limit to prevent performance issues with very long events.
  */
 export const MAX_RECURRING_DAYS = 365;
+
+/**
+ * Calendar view types.
+ * Used throughout the calendar feature to identify the current view.
+ */
+export const CALENDAR_VIEW_TYPES = {
+  ROLLING: "rolling",
+  WEEK: "week",
+  MONTH: "month",
+} as const;
+
+/**
+ * Type for calendar view types.
+ * Derived from CALENDAR_VIEW_TYPES constant.
+ */
+export type CalendarViewType = typeof CALENDAR_VIEW_TYPES[keyof typeof CALENDAR_VIEW_TYPES];

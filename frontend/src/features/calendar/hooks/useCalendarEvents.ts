@@ -3,13 +3,15 @@ import {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
+  CalendarEventResponse,
 } from "../../../shared/api/calendar";
 import { EventFormData } from "../types/eventForm";
+import { formatDateForEventForm } from "../utils/dateFormatters";
 
 type LoadDataCallback = () => Promise<void>;
 type SetErrorCallback = (error: string | null) => void;
 type SetShowCreateFormCallback = (show: boolean) => void;
-type SetEditingEventCallback = (event: any) => void;
+type SetEditingEventCallback = (event: CalendarEventResponse | null) => void;
 type SetQuickAddTitleCallback = (title: string) => void;
 type SetShowQuickAddCallback = (show: boolean) => void;
 type LoadTasksCallback = () => Promise<void>;
@@ -105,11 +107,8 @@ export function useCalendarEvents(
     if (!currentMemberId || !quickAddTitle.trim()) return;
 
     try {
-      // Format date as YYYY-MM-DD
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
-      const day = String(selectedDate.getDate()).padStart(2, "0");
-      const dateStr = `${year}-${month}-${day}`;
+      // Format date as YYYY-MM-DD for all-day event
+      const dateStr = formatDateForEventForm(selectedDate);
       
       // Create all-day task with defaults
       await createCalendarEvent(

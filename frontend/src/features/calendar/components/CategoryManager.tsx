@@ -28,13 +28,16 @@ export function CategoryManager({ categories, onClose, onUpdate }: CategoryManag
 
     try {
       await createCalendarCategory(categoryName.trim(), categoryColor);
+      // Small delay to ensure backend cache is evicted
+      await new Promise(resolve => setTimeout(resolve, 100));
       await onUpdate();
       setCategoryName("");
       setCategoryColor(CATEGORY_COLORS[0].value);
       setShowCreateForm(false);
       setError(null);
     } catch (e) {
-      setError("Kunde inte skapa kategori.");
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte skapa kategori.";
+      setError(errorMessage);
       console.error("Error creating category:", e);
     }
   };
@@ -47,13 +50,16 @@ export function CategoryManager({ categories, onClose, onUpdate }: CategoryManag
 
     try {
       await updateCalendarCategory(editingCategory.id, categoryName.trim(), categoryColor);
+      // Small delay to ensure backend cache is evicted
+      await new Promise(resolve => setTimeout(resolve, 100));
       await onUpdate();
       setEditingCategory(null);
       setCategoryName("");
       setCategoryColor(CATEGORY_COLORS[0].value);
       setError(null);
     } catch (e) {
-      setError("Kunde inte uppdatera kategori.");
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte uppdatera kategori.";
+      setError(errorMessage);
       console.error("Error updating category:", e);
     }
   };
@@ -65,9 +71,12 @@ export function CategoryManager({ categories, onClose, onUpdate }: CategoryManag
 
     try {
       await deleteCalendarCategory(categoryId);
+      // Small delay to ensure backend cache is evicted
+      await new Promise(resolve => setTimeout(resolve, 100));
       await onUpdate();
     } catch (e) {
-      setError("Kunde inte ta bort kategori.");
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte ta bort kategori.";
+      setError(errorMessage);
       console.error("Error deleting category:", e);
     }
   };
@@ -131,19 +140,63 @@ export function CategoryManager({ categories, onClose, onUpdate }: CategoryManag
                 <div style={{ flex: 1, fontWeight: 500 }}>{category.name}</div>
                 <button
                   type="button"
-                  className="todo-action-button"
+                  className="button-secondary"
                   onClick={() => startEdit(category)}
-                  style={{ fontSize: "0.8rem", padding: "4px 8px" }}
+                  title="Redigera kategori"
+                  aria-label={`Redigera kategori ${category.name}`}
+                  style={{ 
+                    padding: "6px 12px",
+                    fontSize: "1.1rem",
+                    minWidth: "40px",
+                    opacity: 0.7,
+                    borderColor: "rgba(100, 100, 100, 0.3)",
+                    color: "#666",
+                    fontWeight: 300,
+                    lineHeight: 1,
+                    transition: "all 0.2s ease"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = "1";
+                    e.currentTarget.style.borderColor = "rgba(100, 100, 100, 0.5)";
+                    e.currentTarget.style.color = "#444";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = "0.7";
+                    e.currentTarget.style.borderColor = "rgba(100, 100, 100, 0.3)";
+                    e.currentTarget.style.color = "#666";
+                  }}
                 >
-                  Redigera
+                  ✎
                 </button>
                 <button
                   type="button"
-                  className="delete-button"
+                  className="button-secondary"
                   onClick={() => void handleDeleteCategory(category.id)}
-                  style={{ fontSize: "0.8rem", padding: "4px 8px" }}
+                  title="Ta bort kategori"
+                  aria-label={`Ta bort kategori ${category.name}`}
+                  style={{ 
+                    padding: "6px 12px",
+                    fontSize: "1.2rem",
+                    minWidth: "40px",
+                    opacity: 0.7,
+                    borderColor: "rgba(200, 100, 100, 0.3)",
+                    color: "#cc6666",
+                    fontWeight: 300,
+                    lineHeight: 1,
+                    transition: "all 0.2s ease"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = "1";
+                    e.currentTarget.style.borderColor = "rgba(200, 100, 100, 0.5)";
+                    e.currentTarget.style.color = "#aa4444";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = "0.7";
+                    e.currentTarget.style.borderColor = "rgba(200, 100, 100, 0.3)";
+                    e.currentTarget.style.color = "#cc6666";
+                  }}
                 >
-                  Ta bort
+                  ×
                 </button>
               </div>
             ))}

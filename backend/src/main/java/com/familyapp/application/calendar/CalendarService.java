@@ -14,7 +14,9 @@ import com.familyapp.application.cache.CacheService;
 import com.familyapp.infrastructure.calendar.CalendarEventTaskCompletionJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -427,8 +429,23 @@ public class CalendarService {
      * @param name The category name
      * @param color The category color
      * @return The created category
+     * @throws IllegalArgumentException if a category with this name already exists for the family
      */
+    @CacheEvict(value = "categories", key = "#familyId != null ? #familyId.toString() : 'all'")
     public CalendarEventCategory createCategory(UUID familyId, String name, String color) {
+        // Validate name
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Category name is required");
+        }
+        
+        // Check if category with this name already exists for this family
+        if (familyId != null) {
+            var existingCategory = categoryRepository.findByFamilyIdAndName(familyId, name.trim());
+            if (existingCategory.isPresent()) {
+                throw new IllegalArgumentException("En kategori med namnet '" + name.trim() + "' finns redan");
+            }
+        }
+        
         var now = OffsetDateTime.now();
         var entity = new CalendarEventCategoryEntity();
         entity.setId(UUID.randomUUID());
@@ -437,18 +454,26 @@ public class CalendarService {
             familyRepository.findById(familyId).ifPresent(entity::setFamily);
         }
         
-        entity.setName(name);
+        entity.setName(name.trim());
         entity.setColor(color != null ? color : "#b8e6b8");
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         
-        var saved = categoryRepository.save(entity);
-        var result = toDomainCategory(saved);
-        
-        // Evict categories cache for this specific family (targeted eviction)
-        cacheService.evictCategories(familyId);
-        
-        return result;
+        try {
+            var saved = categoryRepository.save(entity);
+            var result = toDomainCategory(saved);
+            
+            // Evict categories cache for this specific family (targeted eviction)
+            cacheService.evictCategories(familyId);
+            
+            return result;
+        } catch (DataIntegrityViolationException e) {
+            // Handle unique constraint violation (category name already exists)
+            if (e.getMessage() != null && e.getMessage().contains("unique_category_name_per_family")) {
+                throw new IllegalArgumentException("En kategori med namnet '" + name.trim() + "' finns redan");
+            }
+            throw e;
+        }
     }
 
     /**
@@ -461,25 +486,48 @@ public class CalendarService {
      * @param name The new name
      * @param color The new color
      * @return The updated category
+     * @throws IllegalArgumentException if a category with this name already exists for the family (excluding the current category)
      */
+    @CacheEvict(value = "categories", allEntries = true)
     public CalendarEventCategory updateCategory(UUID categoryId, String name, String color) {
+        // Validate name
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Category name is required");
+        }
+        
         var entity = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
         
-        entity.setName(name);
+        UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
+        
+        // Check if another category with this name already exists for this family
+        if (familyId != null) {
+            var existingCategory = categoryRepository.findByFamilyIdAndName(familyId, name.trim());
+            if (existingCategory.isPresent() && !existingCategory.get().getId().equals(categoryId)) {
+                throw new IllegalArgumentException("En kategori med namnet '" + name.trim() + "' finns redan");
+            }
+        }
+        
+        entity.setName(name.trim());
         if (color != null) {
             entity.setColor(color);
         }
         entity.setUpdatedAt(OffsetDateTime.now());
         
-        var saved = categoryRepository.save(entity);
-        var result = toDomainCategory(saved);
-        
-        // Evict categories cache for this specific family (targeted eviction)
-        UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
-        cacheService.evictCategories(familyId);
-        
-        return result;
+        try {
+            var saved = categoryRepository.save(entity);
+            var result = toDomainCategory(saved);
+            
+            // Cache is evicted by @CacheEvict annotation
+            
+            return result;
+        } catch (DataIntegrityViolationException e) {
+            // Handle unique constraint violation (category name already exists)
+            if (e.getMessage() != null && e.getMessage().contains("unique_category_name_per_family")) {
+                throw new IllegalArgumentException("En kategori med namnet '" + name.trim() + "' finns redan");
+            }
+            throw e;
+        }
     }
 
     /**
@@ -490,16 +538,16 @@ public class CalendarService {
      * 
      * @param categoryId The category to delete
      */
+    @CacheEvict(value = "categories", allEntries = true)
     public void deleteCategory(UUID categoryId) {
-        // Get category before deletion to evict cache
-        var entity = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
-        UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
+        // Check if category exists before deletion
+        if (!categoryRepository.existsById(categoryId)) {
+            throw new IllegalArgumentException("Category not found: " + categoryId);
+        }
         
         categoryRepository.deleteById(categoryId);
         
-        // Evict categories cache for this specific family (targeted eviction)
-        cacheService.evictCategories(familyId);
+        // Cache is evicted by @CacheEvict annotation
     }
 
     private CalendarEvent toDomain(CalendarEventEntity entity) {
