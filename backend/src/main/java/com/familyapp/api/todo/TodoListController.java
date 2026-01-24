@@ -126,6 +126,16 @@ public class TodoListController {
         return toResponse(list);
     }
 
+    @PatchMapping("/{listId}/items/{itemId}")
+    public TodoListResponse updateItem(
+            @PathVariable("listId") UUID listId,
+            @PathVariable("itemId") UUID itemId,
+            @RequestBody UpdateTodoItemRequest request
+    ) {
+        var list = service.updateItem(listId, itemId, request.description());
+        return toResponse(list);
+    }
+
     @DeleteMapping("/{listId}/items/done")
     public TodoListResponse clearDone(@PathVariable("listId") UUID listId) {
         var list = service.clearDone(listId);
@@ -216,6 +226,12 @@ public class TodoListController {
     }
 
     public record CreateTodoItemRequest(
+            @NotBlank(message = "Description is required")
+            String description
+    ) {
+    }
+
+    public record UpdateTodoItemRequest(
             @NotBlank(message = "Description is required")
             String description
     ) {

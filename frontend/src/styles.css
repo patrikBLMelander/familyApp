@@ -686,6 +686,74 @@ body {
   transform: scale(0.98);
 }
 
+.todo-edit-button {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: linear-gradient(135deg, #b8d8f0 0%, #a8c8e0 100%);
+  color: #2d4a5a;
+  border: none;
+  border-radius: 8px 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 0;
+  transition: all 0.2s ease;
+  box-shadow: 2px 0 8px rgba(184, 216, 240, 0.2);
+}
+
+.todo-edit-button:active {
+  background: linear-gradient(135deg, #a8c8e0 0%, #98b8d0 100%);
+  transform: scale(0.98);
+}
+
+.todo-edit-form {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.todo-edit-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid rgba(184, 216, 240, 0.6);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: rgba(255, 255, 255, 0.95);
+  color: #2d4a5a;
+  box-sizing: border-box;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.todo-edit-input:focus {
+  border-color: #a8c8e0;
+  box-shadow: 0 0 0 3px rgba(184, 216, 240, 0.2);
+}
+
+.todo-edit-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.todo-edit-form {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.todo-updating-indicator {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
 .todo-separator {
   margin: 6px 0 4px;
   display: flex;

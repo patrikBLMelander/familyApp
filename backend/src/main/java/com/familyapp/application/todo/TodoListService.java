@@ -188,6 +188,26 @@ public class TodoListService {
         return toDomain(savedList);
     }
 
+    public TodoList updateItem(UUID listId, UUID itemId, String description) {
+        if (description == null || description.trim().isEmpty()) {
+            throw new IllegalArgumentException("Description cannot be empty");
+        }
+        
+        var list = listRepository.findById(listId)
+                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+
+        var item = list.getItems().stream()
+                .filter(i -> i.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Todo item not found: " + itemId));
+
+        item.setDescription(description.trim());
+        list.setUpdatedAt(OffsetDateTime.now());
+
+        var savedList = listRepository.save(list);
+        return toDomain(savedList);
+    }
+
     public TodoList deleteItem(UUID listId, UUID itemId) {
         var list = listRepository.findById(listId)
                 .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));

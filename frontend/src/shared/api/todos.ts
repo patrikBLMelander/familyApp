@@ -65,6 +65,15 @@ export async function toggleTodoItem(listId: string, itemId: string): Promise<To
   return handleJson<TodoListResponse>(response);
 }
 
+export async function updateTodoItem(listId: string, itemId: string, description: string): Promise<TodoListResponse> {
+  const response = await fetch(`${API_BASE_URL}/todo-lists/${listId}/items/${itemId}`, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify({ description })
+  });
+  return handleJson<TodoListResponse>(response);
+}
+
 export async function clearDoneItems(listId: string): Promise<TodoListResponse> {
   const response = await fetch(`${API_BASE_URL}/todo-lists/${listId}/items/done`, {
     method: "DELETE",
