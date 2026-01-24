@@ -4,6 +4,13 @@
   box-sizing: border-box;
 }
 
+/* Hide desktop action buttons on mobile for calendar events */
+@media (max-width: 768px) {
+  .event-actions-desktop {
+    display: none !important;
+  }
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;

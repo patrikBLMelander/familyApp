@@ -164,7 +164,7 @@ export function useCalendarData(
     }
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceReplace: boolean = false) => {
     try {
       setLoading(true);
       
@@ -229,7 +229,8 @@ export function useCalendarData(
       
       // For rolling view, only merge if we're extending the range (not initial load)
       // For other views or initial load, always replace
-      if (viewType === CALENDAR_VIEW_TYPES.ROLLING && rollingViewEndDate && events.length > 0) {
+      // If forceReplace is true, always replace (e.g., after delete)
+      if (!forceReplace && viewType === CALENDAR_VIEW_TYPES.ROLLING && rollingViewEndDate && events.length > 0) {
         // This is extending the range - merge events
         // IMPORTANT: For recurring events, same ID can have different startDateTime
         // So we need to use both ID and startDateTime to identify unique events

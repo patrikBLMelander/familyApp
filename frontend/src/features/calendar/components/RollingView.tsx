@@ -13,7 +13,7 @@ type RollingViewProps = {
   setShowQuickAdd: (show: boolean) => void;
   quickAddTitle: string;
   setQuickAddTitle: (title: string) => void;
-  handleQuickAdd: (title: string) => Promise<void>;
+  handleQuickAdd: (title: string, memberId?: string | null) => Promise<void>;
   tasksWithCompletion: CalendarTaskWithCompletionResponse[];
   tasksByMember: Map<string, CalendarTaskWithCompletionResponse[]>;
   members: FamilyMemberResponse[];
@@ -25,6 +25,7 @@ type RollingViewProps = {
   setEditingEvent: (event: CalendarEventResponse | null) => void;
   onLoadMoreEvents?: () => Promise<void>;
   scrollToDate?: Date | null;
+  currentUserRole: "CHILD" | "ASSISTANT" | "PARENT" | null;
 };
 
 // Helper function to get all dates for a multi-day all-day event
@@ -86,6 +87,7 @@ export function RollingView({
   setEditingEvent,
   onLoadMoreEvents,
   scrollToDate,
+  currentUserRole,
 }: RollingViewProps) {
   const [displayedEventCount, setDisplayedEventCount] = useState(15);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -93,9 +95,16 @@ export function RollingView({
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const previousTotalEventCountRef = useRef(0);
-  const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadMoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expectingMoreEventsRef = useRef(false);
-  const dateElementRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const dateElementRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
+  const [swipeStartY, setSwipeStartY] = useState<number | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState<number>(0);
+  const [swipedEventId, setSwipedEventId] = useState<string | null>(null);
+  const [hasSwiped, setHasSwiped] = useState(false);
+  const [quickAddMemberId, setQuickAddMemberId] = useState<string | null>(null);
+  const swipeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Filter events based on task/event toggle
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
@@ -269,6 +278,15 @@ export function RollingView({
     setDisplayedEventCount(15);
   }, [showTasksOnly, showAllMembers, currentMemberId]);
 
+  // Cleanup swipe timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (swipeTimeoutRef.current) {
+        clearTimeout(swipeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Track when we're loading more to detect API completion
   const lastEventCountRef = useRef(events.length);
   
@@ -416,7 +434,8 @@ export function RollingView({
 
 
   const handleQuickAddTask = async () => {
-    await handleQuickAdd(quickAddTitle);
+    await handleQuickAdd(quickAddTitle, quickAddMemberId);
+    setQuickAddMemberId(null);
   };
 
   return (
@@ -469,8 +488,8 @@ export function RollingView({
               })()}
             </button>
           </div>
-          {/* Quick Add Input */}
-          {showQuickAdd && (
+          {/* Quick Add Input - only shown when showAllMembers is false */}
+          {showQuickAdd && !showAllMembers && (
             <section className="card" style={{ marginBottom: "12px" }}>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                 <input
@@ -483,6 +502,7 @@ export function RollingView({
                     } else if (e.key === "Escape") {
                       setShowQuickAdd(false);
                       setQuickAddTitle("");
+                      setQuickAddMemberId(null);
                     }
                   }}
                   placeholder="Skriv titel..."
@@ -509,6 +529,7 @@ export function RollingView({
                   onClick={() => {
                     setShowQuickAdd(false);
                     setQuickAddTitle("");
+                    setQuickAddMemberId(null);
                   }}
                   style={{ fontSize: "0.9rem", padding: "8px 16px" }}
                 >
@@ -547,7 +568,9 @@ export function RollingView({
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                   {members.map((member) => {
                     const memberTasks = tasksByMember.get(member.id) || [];
-                    if (memberTasks.length === 0 && !showQuickAdd) return null;
+                    const isQuickAddForThisMember = quickAddMemberId === member.id;
+                    // Show member if they have tasks OR if quick add is active for them
+                    if (memberTasks.length === 0 && !isQuickAddForThisMember) return null;
                     
                     return (
                       <section key={member.id} className="card">
@@ -557,7 +580,75 @@ export function RollingView({
                               {member.name}
                             </h3>
                           </div>
+                          {!isQuickAddForThisMember && (
+                            <button
+                              type="button"
+                              className="button-primary"
+                              onClick={() => {
+                                // Close any other open quick add and clear text
+                                if (quickAddMemberId && quickAddMemberId !== member.id) {
+                                  setQuickAddTitle("");
+                                }
+                                setQuickAddMemberId(member.id);
+                                setShowQuickAdd(true);
+                              }}
+                              style={{ fontSize: "0.85rem", padding: "6px 12px" }}
+                            >
+                              + Add
+                            </button>
+                          )}
                         </div>
+                        
+                        {/* Quick Add Input for this specific member */}
+                        {isQuickAddForThisMember && (
+                          <div style={{ marginBottom: "12px", padding: "8px", background: "#f5f5f5", borderRadius: "6px" }}>
+                            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                              <input
+                                type="text"
+                                value={quickAddTitle}
+                                onChange={(e) => setQuickAddTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    void handleQuickAddTask();
+                                  } else if (e.key === "Escape") {
+                                    setShowQuickAdd(false);
+                                    setQuickAddTitle("");
+                                    setQuickAddMemberId(null);
+                                  }
+                                }}
+                                placeholder="Skriv titel..."
+                                autoFocus
+                                style={{
+                                  flex: 1,
+                                  padding: "8px 12px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #ddd",
+                                  fontSize: "0.9rem",
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="button-primary"
+                                onClick={() => void handleQuickAddTask()}
+                                style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                              >
+                                Lägg till
+                              </button>
+                              <button
+                                type="button"
+                                className="button-secondary"
+                                onClick={() => {
+                                  setShowQuickAdd(false);
+                                  setQuickAddTitle("");
+                                  setQuickAddMemberId(null);
+                                }}
+                                style={{ fontSize: "0.9rem", padding: "8px 16px" }}
+                              >
+                                Avbryt
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         {memberTasks.length === 0 ? (
                           <p className="placeholder-text" style={{ margin: 0, fontSize: "0.9rem" }}>
                             Inga sysslor
@@ -814,91 +905,213 @@ export function RollingView({
                       .filter(Boolean)
                       .join(", ");
 
+                    const isSwiped = swipedEventId === event.id;
+                    const canEdit = currentUserRole === "PARENT" || currentUserRole === "ASSISTANT";
+                    
                     return (
                       <li
                         key={event.id}
                         style={{
-                          padding: "12px",
+                          position: "relative",
                           marginBottom: "8px",
-                          background: category?.color
-                            ? `${category.color}20`
-                            : "rgba(240, 240, 240, 0.5)",
-                          borderLeft: `4px solid ${category?.color || "#b8e6b8"}`,
                           borderRadius: "8px",
+                          overflow: "hidden",
+                          transform: isSwiped ? `translateX(${swipeOffset}px)` : "translateX(0)",
+                          transition: isSwiped ? "transform 0.2s ease" : "transform 0.3s ease",
+                        }}
+                        onTouchStart={(e) => {
+                          if (!canEdit) return;
+                          setSwipeStartX(e.touches[0].clientX);
+                          setSwipeStartY(e.touches[0].clientY);
+                          setHasSwiped(false);
+                          if (swipedEventId !== event.id) {
+                            setSwipedEventId(null);
+                            setSwipeOffset(0);
+                          }
+                        }}
+                        onTouchMove={(e) => {
+                          if (!canEdit || swipeStartX === null || swipeStartY === null) return;
+                          const currentX = e.touches[0].clientX;
+                          const currentY = e.touches[0].clientY;
+                          const deltaX = currentX - swipeStartX;
+                          const deltaY = Math.abs(currentY - swipeStartY);
+                          
+                          // Only handle swipe if horizontal movement is greater than vertical
+                          if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+                            e.preventDefault();
+                            setHasSwiped(true);
+                            if (deltaX < 0) {
+                              // Swipe left - show delete button
+                              setSwipedEventId(event.id);
+                              setSwipeOffset(Math.max(deltaX, -80));
+                            } else if (deltaX > 0 && isSwiped) {
+                              // Swipe right - close swipe
+                              setSwipedEventId(null);
+                              setSwipeOffset(0);
+                            }
+                          }
+                        }}
+                        onTouchEnd={() => {
+                          if (isSwiped) {
+                            // If swiped more than 50px, keep it open, otherwise close
+                            if (swipeOffset > -50) {
+                              setSwipedEventId(null);
+                              setSwipeOffset(0);
+                            } else {
+                              setSwipeOffset(-80);
+                            }
+                          }
+                          // Reset after a short delay to allow click event to check hasSwiped
+                          if (swipeTimeoutRef.current) {
+                            clearTimeout(swipeTimeoutRef.current);
+                          }
+                          swipeTimeoutRef.current = setTimeout(() => {
+                            setSwipeStartX(null);
+                            setSwipeStartY(null);
+                            setHasSwiped(false);
+                            swipeTimeoutRef.current = null;
+                          }, 100);
+                        }}
+                        onClick={(e) => {
+                          // Only edit if not swiped and user has permission
+                          if (!hasSwiped && !isSwiped && canEdit) {
+                            setEditingEvent(event);
+                          }
                         }}
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, marginBottom: "4px" }}>{event.title}</div>
-                            <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
-                              {event.isAllDay ? (
-                                // For all-day events, show date range if multi-day, otherwise just the date
-                                (() => {
-                                  const startDate = new Date(event.startDateTime.substring(0, 10));
-                                  const startDateStr = startDate.toLocaleDateString("sv-SE", {
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                  });
-                                  
-                                  if (event.endDateTime) {
-                                    const endDate = new Date(event.endDateTime.substring(0, 10));
-                                    const endDateStr = endDate.toLocaleDateString("sv-SE", {
+                        <div
+                          style={{
+                            padding: "12px",
+                            background: category?.color
+                              ? `${category.color}20`
+                              : "rgba(240, 240, 240, 0.5)",
+                            borderLeft: `4px solid ${category?.color || "#b8e6b8"}`,
+                            borderRadius: "8px",
+                            cursor: canEdit ? "pointer" : "default",
+                            userSelect: "none",
+                            WebkitUserSelect: "none",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600, marginBottom: "4px" }}>{event.title}</div>
+                              <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
+                                {event.isAllDay ? (
+                                  // For all-day events, show date range if multi-day, otherwise just the date
+                                  (() => {
+                                    const startDate = new Date(event.startDateTime.substring(0, 10));
+                                    const startDateStr = startDate.toLocaleDateString("sv-SE", {
                                       year: "numeric",
                                       month: "long",
                                       day: "numeric",
                                     });
                                     
-                                    // Check if same day
-                                    if (event.startDateTime.substring(0, 10) === event.endDateTime.substring(0, 10)) {
-                                      return `${startDateStr} - Heldag`;
+                                    if (event.endDateTime) {
+                                      const endDate = new Date(event.endDateTime.substring(0, 10));
+                                      const endDateStr = endDate.toLocaleDateString("sv-SE", {
+                                        year: "numeric",
+                                        month: "long",
+                                        day: "numeric",
+                                      });
+                                      
+                                      // Check if same day
+                                      if (event.startDateTime.substring(0, 10) === event.endDateTime.substring(0, 10)) {
+                                        return `${startDateStr} - Heldag`;
+                                      }
+                                      
+                                      // Multi-day: show range
+                                      return `${startDateStr} - ${endDateStr} - Heldag`;
                                     }
                                     
-                                    // Multi-day: show range
-                                    return `${startDateStr} - ${endDateStr} - Heldag`;
-                                  }
-                                  
-                                  return `${startDateStr} - Heldag`;
-                                })()
-                              ) : (
-                                formatDateTimeRange(event.startDateTime, event.endDateTime, false)
+                                    return `${startDateStr} - Heldag`;
+                                  })()
+                                ) : (
+                                  formatDateTimeRange(event.startDateTime, event.endDateTime, false)
+                                )}
+                              </div>
+                              {event.description && (
+                                <div style={{ fontSize: "0.9rem", color: "#6b6b6b", marginBottom: "4px" }}>
+                                  {event.description}
+                                </div>
+                              )}
+                              {event.location && (
+                                <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
+                                  📍 {event.location}
+                                </div>
+                              )}
+                              {participantNames && (
+                                <div style={{ fontSize: "0.85rem", color: "#6b6b6b" }}>
+                                  👥 {participantNames}
+                                </div>
                               )}
                             </div>
-                            {event.description && (
-                              <div style={{ fontSize: "0.9rem", color: "#6b6b6b", marginBottom: "4px" }}>
-                                {event.description}
+                            {/* Desktop buttons - shown only on desktop, hidden on mobile */}
+                            {canEdit && (
+                              <div 
+                                className="event-actions-desktop"
+                                style={{ 
+                                  display: isSwiped ? "none" : "flex", 
+                                  gap: "8px",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="todo-action-button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingEvent(event);
+                                  }}
+                                  style={{ fontSize: "0.8rem", padding: "4px 8px" }}
+                                >
+                                  Redigera
+                                </button>
+                                <button
+                                  type="button"
+                                  className="todo-action-button-danger"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleDeleteEvent(event.id);
+                                  }}
+                                  style={{ fontSize: "0.8rem", padding: "4px 8px", borderRadius: "8px" }}
+                                >
+                                  Ta bort
+                                </button>
                               </div>
                             )}
-                            {event.location && (
-                              <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
-                                📍 {event.location}
-                              </div>
-                            )}
-                            {participantNames && (
-                              <div style={{ fontSize: "0.85rem", color: "#6b6b6b" }}>
-                                👥 {participantNames}
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            <button
-                              type="button"
-                              className="todo-action-button"
-                              onClick={() => setEditingEvent(event)}
-                              style={{ fontSize: "0.8rem", padding: "4px 8px" }}
-                            >
-                              Redigera
-                            </button>
-                            <button
-                              type="button"
-                              className="todo-action-button-danger"
-                              onClick={() => void handleDeleteEvent(event.id)}
-                              style={{ fontSize: "0.8rem", padding: "4px 8px", borderRadius: "8px" }}
-                            >
-                              Ta bort
-                            </button>
                           </div>
                         </div>
+                        {/* Swipe delete button - shown when swiped on mobile */}
+                        {isSwiped && canEdit && (
+                          <button
+                            type="button"
+                            className="todo-action-button-danger"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDeleteEvent(event.id);
+                              setSwipedEventId(null);
+                              setSwipeOffset(0);
+                            }}
+                            style={{
+                              position: "absolute",
+                              right: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: "80px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "#dc3545",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "0 8px 8px 0",
+                              fontSize: "0.85rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Ta bort
+                          </button>
+                        )}
                       </li>
                     );
                   })}

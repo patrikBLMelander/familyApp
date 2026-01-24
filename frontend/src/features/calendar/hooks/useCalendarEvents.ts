@@ -9,7 +9,7 @@ import { EventFormData } from "../types/eventForm";
 import { formatDateForEventForm } from "../utils/dateFormatters";
 import { extractErrorMessage } from "../utils/errorHandling";
 
-type LoadDataCallback = () => Promise<void>;
+type LoadDataCallback = (forceReplace?: boolean) => Promise<void>;
 type SetErrorCallback = (error: string | null) => void;
 type SetShowCreateFormCallback = (show: boolean) => void;
 type SetEditingEventCallback = (event: CalendarEventResponse | null) => void;
@@ -121,7 +121,8 @@ export function useCalendarEvents(
     }
     try {
       await deleteCalendarEvent(eventId);
-      await loadData();
+      // Force replace to ensure deleted event is removed from list
+      await loadData(true);
       setEditingEvent(null);
       setShowCreateForm(false);
     } catch (e) {
@@ -131,8 +132,10 @@ export function useCalendarEvents(
     }
   }, [loadData, setError, setEditingEvent, setShowCreateForm]);
 
-  const handleQuickAdd = useCallback(async (quickAddTitle: string) => {
-    if (!currentMemberId || !quickAddTitle.trim()) return;
+  const handleQuickAdd = useCallback(async (quickAddTitle: string, memberId?: string | null) => {
+    // Use provided memberId or fall back to currentMemberId
+    const targetMemberId = memberId || currentMemberId;
+    if (!targetMemberId || !quickAddTitle.trim()) return;
 
     try {
       // Format date as YYYY-MM-DD for all-day event
@@ -147,7 +150,7 @@ export function useCalendarEvents(
         undefined, // description
         undefined, // categoryId
         undefined, // location
-        [currentMemberId], // participantIds
+        [targetMemberId], // participantIds
         null, // recurringType
         null, // recurringInterval
         null, // recurringEndDate

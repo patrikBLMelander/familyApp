@@ -231,6 +231,7 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
               setEditingEvent={setEditingEvent}
               onLoadMoreEvents={loadMoreEvents}
               scrollToDate={scrollToDate}
+              currentUserRole={currentUserRole}
             />
           )}
 
