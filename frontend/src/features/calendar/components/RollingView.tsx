@@ -24,6 +24,7 @@ type RollingViewProps = {
   handleDeleteEvent: (eventId: string) => Promise<void>;
   setEditingEvent: (event: CalendarEventResponse | null) => void;
   onLoadMoreEvents?: () => Promise<void>;
+  scrollToDate?: Date | null;
 };
 
 // Helper function to get all dates for a multi-day all-day event
@@ -84,6 +85,7 @@ export function RollingView({
   handleDeleteEvent,
   setEditingEvent,
   onLoadMoreEvents,
+  scrollToDate,
 }: RollingViewProps) {
   const [displayedEventCount, setDisplayedEventCount] = useState(15);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -93,6 +95,7 @@ export function RollingView({
   const previousTotalEventCountRef = useRef(0);
   const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const expectingMoreEventsRef = useRef(false);
+  const dateElementRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   // Filter events based on task/event toggle
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
@@ -317,6 +320,100 @@ export function RollingView({
     
     previousTotalEventCountRef.current = totalEventCount;
   }, [totalEventCount, showTasksOnly, displayedEventCount, events.length]);
+
+  // Scroll to specific date when scrollToDate prop changes
+  useEffect(() => {
+    if (!scrollToDate || showTasksOnly) return;
+
+    // Normalize the target date - use the date components directly to avoid timezone issues
+    // scrollToDate should already be a Date object with the correct local date
+    const year = scrollToDate.getFullYear();
+    const month = String(scrollToDate.getMonth() + 1).padStart(2, "0");
+    const day = String(scrollToDate.getDate()).padStart(2, "0");
+    const targetDateStr = `${year}-${month}-${day}`;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split("T")[0];
+    
+    // If target date is in the past, don't scroll (rolling view only shows future events)
+    if (targetDateStr < todayStr) {
+      return;
+    }
+    
+    // Function to attempt scrolling with retries
+    const attemptScroll = (retries = 0) => {
+      const element = dateElementRefs.current.get(targetDateStr);
+      
+      if (element) {
+        // Element found, scroll to it
+        const elementRect = element.getBoundingClientRect();
+        const absoluteElementTop = elementRect.top + window.pageYOffset;
+        const scrollPosition = absoluteElementTop - (window.innerHeight / 2) + (elementRect.height / 2);
+        
+        window.scrollTo({
+          top: scrollPosition,
+          behavior: "smooth",
+        });
+        return true;
+      }
+      
+      // Element not found yet
+      if (retries < 5) {
+        // Retry after a delay
+        setTimeout(() => attemptScroll(retries + 1), 200);
+      }
+      return false;
+    };
+    
+    // Check if the date is in sortedDates
+    const targetDateIndex = sortedDates.indexOf(targetDateStr);
+    
+    // Check if date is in displayedDates
+    const isDisplayed = displayedDates.includes(targetDateStr);
+    
+    if (targetDateIndex === -1) {
+      // Date not in events yet - might need to load more
+      // Check if we need to load more events
+      const lastSortedDate = sortedDates[sortedDates.length - 1];
+      const needsMoreEvents = !lastSortedDate || targetDateStr > lastSortedDate;
+      
+      if (needsMoreEvents && onLoadMoreEvents) {
+        // Load more events and then try to scroll
+        onLoadMoreEvents().then(() => {
+          // Wait a bit for state to update, then try scrolling
+          setTimeout(() => attemptScroll(), 800);
+        }).catch((error) => {
+          console.error("Error loading more events:", error);
+          // Try scrolling anyway in case the date appears
+          setTimeout(() => attemptScroll(), 500);
+        });
+      } else {
+        // No load function or date is before last date, just try to scroll anyway
+        setTimeout(() => attemptScroll(), 300);
+      }
+      return;
+    }
+    
+    if (!isDisplayed) {
+      // Date exists but not displayed yet - calculate how many events to show
+      let eventCount = 0;
+      for (let i = 0; i <= targetDateIndex; i++) {
+        const dateKey = sortedDates[i];
+        eventCount += eventsByDate[dateKey]?.length || 0;
+      }
+      
+      // Increase displayedEventCount to include this date
+      setDisplayedEventCount(Math.max(displayedEventCount, eventCount + 15));
+      
+      // Wait for DOM to update, then scroll (with retries)
+      setTimeout(() => attemptScroll(), 400);
+    } else {
+      // Date is already displayed, scroll to it (with retries)
+      setTimeout(() => attemptScroll(), 150);
+    }
+  }, [scrollToDate, showTasksOnly, sortedDates, displayedDates, eventsByDate, displayedEventCount]);
+
 
   const handleQuickAddTask = async () => {
     await handleQuickAdd(quickAddTitle);
@@ -695,7 +792,17 @@ export function RollingView({
             });
 
             return (
-              <section key={dateKey} className="card">
+              <section
+                key={dateKey}
+                ref={(el) => {
+                  if (el) {
+                    dateElementRefs.current.set(dateKey, el);
+                  } else {
+                    dateElementRefs.current.delete(dateKey);
+                  }
+                }}
+                className="card"
+              >
                 <h3 style={{ marginTop: 0, marginBottom: "12px", fontSize: "1rem", fontWeight: 600 }}>
                   {dateStr}
                 </h3>

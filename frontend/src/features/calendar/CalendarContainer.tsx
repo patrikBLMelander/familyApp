@@ -10,6 +10,7 @@ import { RollingView } from "./components/RollingView";
 import { CalendarHeader } from "./components/CalendarHeader";
 import { CalendarViewSelector } from "./components/CalendarViewSelector";
 import { CalendarFilters } from "./components/CalendarFilters";
+import { DayActionMenu } from "./components/DayActionMenu";
 import { useCalendarData } from "./hooks/useCalendarData";
 import { useCalendarEvents } from "./hooks/useCalendarEvents";
 import { formatDateForEventForm } from "./utils/dateFormatters";
@@ -48,6 +49,8 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddTitle, setQuickAddTitle] = useState("");
   const [initialStartDate, setInitialStartDate] = useState<string | null>(null);
+  const [dayActionMenuDate, setDayActionMenuDate] = useState<Date | null>(null);
+  const [scrollToDate, setScrollToDate] = useState<Date | null>(null);
 
   // Use data hook
   const {
@@ -227,6 +230,7 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
               handleDeleteEvent={handleDeleteEvent}
               setEditingEvent={setEditingEvent}
               onLoadMoreEvents={loadMoreEvents}
+              scrollToDate={scrollToDate}
             />
           )}
 
@@ -259,10 +263,7 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
               onEventClick={(event) => setEditingEvent(event)}
               onEventDelete={handleDeleteEvent}
               onDayClick={(date) => {
-                const dateStr = formatDateForEventForm(date);
-                setInitialStartDate(dateStr);
-                setEditingEvent(null);
-                setShowCreateForm(true);
+                setDayActionMenuDate(date);
               }}
             />
           )}
@@ -301,6 +302,38 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
             // Reload categories only (without affecting loading state)
             await loadCategories();
           }}
+        />
+      )}
+
+      {dayActionMenuDate && (
+        <DayActionMenu
+          date={dayActionMenuDate}
+          events={events}
+          onClose={() => setDayActionMenuDate(null)}
+          onCreateEvent={(date) => {
+            const dateStr = formatDateForEventForm(date);
+            setInitialStartDate(dateStr);
+            setEditingEvent(null);
+            setShowCreateForm(true);
+          }}
+          onEditEvent={(event) => {
+            setEditingEvent(event);
+          }}
+          onDeleteEvent={handleDeleteEvent}
+          onGoToRollingView={(date) => {
+            setSelectedDate(date);
+            setViewType(CALENDAR_VIEW_TYPES.ROLLING);
+            // Set scrollToDate after a small delay to ensure view has switched
+            setTimeout(() => {
+              setScrollToDate(date);
+              // Clear scrollToDate after scrolling is complete
+              setTimeout(() => {
+                setScrollToDate(null);
+              }, 2000);
+            }, 100);
+          }}
+          currentUserRole={currentUserRole}
+          currentUserId={currentMemberId}
         />
       )}
     </div>

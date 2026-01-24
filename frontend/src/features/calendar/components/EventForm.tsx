@@ -708,8 +708,8 @@ export function EventForm({ event, initialStartDate, categories, members, curren
             </button>
           </div>
           {event && onDelete && (
-            // ASSISTANT can only delete events they created, PARENT can delete any
-            (currentUserRole === "PARENT" || (currentUserRole === "ASSISTANT" && event.createdById === currentUserId)) && (
+            // PARENT and ASSISTANT can delete all events
+            (currentUserRole === "PARENT" || currentUserRole === "ASSISTANT") && (
             <button 
               type="button" 
               onClick={() => onDelete()} 

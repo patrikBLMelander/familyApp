@@ -119,11 +119,9 @@ export function MonthView({ events, categories, members, currentMonth, onMonthCh
             const todayClass = isToday(day);
 
             const handleDayClick = (e: React.MouseEvent) => {
-              // Only trigger if clicking on the day container itself, not on events
-              if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-event]') === null) {
-                onDayClick?.(dayDate);
-                e.stopPropagation();
-              }
+              // Always trigger onDayClick when clicking on the day (including events)
+              onDayClick?.(dayDate);
+              e.stopPropagation();
             };
 
             return (
@@ -211,10 +209,6 @@ export function MonthView({ events, categories, members, currentMonth, onMonthCh
                           <div
                             key={task.id}
                             data-event
-                            onClick={(e) => {
-                              onEventClick(task);
-                              e.stopPropagation();
-                            }}
                             style={{
                               padding: "1px 2px",
                               background: category?.color || "#b8e6b8",
@@ -250,10 +244,6 @@ export function MonthView({ events, categories, members, currentMonth, onMonthCh
                         <div
                           key={event.id}
                           data-event
-                          onClick={(e) => {
-                            onEventClick(event);
-                            e.stopPropagation();
-                          }}
                           style={{
                             padding: "1px 2px",
                             background: category?.color || "#b8e6b8",
