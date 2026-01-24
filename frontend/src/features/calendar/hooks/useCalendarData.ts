@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   fetchCalendarEvents,
   CalendarEventResponse,
@@ -54,6 +54,7 @@ export function useCalendarData(
   const [tasksWithCompletion, setTasksWithCompletion] = useState<CalendarTaskWithCompletionResponse[]>([]);
   const [tasksByMember, setTasksByMember] = useState<Map<string, CalendarTaskWithCompletionResponse[]>>(new Map());
   const [currentUserRole, setCurrentUserRole] = useState<"CHILD" | "ASSISTANT" | "PARENT" | null>(null);
+  const [rollingViewEndDate, setRollingViewEndDate] = useState<Date | null>(null);
 
   const loadCurrentMember = useCallback(async () => {
     const deviceToken = localStorage.getItem("deviceToken");
@@ -174,11 +175,20 @@ export function useCalendarData(
       
       if (viewType === CALENDAR_VIEW_TYPES.ROLLING) {
         // Rolling view: today to 30 days ahead
-        startDate = new Date();
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date();
-        endDate.setDate(endDate.getDate() + 30);
-        endDate.setHours(23, 59, 59, 999);
+        // Reset end date on initial load (when rollingViewEndDate is null)
+        if (!rollingViewEndDate) {
+          startDate = new Date();
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date();
+          endDate.setDate(endDate.getDate() + 30);
+          endDate.setHours(23, 59, 59, 999);
+          setRollingViewEndDate(endDate);
+        } else {
+          // Use existing end date if already set (don't reset on every call)
+          startDate = new Date();
+          startDate.setHours(0, 0, 0, 0);
+          endDate = rollingViewEndDate;
+        }
       } else if (viewType === CALENDAR_VIEW_TYPES.WEEK) {
         // Week view: 7 days before current week to 7 days after (3 weeks total)
         const weekStart = new Date(currentWeek);
@@ -216,7 +226,35 @@ export function useCalendarData(
         fetchCalendarCategories(),
         fetchAllFamilyMembers(),
       ]);
-      setEvents(eventsData);
+      
+      // For rolling view, only merge if we're extending the range (not initial load)
+      // For other views or initial load, always replace
+      if (viewType === CALENDAR_VIEW_TYPES.ROLLING && rollingViewEndDate && events.length > 0) {
+        // This is extending the range - merge events
+        // IMPORTANT: For recurring events, same ID can have different startDateTime
+        // So we need to use both ID and startDateTime to identify unique events
+        setEvents(prev => {
+          // Create a Set of unique identifiers: "id:startDateTime"
+          const existingEventKeys = new Set(
+            prev.map(e => `${e.id}:${e.startDateTime}`)
+          );
+          const newEvents = eventsData.filter(
+            e => !existingEventKeys.has(`${e.id}:${e.startDateTime}`)
+          );
+          return [...prev, ...newEvents].sort((a, b) => 
+            new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime()
+          );
+        });
+      } else {
+        // Initial load or view change - replace events
+        setEvents(eventsData);
+      }
+      
+      // Reset rolling view end date for non-rolling views
+      if (viewType !== CALENDAR_VIEW_TYPES.ROLLING) {
+        setRollingViewEndDate(null);
+      }
+      
       setCategories(categoriesData);
       setMembers(membersData);
     } catch (e) {
@@ -226,7 +264,70 @@ export function useCalendarData(
     } finally {
       setLoading(false);
     }
-  }, [viewType, currentWeek, currentMonth]);
+  }, [viewType, currentWeek, currentMonth]); // Removed rollingViewEndDate to prevent infinite loops
+
+  const loadMoreEventsRef = useRef(false);
+  
+  const loadMoreEvents = useCallback(async () => {
+    if (viewType !== CALENDAR_VIEW_TYPES.ROLLING) {
+      return;
+    }
+    
+    // Prevent multiple simultaneous calls
+    if (loadMoreEventsRef.current) {
+      return;
+    }
+    
+    const currentEndDate = rollingViewEndDate;
+    if (!currentEndDate) {
+      return;
+    }
+    
+    loadMoreEventsRef.current = true;
+    
+    try {
+      // Extend date range by 30 more days
+      const newEndDate = new Date(currentEndDate);
+      newEndDate.setDate(newEndDate.getDate() + 30);
+      newEndDate.setHours(23, 59, 59, 999);
+      
+      // IMPORTANT: Fetch only events AFTER currentEndDate to avoid duplicates
+      // We already have events from today to currentEndDate, so we only need
+      // events from currentEndDate+1 to newEndDate
+      const fetchStartDate = new Date(currentEndDate);
+      fetchStartDate.setDate(fetchStartDate.getDate() + 1); // Start from day after currentEndDate
+      fetchStartDate.setHours(0, 0, 0, 0);
+      
+      // Fetch events in the NEW range only (after currentEndDate)
+      const eventsData = await fetchCalendarEvents(fetchStartDate, newEndDate);
+      
+      // Merge with existing events, avoiding duplicates
+      // IMPORTANT: For recurring events, same ID can have different startDateTime
+      // So we need to use both ID and startDateTime to identify unique events
+      setEvents(prev => {
+        // Create a Set of unique identifiers: "id:startDateTime"
+        const existingEventKeys = new Set(
+          prev.map(e => `${e.id}:${e.startDateTime}`)
+        );
+        
+        // Filter out events that already exist (using id:startDateTime as key)
+        const newEvents = eventsData.filter(
+          e => !existingEventKeys.has(`${e.id}:${e.startDateTime}`)
+        );
+        
+        return [...prev, ...newEvents].sort((a, b) => 
+          new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime()
+        );
+      });
+      
+      // Update the end date for next load
+      setRollingViewEndDate(newEndDate);
+    } catch (e) {
+      console.error("Error loading more events:", e);
+    } finally {
+      loadMoreEventsRef.current = false;
+    }
+  }, [viewType, rollingViewEndDate]);
 
   const handleToggleTask = useCallback(async (
     eventId: string,
@@ -310,5 +411,6 @@ export function useCalendarData(
     loadCurrentMember,
     handleToggleTask,
     setError,
+    loadMoreEvents,
   };
 }

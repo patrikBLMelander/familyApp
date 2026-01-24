@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { CalendarEventResponse, CalendarEventCategoryResponse, CalendarTaskWithCompletionResponse } from "../../../shared/api/calendar";
 import { FamilyMemberResponse } from "../../../shared/api/familyMembers";
 import { formatDateTimeRange } from "../utils/dateFormatters";
@@ -22,6 +23,7 @@ type RollingViewProps = {
   handleToggleTask: (eventId: string, memberId?: string) => void;
   handleDeleteEvent: (eventId: string) => Promise<void>;
   setEditingEvent: (event: CalendarEventResponse | null) => void;
+  onLoadMoreEvents?: () => Promise<void>;
 };
 
 // Helper function to get all dates for a multi-day all-day event
@@ -81,7 +83,16 @@ export function RollingView({
   handleToggleTask,
   handleDeleteEvent,
   setEditingEvent,
+  onLoadMoreEvents,
 }: RollingViewProps) {
+  const [displayedEventCount, setDisplayedEventCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+  const previousTotalEventCountRef = useRef(0);
+  const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const expectingMoreEventsRef = useRef(false);
   // Filter events based on task/event toggle
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
@@ -108,30 +119,204 @@ export function RollingView({
     return isFutureEvent;
   });
 
-  // Group events by date
-  const eventsByDate = filteredEvents.reduce((acc, event) => {
-    if (event.isAllDay) {
-      // For all-day events, get all dates the event spans
-      const dates = getAllDayEventDates(event);
-      dates.forEach(dateKey => {
+  // Group events by date - memoized to prevent unnecessary recalculations
+  const eventsByDate = useMemo(() => {
+    return filteredEvents.reduce((acc, event) => {
+      if (event.isAllDay) {
+        // For all-day events, get all dates the event spans
+        const dates = getAllDayEventDates(event);
+        dates.forEach(dateKey => {
+          if (!acc[dateKey]) {
+            acc[dateKey] = [];
+          }
+          acc[dateKey].push(event);
+        });
+      } else {
+        // For regular events, parse the datetime
+        const date = new Date(event.startDateTime);
+        const dateKey = date.toISOString().split("T")[0];
         if (!acc[dateKey]) {
           acc[dateKey] = [];
         }
         acc[dateKey].push(event);
-      });
-    } else {
-      // For regular events, parse the datetime
-      const date = new Date(event.startDateTime);
-      const dateKey = date.toISOString().split("T")[0];
-      if (!acc[dateKey]) {
-        acc[dateKey] = [];
       }
-      acc[dateKey].push(event);
-    }
-    return acc;
-  }, {} as Record<string, CalendarEventResponse[]>);
+      return acc;
+    }, {} as Record<string, CalendarEventResponse[]>);
+  }, [filteredEvents]);
 
-  const sortedDates = Object.keys(eventsByDate).sort();
+  const sortedDates = useMemo(() => {
+    return Object.keys(eventsByDate).sort();
+  }, [eventsByDate]);
+
+  // Count total events across all dates
+  const totalEventCount = sortedDates.reduce((count, dateKey) => {
+    return count + eventsByDate[dateKey].length;
+  }, 0);
+
+  // Get dates to display based on displayedEventCount
+  // We show complete dates, so if a date has events, we show all of them
+  const displayedDates = useMemo(() => {
+    let eventCount = 0;
+    const datesToShow: string[] = [];
+    
+    for (const dateKey of sortedDates) {
+      const dateEvents = eventsByDate[dateKey];
+      const dateEventCount = dateEvents.length;
+      
+      // If adding this date would exceed the limit, stop
+      // But if we haven't shown any dates yet, show at least one
+      if (eventCount > 0 && eventCount + dateEventCount > displayedEventCount) {
+        break;
+      }
+      
+      datesToShow.push(dateKey);
+      eventCount += dateEventCount;
+      
+      // If we've reached the limit, stop
+      if (eventCount >= displayedEventCount) {
+        break;
+      }
+    }
+    
+    return datesToShow;
+  }, [sortedDates, eventsByDate, displayedEventCount]);
+
+  // Load more events when reaching bottom
+  const loadMoreEvents = useCallback(async () => {
+    if (isLoadingMore) {
+      return;
+    }
+    
+    // Clear any pending timeout
+    if (loadMoreTimeoutRef.current) {
+      clearTimeout(loadMoreTimeoutRef.current);
+      loadMoreTimeoutRef.current = null;
+    }
+    
+    // Debounce: wait a bit before loading to prevent rapid-fire calls
+    loadMoreTimeoutRef.current = setTimeout(async () => {
+      if (isLoadingMore) {
+        return;
+      }
+      
+      setIsLoadingMore(true);
+      
+      try {
+        // Check if we need to load more from API
+        if (displayedEventCount >= totalEventCount && onLoadMoreEvents) {
+          expectingMoreEventsRef.current = true;
+          // Load more events from API
+          await onLoadMoreEvents();
+          // After loading, useEffect will handle increasing displayedEventCount
+          // Don't increase here to avoid double increment
+        } else {
+          // Just show more from already loaded events
+          setDisplayedEventCount(prev => prev + 15);
+        }
+      } catch (error) {
+        console.error("Error loading more events:", error);
+        expectingMoreEventsRef.current = false;
+      } finally {
+        setIsLoadingMore(false);
+        loadMoreTimeoutRef.current = null;
+      }
+    }, 300); // 300ms debounce
+  }, [isLoadingMore, onLoadMoreEvents, displayedEventCount, totalEventCount]);
+
+  // Set up intersection observer for infinite scroll
+  useEffect(() => {
+    if (showTasksOnly || !loadMoreTriggerRef.current) return;
+
+    // Disconnect previous observer if it exists
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && !isLoadingMore) {
+          void loadMoreEvents();
+        }
+      },
+      {
+        root: null,
+        rootMargin: "200px", // Start loading 200px before reaching bottom
+        threshold: 0.1,
+      }
+    );
+
+    const currentTrigger = loadMoreTriggerRef.current;
+    if (currentTrigger) {
+      observerRef.current.observe(currentTrigger);
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+      if (loadMoreTimeoutRef.current) {
+        clearTimeout(loadMoreTimeoutRef.current);
+      }
+    };
+  }, [showTasksOnly, isLoadingMore, loadMoreEvents]);
+
+  // Reset displayed count when filters change
+  useEffect(() => {
+    setDisplayedEventCount(15);
+  }, [showTasksOnly, showAllMembers, currentMemberId]);
+
+  // Track when we're loading more to detect API completion
+  const lastEventCountRef = useRef(events.length);
+  
+  // When events array grows (after loading more), automatically show more
+  useEffect(() => {
+    if (showTasksOnly) {
+      previousTotalEventCountRef.current = totalEventCount;
+      lastEventCountRef.current = events.length;
+      return;
+    }
+    
+    // Check if events array actually grew (new events were added)
+    const eventsArrayGrew = events.length > lastEventCountRef.current;
+    const wasExpectingMore = expectingMoreEventsRef.current;
+    
+    // Only update if total actually increased
+    if (totalEventCount > previousTotalEventCountRef.current) {
+      const previousTotal = previousTotalEventCountRef.current;
+      const increase = totalEventCount - previousTotal;
+      
+      // Always update displayedEventCount when new events are loaded
+      // This ensures the UI updates when:
+      // 1. We were expecting more events (API call just completed) - ALWAYS update
+      // 2. Events array grew (new events added to state) - ALWAYS update
+      // 3. We were showing all/most events (at or near the limit) - update to show new ones
+      const shouldUpdate = wasExpectingMore || eventsArrayGrew || displayedEventCount >= previousTotal - 2;
+      
+      if (shouldUpdate) {
+        if (wasExpectingMore) {
+          expectingMoreEventsRef.current = false;
+        }
+        if (eventsArrayGrew) {
+          lastEventCountRef.current = events.length;
+        }
+        
+        // Force update by using functional setState
+        setDisplayedEventCount(prev => {
+          // Show at least 15 more, or the full increase if it's less than 15
+          const increment = (wasExpectingMore || eventsArrayGrew)
+            ? Math.max(15, increase)
+            : 15;
+          return Math.min(prev + increment, totalEventCount);
+        });
+      }
+    } else if (eventsArrayGrew) {
+      // Events array grew but totalEventCount didn't increase (filtering issue?)
+      lastEventCountRef.current = events.length;
+    }
+    
+    previousTotalEventCountRef.current = totalEventCount;
+  }, [totalEventCount, showTasksOnly, displayedEventCount, events.length]);
 
   const handleQuickAddTask = async () => {
     await handleQuickAdd(quickAddTitle);
@@ -495,8 +680,11 @@ export function RollingView({
             </p>
           </section>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {sortedDates.map((dateKey) => {
+          <div 
+            ref={scrollContainerRef}
+            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+          >
+          {displayedDates.map((dateKey) => {
             const dateEvents = eventsByDate[dateKey];
             const date = new Date(dateKey);
             const dateStr = date.toLocaleDateString("sv-SE", {
@@ -611,6 +799,10 @@ export function RollingView({
               </section>
             );
           })}
+          {/* Load more trigger - invisible element at the bottom */}
+          {!showTasksOnly && (displayedEventCount < totalEventCount || (displayedEventCount >= totalEventCount && onLoadMoreEvents)) && (
+            <div ref={loadMoreTriggerRef} style={{ height: "1px", marginTop: "16px" }} />
+          )}
         </div>
         )
       )}

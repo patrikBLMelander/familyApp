@@ -66,6 +66,7 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
     loadCurrentMember,
     handleToggleTask,
     setError,
+    loadMoreEvents,
   } = useCalendarData(
     viewType,
     currentWeek,
@@ -225,6 +226,7 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
               handleToggleTask={handleToggleTaskWrapper}
               handleDeleteEvent={handleDeleteEvent}
               setEditingEvent={setEditingEvent}
+              onLoadMoreEvents={loadMoreEvents}
             />
           )}
 
