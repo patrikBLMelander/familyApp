@@ -91,3 +91,34 @@ export async function fetchMemberPetHistory(memberId: string): Promise<PetHistor
   return handleJson<PetHistoryResponse[]>(response);
 }
 
+
+export async function feedPet(xpAmount: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/pets/feed`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ xpAmount }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Request failed with status ${response.status}: ${errorText}`);
+  }
+}
+
+export type CollectedFoodResponse = {
+  foodItems: FoodItemResponse[];
+  totalCount: number;
+};
+
+export type FoodItemResponse = {
+  id: string;
+  eventId: string | null; // null for bonus food
+  xpAmount: number;
+  collectedAt: string;
+};
+
+export async function getCollectedFood(): Promise<CollectedFoodResponse> {
+  const response = await fetch(`${API_BASE_URL}/pets/collected-food`, {
+    headers: getHeaders(),
+  });
+  return handleJson<CollectedFoodResponse>(response);
+}

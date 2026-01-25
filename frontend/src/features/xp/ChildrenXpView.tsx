@@ -3,6 +3,7 @@ import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/fa
 import { fetchMemberXpProgress, fetchMemberXpHistory, awardBonusXp, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
 import { fetchMemberPet, fetchMemberPetHistory, PetResponse, PetHistoryResponse } from "../../shared/api/pets";
 import { getIntegratedPetImagePath, getPetNameSwedish } from "../pet/petImageUtils";
+import { getPetFoodEmoji, getPetFoodName } from "../pet/petFoodUtils";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
 
@@ -106,19 +107,22 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
     
     const xpAmount = parseInt(bonusXpAmount, 10);
     if (isNaN(xpAmount) || xpAmount <= 0 || xpAmount > 100) {
-      alert("XP måste vara mellan 1 och 100");
+      alert("Mat måste vara mellan 1 och 100");
       return;
     }
 
     try {
       setAwardingXp(true);
-      const updatedProgress = await awardBonusXp(bonusXpDialog.childId, xpAmount);
+      // Award bonus XP now creates food items instead of giving XP directly
+      // Progress won't change until the child feeds their pet
+      await awardBonusXp(bonusXpDialog.childId, xpAmount);
       
-      // Reload pet data to get updated growth stage
+      // Reload pet data and progress to get updated state
       try {
-        const [pet, petHistory] = await Promise.all([
+        const [pet, petHistory, progress] = await Promise.all([
           fetchMemberPet(bonusXpDialog.childId).catch(() => null),
-          fetchMemberPetHistory(bonusXpDialog.childId).catch(() => [])
+          fetchMemberPetHistory(bonusXpDialog.childId).catch(() => []),
+          fetchMemberXpProgress(bonusXpDialog.childId).catch(() => null)
         ]);
         
         // Update the child's progress and pet in state
@@ -129,7 +133,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
             const updatedPet = pet || childData.pet;
             newMap.set(bonusXpDialog.childId, {
               ...childData,
-              progress: updatedProgress,
+              progress: progress || childData.progress,
               pet: updatedPet,
               petHistory: petHistory.length > 0 ? petHistory : childData.petHistory
             });
@@ -137,25 +141,19 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           return newMap;
         });
       } catch (e) {
-        // If pet reload fails, still update progress
-        setChildrenXpData(prev => {
-          const newMap = new Map(prev);
-          const childData = newMap.get(bonusXpDialog.childId);
-          if (childData) {
-            newMap.set(bonusXpDialog.childId, {
-              ...childData,
-              progress: updatedProgress
-            });
-          }
-          return newMap;
-        });
+        console.error("Error reloading child data after bonus XP:", e);
+        // Continue anyway - food was created successfully
       }
 
       setBonusXpDialog(null);
       setBonusXpAmount("10");
     } catch (e) {
       console.error("Error awarding bonus XP:", e);
-      alert("Kunde inte ge bonus-XP. Försök igen.");
+      if (e instanceof Error) {
+        alert(e.message || "Kunde inte ge bonus-mat. Försök igen.");
+      } else {
+        alert("Kunde inte ge bonus-mat. Försök igen.");
+      }
     } finally {
       setAwardingXp(false);
     }
@@ -266,7 +264,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
               </button>
             )}
             <div style={{ flex: 1 }}>
-              <h2 className="view-title" style={{ margin: 0 }}>Barnens XP</h2>
+              <h2 className="view-title" style={{ margin: 0 }}>Barnens Djur</h2>
             </div>
           </div>
         </div>
@@ -282,6 +280,10 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
 
           // Show pet even if no XP progress exists yet
           const progressPercentage = progress ? (progress.xpInCurrentLevel / XP_PER_LEVEL) * 100 : 0;
+          
+          // Get food emoji and name for this child's pet
+          const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
+          const foodName = pet ? getPetFoodName(pet.petType) : "mat";
 
           // If no progress and no pet, show simple message
           if (!progress && !pet) {
@@ -291,7 +293,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   {child.name}
                 </h3>
                 <p style={{ margin: 0, color: "#6b6b6b", fontSize: "0.9rem" }}>
-                  {xpData?.error || "Ingen XP-data än"}
+                  {xpData?.error || "Ingen mat-data än"}
                 </p>
               </section>
             );
@@ -320,7 +322,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   onClick={() => setBonusXpDialog({ childId: child.id, childName: child.name })}
                   style={{ fontSize: "0.85rem", padding: "6px 12px", whiteSpace: "nowrap", flexShrink: 0 }}
                 >
-                  + Ge XP
+                  + Ge mat
                 </button>
               </div>
               
@@ -385,12 +387,12 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                       Level {progress.currentLevel}
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#6b6b6b" }}>
-                      {progress.currentXp} XP • {monthNames[progress.month - 1]} {progress.year}
+                      {progress.currentXp} {foodEmoji} {foodName} • {monthNames[progress.month - 1]} {progress.year}
                     </div>
                   </>
                 ) : (
                   <div style={{ fontSize: "0.95rem", color: "#6b6b6b" }}>
-                    Ingen XP-data än
+                    Ingen mat-data än
                   </div>
                 )}
               </div>
@@ -412,7 +414,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   gap: "4px"
                 }}>
                   <span>Progress till Level {Math.min(progress.currentLevel + 1, MAX_LEVEL)}</span>
-                  <span>{progress.xpInCurrentLevel} / {XP_PER_LEVEL} XP</span>
+                  <span>{progress.xpInCurrentLevel} / {XP_PER_LEVEL} {foodEmoji}</span>
                 </div>
                 <div style={{
                   width: "100%",
@@ -437,7 +439,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                     color: "#6b6b6b",
                     textAlign: "center"
                   }}>
-                    {progress.xpForNextLevel} XP kvar
+                    {progress.xpForNextLevel} {foodEmoji} kvar
                   </p>
                 )}
               </div>
@@ -465,10 +467,10 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "#2d5a2d" }}>
-                    {progress.currentXp}
+                    {progress.currentXp} {foodEmoji}
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#6b6b6b" }}>
-                    Total XP
+                    Total {foodName}
                   </div>
                 </div>
               </div>
@@ -529,7 +531,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                               Level {h.finalLevel}
                             </div>
                             <div style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>
-                              {h.finalXp} XP
+                              {h.finalXp} {foodEmoji}
                             </div>
                           </div>
                         </div>
@@ -566,11 +568,11 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
             width: "400px"
           }}>
             <h3 style={{ marginTop: 0, marginBottom: "16px", fontSize: "1.1rem", fontWeight: 600 }}>
-              Ge bonus-XP till {bonusXpDialog.childName}
+              Ge bonus-mat till {bonusXpDialog.childName}
             </h3>
             <div style={{ marginBottom: "16px" }}>
               <label htmlFor="bonusXpAmount" style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>
-                XP-poäng (1-100)
+                Mat (1-100)
               </label>
               <input
                 id="bonusXpAmount"
@@ -604,7 +606,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 onClick={handleAwardBonusXp}
                 disabled={awardingXp}
               >
-                {awardingXp ? "Ger XP..." : "Ge XP"}
+                {awardingXp ? "Ger mat..." : "Ge mat"}
               </button>
             </div>
           </div>

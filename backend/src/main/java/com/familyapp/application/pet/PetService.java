@@ -202,6 +202,32 @@ public class PetService {
         return EGG_TO_PET_MAP.keySet().stream().sorted().toList();
     }
 
+    /**
+     * Feed the pet - awards XP to the member
+     * This is called when the child feeds their pet with collected food
+     * @param memberId The member ID
+     * @param xpAmount The amount of XP to award (number of food items)
+     */
+    public void feedPet(UUID memberId, int xpAmount) {
+        if (xpAmount <= 0) {
+            throw new IllegalArgumentException("XP amount must be positive");
+        }
+
+        var member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+
+        // Only children can feed pets
+        if (!"CHILD".equals(member.getRole())) {
+            throw new IllegalArgumentException("Only children can feed pets");
+        }
+
+        // Award XP
+        xpService.awardXp(memberId, xpAmount);
+
+        // Update growth stage based on new XP level
+        updateGrowthStage(memberId);
+    }
+
     private ChildPet toDomain(ChildPetEntity entity) {
         return new ChildPet(
                 entity.getId(),

@@ -2,6 +2,7 @@ package com.familyapp.application.calendar;
 
 import com.familyapp.application.xp.XpService;
 import com.familyapp.application.familymember.FamilyMemberService;
+import com.familyapp.application.pet.CollectedFoodService;
 import com.familyapp.domain.calendar.CalendarEvent;
 import com.familyapp.domain.calendar.CalendarEventCategory;
 import com.familyapp.domain.calendar.CalendarEventTaskCompletion;
@@ -40,6 +41,7 @@ public class CalendarService {
     private final CalendarEventTaskCompletionJpaRepository completionRepository;
     private final XpService xpService;
     private final CacheService cacheService;
+    private final CollectedFoodService foodService;
 
     public CalendarService(
             CalendarEventJpaRepository eventRepository,
@@ -49,13 +51,15 @@ public class CalendarService {
             FamilyJpaRepository familyRepository,
             CalendarEventTaskCompletionJpaRepository completionRepository,
             XpService xpService,
-            CacheService cacheService
+            CacheService cacheService,
+            CollectedFoodService foodService
     ) {
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
         this.memberRepository = memberRepository;
         this.memberService = memberService;
         this.familyRepository = familyRepository;
+        this.foodService = foodService;
         this.completionRepository = completionRepository;
         this.xpService = xpService;
         this.cacheService = cacheService;
@@ -653,18 +657,23 @@ public class CalendarService {
         
         var saved = completionRepository.save(completionEntity);
         
-        // Award XP if xpPoints is set (only for children, handled by XpService)
+        // Add food to collection when task is completed
         Integer xpPoints = eventEntity.getXpPoints();
         if (xpPoints != null && xpPoints > 0) {
             try {
-                xpService.awardXp(memberId, xpPoints);
+                foodService.addFoodFromTask(memberId, eventId, xpPoints);
             } catch (Exception e) {
                 // Log error but don't fail the task completion
-                // XP award failure shouldn't prevent task from being marked as complete
-                System.err.println("Failed to award XP for task completion: " + e.getMessage());
+                // Note: Using System.err for now as this service doesn't have a logger yet
+                // TODO: Add SLF4J logger to CalendarService for proper logging
+                System.err.println("Failed to add food for task completion: eventId=" + eventId + 
+                    ", memberId=" + memberId + ", xpPoints=" + xpPoints + ", error=" + e.getMessage());
                 e.printStackTrace();
             }
         }
+        
+        // NOTE: XP is no longer awarded here. XP is awarded when the child feeds their pet.
+        // This allows the child to collect food from tasks and then feed the pet when ready.
         
         // Ensure event and member are loaded before converting to domain
         // This prevents lazy loading issues
@@ -683,11 +692,32 @@ public class CalendarService {
         
         var completion = completionRepository.findByEventIdAndMemberIdAndOccurrenceDate(eventId, memberId, occurrenceDate);
         if (completion.isPresent()) {
-            // Remove XP if xpPoints is set (only for children, handled by XpService)
+            
+            // Remove food from collection when task is uncompleted
+            // Only removes unfed food - if food has been fed, it cannot be removed
             Integer xpPoints = eventEntity.getXpPoints();
             if (xpPoints != null && xpPoints > 0) {
-                xpService.removeXp(memberId, xpPoints);
+                try {
+                    foodService.removeFoodFromTask(memberId, eventId, xpPoints);
+                } catch (IllegalArgumentException e) {
+                    // Not enough unfed food - throw error to prevent uncompletion
+                    // The error message from removeFoodFromTask already contains detailed information
+                    throw e;
+                } catch (Exception e) {
+                    // Log other errors but don't fail the uncompletion
+                    // Note: Using System.err for now as this service doesn't have a logger yet
+                    // TODO: Add SLF4J logger to CalendarService for proper logging
+                    System.err.println("Failed to remove food for task uncompletion: eventId=" + eventId + 
+                        ", memberId=" + memberId + ", xpPoints=" + xpPoints + ", error=" + e.getMessage());
+                    e.printStackTrace();
+                    // Re-throw as IllegalArgumentException to provide user-friendly message
+                    throw new IllegalArgumentException(
+                            "Kan inte avmarkera syssla: Ett fel uppstod när mat skulle tas bort. " +
+                            "Kontrollera att du har tillräckligt med omatad mat."
+                    );
+                }
             }
+            
             completionRepository.delete(completion.get());
         }
     }

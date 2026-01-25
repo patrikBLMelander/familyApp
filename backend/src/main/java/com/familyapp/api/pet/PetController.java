@@ -2,9 +2,11 @@ package com.familyapp.api.pet;
 
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.pet.PetService;
+import com.familyapp.application.pet.CollectedFoodService;
 import com.familyapp.domain.familymember.FamilyMember;
 import com.familyapp.domain.pet.ChildPet;
 import com.familyapp.domain.pet.PetHistory;
+import com.familyapp.domain.pet.CollectedFood;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,10 +20,12 @@ public class PetController {
 
     private final PetService petService;
     private final FamilyMemberService memberService;
+    private final CollectedFoodService foodService;
 
-    public PetController(PetService petService, FamilyMemberService memberService) {
+    public PetController(PetService petService, FamilyMemberService memberService, CollectedFoodService foodService) {
         this.petService = petService;
         this.memberService = memberService;
+        this.foodService = foodService;
     }
 
     @GetMapping("/current")
@@ -156,7 +160,96 @@ public class PetController {
                 .toList();
     }
 
+    @PostMapping("/feed")
+    public void feedPet(
+            @RequestBody FeedPetRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID memberId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var member = memberService.getMemberByDeviceToken(deviceToken);
+                memberId = member.id();
+
+                // Only children can feed pets
+                if (member.role() != FamilyMember.Role.CHILD) {
+                    throw new IllegalArgumentException("Only children can feed pets");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token: " + e.getMessage());
+            }
+        } else {
+            throw new IllegalArgumentException("Device token is required");
+        }
+
+        // Validate request
+        if (request.xpAmount() == null || request.xpAmount() <= 0) {
+            throw new IllegalArgumentException("XP amount must be positive");
+        }
+
+        // Mark food as fed before awarding XP
+        int actualFedAmount = foodService.markFoodAsFed(memberId, request.xpAmount());
+        
+        if (actualFedAmount == 0) {
+            throw new IllegalArgumentException("No unfed food available");
+        }
+        
+        // Award XP for the actual amount fed
+        petService.feedPet(memberId, actualFedAmount);
+    }
+
+    @GetMapping("/collected-food")
+    public CollectedFoodResponse getCollectedFood(
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID memberId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var member = memberService.getMemberByDeviceToken(deviceToken);
+                memberId = member.id();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        } else {
+            throw new IllegalArgumentException("Device token is required");
+        }
+
+        var unfedFood = foodService.getUnfedFood(memberId);
+        var totalCount = foodService.getUnfedFoodCount(memberId);
+
+        return new CollectedFoodResponse(
+                unfedFood.stream().map(this::toFoodResponse).toList(),
+                totalCount
+        );
+    }
+
     public record SelectEggRequest(String eggType, String name) {
+    }
+
+    public record FeedPetRequest(Integer xpAmount) {
+    }
+
+    public record CollectedFoodResponse(
+            List<FoodItemResponse> foodItems,
+            int totalCount
+    ) {
+    }
+
+    public record FoodItemResponse(
+            String id,
+            String eventId, // null for bonus food
+            int xpAmount,
+            String collectedAt
+    ) {
+    }
+
+    private FoodItemResponse toFoodResponse(CollectedFood food) {
+        return new FoodItemResponse(
+                food.id().toString(),
+                food.eventId() != null ? food.eventId().toString() : null,
+                food.xpAmount(),
+                food.collectedAt().toString()
+        );
     }
 
     private PetResponse toResponse(ChildPet pet) {

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { CalendarEventResponse, CalendarEventCategoryResponse, CalendarTaskWithCompletionResponse } from "../../../shared/api/calendar";
 import { FamilyMemberResponse } from "../../../shared/api/familyMembers";
+import { fetchMemberPet, PetResponse } from "../../../shared/api/pets";
+import { getPetFoodEmoji, getPetFoodName } from "../../pet/petFoodUtils";
 import { formatDateTimeRange } from "../utils/dateFormatters";
 import { MAX_RECURRING_DAYS } from "../constants";
 
@@ -91,6 +93,7 @@ export function RollingView({
 }: RollingViewProps) {
   const [displayedEventCount, setDisplayedEventCount] = useState(15);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [petsByMemberId, setPetsByMemberId] = useState<Map<string, PetResponse>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
@@ -105,6 +108,35 @@ export function RollingView({
   const [hasSwiped, setHasSwiped] = useState(false);
   const [quickAddMemberId, setQuickAddMemberId] = useState<string | null>(null);
   const swipeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Load pets for all children
+  useEffect(() => {
+    const loadPets = async () => {
+      const children = members.filter(m => m.role === "CHILD");
+      const petPromises = children.map(async (child) => {
+        try {
+          const pet = await fetchMemberPet(child.id);
+          return { memberId: child.id, pet };
+        } catch (e) {
+          return { memberId: child.id, pet: null };
+        }
+      });
+      
+      const petResults = await Promise.all(petPromises);
+      const petsMap = new Map<string, PetResponse>();
+      petResults.forEach(({ memberId, pet }) => {
+        if (pet) {
+          petsMap.set(memberId, pet);
+        }
+      });
+      setPetsByMemberId(petsMap);
+    };
+    
+    if (members.length > 0) {
+      void loadPets();
+    }
+  }, [members]);
+  
   // Filter events based on task/event toggle
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
@@ -682,39 +714,49 @@ export function RollingView({
                                       onChange={() => handleToggleTask(task.event.id, member.id)}
                                       style={{ cursor: "pointer", width: "18px", height: "18px" }}
                                     />
-                                    <div style={{ flex: 1 }}>
-                                      <span 
-                                        style={{ 
-                                          color: "#2d3748",
-                                          textDecoration: task.completed ? "line-through" : "none",
-                                          fontWeight: task.completed ? 600 : 500
-                                        }}
-                                      >
-                                        {task.event.title}
-                                      </span>
-                                      {task.event.xpPoints && task.event.xpPoints > 0 && (
-                                        <span style={{
-                                          fontSize: "0.75rem",
-                                          padding: "2px 8px",
-                                          borderRadius: "12px",
-                                          background: "rgba(184, 230, 184, 0.3)",
-                                          color: "#2d5a2d",
-                                          fontWeight: 600,
-                                          marginLeft: "8px"
-                                        }}>
-                                          +{task.event.xpPoints} XP
+                                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                                      <div style={{ flex: 1 }}>
+                                        <span 
+                                          style={{ 
+                                            color: "#2d3748",
+                                            textDecoration: task.completed ? "line-through" : "none",
+                                            fontWeight: task.completed ? 600 : 500
+                                          }}
+                                        >
+                                          {task.event.title}
                                         </span>
-                                      )}
-                                      {task.event.description && (
-                                        <p style={{ 
-                                          margin: "4px 0 0", 
-                                          fontSize: "0.9rem", 
-                                          color: "#6b6b6b",
-                                          fontStyle: task.completed ? "italic" : "normal"
-                                        }}>
-                                          {task.event.description}
-                                        </p>
-                                      )}
+                                        {task.event.description && (
+                                          <p style={{ 
+                                            margin: "4px 0 0", 
+                                            fontSize: "0.9rem", 
+                                            color: "#6b6b6b",
+                                            fontStyle: task.completed ? "italic" : "normal"
+                                          }}>
+                                            {task.event.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                      {task.event.xpPoints && task.event.xpPoints > 0 && (() => {
+                                        // If viewing all members and this member is a child, show food
+                                        // If current user is a child, show food for their own tasks
+                                        if (member.role === "CHILD") {
+                                          const pet = petsByMemberId.get(member.id);
+                                          const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
+                                          
+                                          return (
+                                            <span style={{
+                                              fontSize: "1.2rem",
+                                              flexShrink: 0
+                                            }}>
+                                              {foodEmoji}
+                                            </span>
+                                          );
+                                        }
+                                        
+                                        // Hide XP for adults' own tasks (when not viewing all members)
+                                        // If viewing all members, we already handled children above
+                                        return null;
+                                      })()}
                                     </div>
                                   </label>
                                 </li>

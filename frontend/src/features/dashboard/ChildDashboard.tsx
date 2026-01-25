@@ -1,10 +1,14 @@
-import { useState, useEffect } from "react";
-import { fetchCurrentPet, PetResponse } from "../../shared/api/pets";
+import { useState, useEffect, useRef } from "react";
+import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, CollectedFoodResponse } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
 import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse } from "../../shared/api/calendar";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
 import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
+import { getPetFoodEmoji, getPetFoodName, getRandomPetMessage } from "../pet/petFoodUtils";
+import { HalfCircleProgress } from "./components/HalfCircleProgress";
+import { ConfettiAnimation } from "./components/ConfettiAnimation";
+import { FloatingXpNumber } from "./components/FloatingXpNumber";
 
 type ViewKey = "dailytasks" | "xp";
 
@@ -16,6 +20,8 @@ type ChildDashboardProps = {
 
 const XP_PER_LEVEL = 24;
 
+// FoodItem is now managed by backend, we just track count
+
 export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboardProps) {
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
@@ -23,6 +29,27 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasIntegratedImage, setHasIntegratedImage] = useState<boolean>(false);
+  
+  // Food collection state
+  const [collectedFoodCount, setCollectedFoodCount] = useState<number>(0);
+  const [isFeeding, setIsFeeding] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [floatingXp, setFloatingXp] = useState<number | null>(null);
+  const [petMood, setPetMood] = useState<"happy" | "hungry">("happy");
+  const [petMessage, setPetMessage] = useState<string>("");
+  const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
+  const previousLevelRef = useRef<number>(0);
+  const lastFedDateRef = useRef<string>("");
+  
+  // Track window width for responsive design
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -39,15 +66,21 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         const member = await getMemberByDeviceToken(deviceToken);
         const memberId = member.id;
 
-        // Load pet, XP, and tasks in parallel
-        const [petData, xpData, tasksData] = await Promise.all([
+        // Load pet, XP, tasks, and collected food in parallel
+        const [petData, xpData, tasksData, foodData] = await Promise.all([
           fetchCurrentPet().catch(() => null),
           fetchCurrentXpProgress().catch(() => null),
           fetchTasksForToday(memberId).catch(() => []),
+          getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
         ]);
 
         setPet(petData);
         setXpProgress(xpData);
+        
+        // Initialize previous level
+        if (xpData) {
+          previousLevelRef.current = xpData.currentLevel;
+        }
         
         // Check if integrated image exists for this pet
         if (petData) {
@@ -63,6 +96,26 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           return a.event.title.localeCompare(b.event.title);
         });
         setTasks(sortedTasks);
+        
+        // Set collected food count from backend
+        setCollectedFoodCount(foodData.totalCount);
+        
+        // Check pet mood based on today's date
+        const today = new Date().toISOString().split('T')[0];
+        if (lastFedDateRef.current !== today) {
+          // Check if any tasks were completed today
+          const todayCompletedTasks = sortedTasks.filter(t => t.completed);
+          if (todayCompletedTasks.length === 0) {
+            setPetMood("hungry");
+            setPetMessage(getRandomPetMessage("hungry"));
+          } else {
+            setPetMood("happy");
+            setPetMessage(getRandomPetMessage("happy"));
+          }
+        } else {
+          setPetMood("happy");
+          setPetMessage(getRandomPetMessage("happy"));
+        }
       } catch (e) {
         console.error("Error loading dashboard data:", e);
         setError("Kunde inte ladda data.");
@@ -75,12 +128,26 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
   }, []);
 
   const handleToggleTask = async (eventId: string) => {
+    const task = tasks.find(t => t.event.id === eventId);
+    if (!task) return;
+    
+    const wasCompleted = task.completed;
+    const xpPoints = task.event.xpPoints || 0;
+    
+    // If uncompleting, check if we have enough unfed food
+    if (wasCompleted && xpPoints > 0) {
+      if (collectedFoodCount < xpPoints) {
+        alert(`Du kan inte avmarkera denna syssla. Du behöver ${xpPoints} omatad mat, men du har bara ${collectedFoodCount}.`);
+        return;
+      }
+    }
+    
     // Optimistic update
     setTasks((prev) =>
-      prev.map((task) =>
-        task.event.id === eventId
-          ? { ...task, completed: !task.completed }
-          : task
+      prev.map((t) =>
+        t.event.id === eventId
+          ? { ...t, completed: !t.completed }
+          : t
       )
     );
 
@@ -92,22 +159,38 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
       const member = await getMemberByDeviceToken(deviceToken);
       await toggleTaskCompletion(eventId, member.id);
       
-      // Reload data to get updated state
-      const [xpData, tasksData, petData] = await Promise.all([
+      // Reload data to get updated state (including food from backend)
+      const [xpData, tasksData, petData, foodData] = await Promise.all([
         fetchCurrentXpProgress().catch(() => null),
         fetchTasksForToday(member.id).catch(() => []),
         fetchCurrentPet().catch(() => null),
+        getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
       ]);
       setXpProgress(xpData);
       setTasks(tasksData);
+      setCollectedFoodCount(foodData.totalCount);
       if (petData) {
         setPet(petData);
         // Check if integrated image exists for updated pet
         const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
         setHasIntegratedImage(integratedExists);
       }
+      
+      // Update pet mood
+      const todayCompletedTasks = tasksData.filter(t => t.completed);
+      if (todayCompletedTasks.length === 0) {
+        setPetMood("hungry");
+        setPetMessage(getRandomPetMessage("hungry"));
+      } else {
+        setPetMood("happy");
+        setPetMessage(getRandomPetMessage("happy"));
+      }
     } catch (e) {
       console.error("Error toggling task:", e);
+      // Show user-friendly error message
+      if (e instanceof Error && e.message.includes("inte tillräckligt")) {
+        alert(e.message);
+      }
       // Revert on error by reloading
       const deviceToken = localStorage.getItem("deviceToken");
       if (deviceToken) {
@@ -115,6 +198,72 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         const tasksData = await fetchTasksForToday(member.id).catch(() => []);
         setTasks(tasksData);
       }
+    }
+  };
+  
+  const handleFeed = async (amount: number | null = null) => {
+    // amount = null means feed all, otherwise feed specific amount
+    const feedAmount = amount ?? collectedFoodCount;
+    
+    if (feedAmount === 0 || isFeeding || !pet || feedAmount > collectedFoodCount) return;
+    
+    setIsFeeding(true);
+    
+    try {
+      const deviceToken = localStorage.getItem("deviceToken");
+      if (!deviceToken) {
+        throw new Error("No device token");
+      }
+      const member = await getMemberByDeviceToken(deviceToken);
+      
+      // Award XP for food via feed endpoint (backend handles marking food as fed)
+      await feedPet(feedAmount);
+      
+      // Show floating XP number
+      setFloatingXp(feedAmount);
+      
+      // Reload collected food count
+      const foodData = await getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 }));
+      setCollectedFoodCount(foodData.totalCount);
+      
+      // Update last fed date
+      const today = new Date().toISOString().split('T')[0];
+      lastFedDateRef.current = today;
+      
+      // Update pet mood
+      setPetMood("happy");
+      setPetMessage(getRandomPetMessage("happy"));
+      
+      // Reload XP progress to check for level up
+      const xpData = await fetchCurrentXpProgress().catch(() => null);
+      if (xpData) {
+        const previousLevel = previousLevelRef.current;
+        setXpProgress(xpData);
+        
+        // Check for level up
+        if (xpData.currentLevel > previousLevel) {
+          setShowConfetti(true);
+          previousLevelRef.current = xpData.currentLevel;
+          
+          // Reload pet to get updated growth stage
+          const petData = await fetchCurrentPet().catch(() => null);
+          if (petData) {
+            setPet(petData);
+            const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
+            setHasIntegratedImage(integratedExists);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error feeding pet:", e);
+      if (e instanceof Error) {
+        alert(e.message || "Kunde inte mata djuret. Försök igen.");
+      }
+    } finally {
+      setTimeout(() => {
+        setIsFeeding(false);
+        setFloatingXp(null);
+      }, 1500);
     }
   };
 
@@ -163,19 +312,32 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
   }
 
   // Calculate energy (XP) progress
-  const energyPercentage = xpProgress 
-    ? (xpProgress.xpInCurrentLevel / XP_PER_LEVEL) * 100 
+  // Clamp to 0-100 to ensure it doesn't exceed 100%
+  const progressPercentage = xpProgress 
+    ? Math.min(100, Math.max(0, (xpProgress.xpInCurrentLevel / XP_PER_LEVEL) * 100))
     : 0;
   const totalEnergy = xpProgress?.currentXp || 0;
   const completedTasksCount = tasks.filter(t => t.completed).length;
   const totalTasksCount = tasks.length;
+  const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
+  const foodName = pet ? getPetFoodName(pet.petType) : "mat";
+  const totalFoodCount = collectedFoodCount;
 
   return (
     <div className="dashboard child-dashboard" style={{
       background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
       minHeight: "100vh",
       padding: "20px",
+      position: "relative",
     }}>
+      {/* Confetti Animation */}
+      {showConfetti && (
+        <ConfettiAnimation
+          onComplete={() => setShowConfetti(false)}
+          duration={3000}
+        />
+      )}
+      
       {/* Header */}
       {childName && (
         <div style={{ 
@@ -203,6 +365,29 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         </div>
       )}
 
+      {/* Pet mood message - above image */}
+      {petMessage && (
+        <div style={{
+          marginBottom: "16px",
+          display: "flex",
+          justifyContent: "center",
+        }}>
+          <div style={{
+            background: petMood === "happy" ? "rgba(184, 230, 184, 0.95)" : "rgba(254, 202, 202, 0.95)",
+            padding: "12px 20px",
+            borderRadius: "16px",
+            fontSize: "0.95rem",
+            fontWeight: 600,
+            color: petMood === "happy" ? "#2d5a2d" : "#c53030",
+            maxWidth: "85%",
+            textAlign: "center",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+          }}>
+            {petMessage}
+          </div>
+        </div>
+      )}
+
       {/* Pet Visualization Card */}
       <section className="card" style={{
         padding: 0,
@@ -211,20 +396,24 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
         overflow: "hidden",
         backgroundColor: "white",
+        position: "relative",
       }}>
         {/* Image container with 3:2 aspect ratio (1440×960) */}
-        <div style={{
-          backgroundImage: hasIntegratedImage 
-            ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
-            : `url(${getPetBackgroundImagePath(pet.petType)})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundColor: "white",
-          width: "100%",
-          aspectRatio: "3 / 2", // 1440×960 aspect ratio
-          position: "relative",
-        }}>
+        <div 
+          style={{
+            backgroundImage: hasIntegratedImage 
+              ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
+              : `url(${getPetBackgroundImagePath(pet.petType)})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            backgroundColor: "white",
+            width: "100%",
+            aspectRatio: "3 / 2", // 1440×960 aspect ratio
+            position: "relative",
+            animation: showConfetti ? "pulseGradient 2s ease-in-out" : undefined,
+          }}
+        >
           {/* Only show PetVisualization if integrated image doesn't exist */}
           {!hasIntegratedImage && (
             <div style={{
@@ -237,6 +426,37 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
               <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
             </div>
           )}
+          
+          {/* Floating XP number */}
+          {floatingXp !== null && (
+            <FloatingXpNumber
+              xp={floatingXp}
+              onComplete={() => setFloatingXp(null)}
+            />
+          )}
+          
+          {/* Full circle progress bar at bottom - upper half goes up over image */}
+          {xpProgress && (
+            <div style={{
+              position: "absolute",
+              bottom: windowWidth < 768 ? "-40px" : "-60px", // Position so upper half is over image
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}>
+              <HalfCircleProgress
+                progress={progressPercentage}
+                currentLevel={xpProgress.currentLevel}
+                mood={petMood}
+                petName={pet.name || getPetNameSwedish(pet.petType)}
+                size={windowWidth < 768 ? 100 : 140}
+                strokeWidth={windowWidth < 768 ? 7 : 10}
+              />
+            </div>
+          )}
         </div>
         
         {/* Text below image */}
@@ -245,25 +465,11 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           textAlign: "center",
           borderTop: "1px solid rgba(0, 0, 0, 0.1)",
         }}>
-          <h3 style={{
-            margin: "0 0 4px",
-            fontSize: "1.5rem",
-            fontWeight: 700,
-            color: "#2d3748",
-          }}>
-            {pet.name || getPetNameSwedish(pet.petType)}
-          </h3>
-          <p style={{
-            margin: 0,
-            fontSize: "1rem",
-            color: "#4a5568",
-          }}>
-            Växtsteg {pet.growthStage} av 5
-          </p>
+          {/* Empty space - message moved to overlay */}
         </div>
       </section>
 
-      {/* Energy Bar */}
+      {/* Food Collection & Feeding Section */}
       <section className="card" style={{
         background: "white",
         borderRadius: "20px",
@@ -271,49 +477,141 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         marginBottom: "24px",
         boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
       }}>
-        <div style={{ marginBottom: "12px" }}>
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "8px",
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "16px",
+        }}>
+          <h3 style={{
+            margin: 0,
+            fontSize: "1.2rem",
+            fontWeight: 600,
+            color: "#2d3748",
           }}>
-            <h3 style={{
+            🍽️ Mat att ge
+          </h3>
+          <span style={{
+            fontSize: "1rem",
+            fontWeight: 600,
+            color: totalFoodCount > 0 ? "#48bb78" : "#4a5568",
+          }}>
+            {totalFoodCount} {foodName}
+          </span>
+        </div>
+        
+        {/* Food bowl visualization */}
+        <div style={{
+          background: "linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)",
+          borderRadius: "16px",
+          padding: "20px",
+          marginBottom: "16px",
+          minHeight: "80px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexWrap: "wrap",
+          gap: "8px",
+          border: "2px solid #e2e8f0",
+        }}>
+          {totalFoodCount === 0 ? (
+            <p style={{
               margin: 0,
-              fontSize: "1.2rem",
-              fontWeight: 600,
-              color: "#2d3748",
+              color: "#a0aec0",
+              fontSize: "0.9rem",
+              textAlign: "center",
             }}>
-              ⚡ Energi
-            </h3>
-            <span style={{
+              Ingen mat ännu... Utför sysslor för att samla {foodName}!
+            </p>
+          ) : (
+            Array.from({ length: Math.min(totalFoodCount, 20) }).map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: "1.5rem",
+                  animation: i >= Math.max(0, totalFoodCount - 5) ? "bounce 0.5s ease" : undefined,
+                }}
+              >
+                {foodEmoji}
+              </span>
+            ))
+          )}
+        </div>
+        
+        {/* Feed buttons */}
+        <div style={{
+          display: "flex",
+          gap: "12px",
+        }}>
+          <button
+            type="button"
+            onClick={() => handleFeed(1)}
+            disabled={totalFoodCount < 1 || isFeeding}
+            style={{
+              flex: 1,
+              padding: "16px",
               fontSize: "1rem",
               fontWeight: 600,
-              color: "#4a5568",
-            }}>
-              {totalEnergy} XP
-            </span>
-          </div>
-          <div style={{
-            width: "100%",
-            height: "28px",
-            background: "#e2e8f0",
-            borderRadius: "14px",
-            overflow: "hidden",
-            position: "relative",
-          }}>
-            <div style={{
-              width: `${energyPercentage}%`,
-              height: "100%",
-              background: "linear-gradient(90deg, #667eea 0%, #764ba2 100%)",
-              borderRadius: "14px",
-              transition: "width 0.5s ease",
-            }} />
-          </div>
+              color: "white",
+              background: totalFoodCount < 1 || isFeeding
+                ? "#cbd5e0"
+                : "linear-gradient(135deg, #48bb78 0%, #38a169 100%)",
+              border: "none",
+              borderRadius: "12px",
+              cursor: totalFoodCount < 1 || isFeeding ? "not-allowed" : "pointer",
+              transition: "all 0.2s ease",
+              boxShadow: totalFoodCount < 1 || isFeeding
+                ? "none"
+                : "0 4px 12px rgba(72, 187, 120, 0.4)",
+            }}
+            onMouseEnter={(e) => {
+              if (totalFoodCount >= 1 && !isFeeding) {
+                e.currentTarget.style.transform = "scale(1.02)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+          >
+            {isFeeding ? "..." : `Mata 1 ${foodName}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleFeed(null)}
+            disabled={totalFoodCount === 0 || isFeeding}
+            style={{
+              flex: 1,
+              padding: "16px",
+              fontSize: "1rem",
+              fontWeight: 600,
+              color: "white",
+              background: totalFoodCount === 0 || isFeeding
+                ? "#cbd5e0"
+                : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              border: "none",
+              borderRadius: "12px",
+              cursor: totalFoodCount === 0 || isFeeding ? "not-allowed" : "pointer",
+              transition: "all 0.2s ease",
+              boxShadow: totalFoodCount === 0 || isFeeding
+                ? "none"
+                : "0 4px 12px rgba(102, 126, 234, 0.4)",
+            }}
+            onMouseEnter={(e) => {
+              if (totalFoodCount > 0 && !isFeeding) {
+                e.currentTarget.style.transform = "scale(1.02)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+          >
+            {isFeeding ? "Ger mat..." : totalFoodCount > 0 ? `Mata allt (${totalFoodCount})` : "Ingen mat"}
+          </button>
         </div>
+        
         {xpProgress && xpProgress.currentLevel < 10 && (
           <p style={{
-            margin: "8px 0 0",
+            margin: "12px 0 0",
             fontSize: "0.9rem",
             color: "#718096",
             textAlign: "center",
@@ -343,7 +641,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
             fontWeight: 600,
             color: "#2d3748",
           }}>
-            📝 Ge din vän energi
+            📝 Samla {foodName} för din vän
           </h3>
           <span style={{
             fontSize: "1rem",
@@ -417,8 +715,25 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
                         fontSize: "0.85rem",
                         color: "#718096",
                         marginTop: "4px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
                       }}>
-                        +{task.event.xpPoints} XP
+                        {task.completed && (
+                          <>
+                            {Array.from({ length: task.event.xpPoints }).map((_, i) => (
+                              <span key={i} style={{ fontSize: "1rem" }}>{foodEmoji}</span>
+                            ))}
+                            <span style={{ marginLeft: "4px" }}>
+                              +{task.event.xpPoints} {foodName}
+                            </span>
+                          </>
+                        )}
+                        {!task.completed && (
+                          <span>
+                            Ger {task.event.xpPoints} {foodName} när klar
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -428,6 +743,28 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           </div>
         )}
       </section>
+      
+      <style>{`
+        @keyframes bounce {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+        
+        @keyframes pulseGradient {
+          0%, 100% {
+            filter: brightness(1) saturate(1);
+            box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
+          }
+          50% {
+            filter: brightness(1.2) saturate(1.3);
+            box-shadow: 0 0 30px 15px rgba(102, 126, 234, 0.5);
+          }
+        }
+      `}</style>
     </div>
   );
 }

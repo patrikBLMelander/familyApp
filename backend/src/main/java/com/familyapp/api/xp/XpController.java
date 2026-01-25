@@ -1,6 +1,7 @@
 package com.familyapp.api.xp;
 
 import com.familyapp.application.familymember.FamilyMemberService;
+import com.familyapp.application.pet.CollectedFoodService;
 import com.familyapp.application.xp.XpService;
 import com.familyapp.domain.familymember.FamilyMember;
 import com.familyapp.domain.xp.MemberXpHistory;
@@ -16,10 +17,12 @@ public class XpController {
 
     private final XpService xpService;
     private final FamilyMemberService memberService;
+    private final CollectedFoodService foodService;
 
-    public XpController(XpService xpService, FamilyMemberService memberService) {
+    public XpController(XpService xpService, FamilyMemberService memberService, CollectedFoodService foodService) {
         this.xpService = xpService;
         this.memberService = memberService;
+        this.foodService = foodService;
     }
 
     @GetMapping("/current")
@@ -154,14 +157,23 @@ public class XpController {
                 throw new IllegalArgumentException("XP points must be between 1 and 100");
             }
 
-            // Award bonus XP
-            xpService.awardBonusXp(memberId, request.xpPoints());
+            // Create bonus food instead of awarding XP directly
+            // The child will get XP when they feed their pet
+            foodService.addBonusFood(memberId, request.xpPoints());
 
-            // Return updated progress
-            var progress = xpService.getCurrentProgress(memberId)
-                    .orElseThrow(() -> new IllegalArgumentException("No XP progress found for member"));
-
-            return toResponse(progress);
+            // Return current progress (unchanged, since XP is only awarded when feeding)
+            // If no progress exists yet, create a default one with 0 XP
+            var progress = xpService.getCurrentProgress(memberId);
+            if (progress.isPresent()) {
+                return toResponse(progress.get());
+            } else {
+                // No progress exists yet - create one with 0 XP
+                // This ensures the API returns a valid response
+                xpService.awardXp(memberId, 0); // This will create progress with 0 XP
+                var newProgress = xpService.getCurrentProgress(memberId)
+                        .orElseThrow(() -> new IllegalArgumentException("Failed to create XP progress"));
+                return toResponse(newProgress);
+            }
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid device token or access denied: " + e.getMessage());
         }

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchCurrentXpProgress, fetchXpHistory, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
+import { fetchCurrentPet, PetResponse } from "../../shared/api/pets";
+import { getPetFoodEmoji, getPetFoodName } from "../pet/petFoodUtils";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores";
 
@@ -13,6 +15,7 @@ const XP_PER_LEVEL = 24;
 export function XpDashboard({ onNavigate }: XpDashboardProps) {
   const [progress, setProgress] = useState<XpProgressResponse | null>(null);
   const [history, setHistory] = useState<XpHistoryResponse[]>([]);
+  const [pet, setPet] = useState<PetResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,12 +23,14 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
     const load = async () => {
       try {
         setLoading(true);
-        const [progressData, historyData] = await Promise.all([
+        const [progressData, historyData, petData] = await Promise.all([
           fetchCurrentXpProgress().catch(() => null),
-          fetchXpHistory().catch(() => [])
+          fetchXpHistory().catch(() => []),
+          fetchCurrentPet().catch(() => null)
         ]);
         setProgress(progressData);
         setHistory(historyData);
+        setPet(petData);
       } catch (e) {
         console.error("Error loading XP data:", e);
         setError("Kunde inte ladda XP-data.");
@@ -64,7 +69,7 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
                 </button>
               )}
               <div style={{ flex: 1 }}>
-                <h2 className="view-title" style={{ margin: 0 }}>XP & Level</h2>
+                <h2 className="view-title" style={{ margin: 0 }}>Mat & Level</h2>
               </div>
             </div>
           </div>
@@ -78,6 +83,8 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
 
   const progressPercentage = (progress.xpInCurrentLevel / XP_PER_LEVEL) * 100;
   const monthNames = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
+  const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
+  const foodName = pet ? getPetFoodName(pet.petType) : "mat";
 
   return (
     <div className="xp-dashboard">
@@ -95,7 +102,7 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
               </button>
             )}
             <div style={{ flex: 1 }}>
-              <h2 className="view-title" style={{ margin: 0 }}>XP & Level</h2>
+              <h2 className="view-title" style={{ margin: 0 }}>Mat & Level</h2>
               <p className="daily-tasks-date" style={{ margin: 0 }}>
                 {monthNames[progress.month - 1]} {progress.year}
               </p>
@@ -114,7 +121,7 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
             Level {progress.currentLevel}
           </h2>
           <p style={{ margin: "6px 0 0", fontSize: "1rem", color: "#6b6b6b" }}>
-            {progress.currentXp} XP
+            {progress.currentXp} {foodEmoji} {foodName}
           </p>
         </div>
 
@@ -130,7 +137,7 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
             gap: "4px"
           }}>
             <span>Progress till Level {Math.min(progress.currentLevel + 1, MAX_LEVEL)}</span>
-            <span>{progress.xpInCurrentLevel} / {XP_PER_LEVEL} XP</span>
+            <span>{progress.xpInCurrentLevel} / {XP_PER_LEVEL} {foodEmoji}</span>
           </div>
           <div style={{
             width: "100%",
@@ -155,7 +162,7 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
               color: "#6b6b6b",
               textAlign: "center"
             }}>
-              {progress.xpForNextLevel} XP kvar till nästa level
+              {progress.xpForNextLevel} {foodEmoji} kvar till nästa level
             </p>
           )}
         </div>
@@ -179,10 +186,10 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#2d5a2d" }}>
-              {progress.currentXp}
+              {progress.currentXp} {foodEmoji}
             </div>
             <div style={{ fontSize: "0.85rem", color: "#6b6b6b" }}>
-              Total XP
+              Total {foodName}
             </div>
           </div>
         </div>
@@ -221,7 +228,7 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
                       Level {h.finalLevel}
                     </div>
                     <div style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>
-                      {h.finalXp} XP
+                      {h.finalXp} {foodEmoji}
                     </div>
                   </div>
                 </div>
