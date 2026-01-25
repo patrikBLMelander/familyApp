@@ -35,6 +35,12 @@ public record CalendarEvent(
         YEARLY
     }
 
+    public enum OccurrenceScope {
+        THIS,              // Only this occurrence
+        THIS_AND_FOLLOWING, // This and all future occurrences
+        ALL                // All occurrences in the series
+    }
+
     public boolean isRecurring() {
         return recurringType != null;
     }

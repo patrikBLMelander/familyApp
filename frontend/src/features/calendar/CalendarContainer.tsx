@@ -279,9 +279,10 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
           members={members}
           currentUserRole={currentUserRole}
           currentUserId={currentMemberId}
-          onSave={(eventData) => {
+          allEvents={events}
+          onSave={(eventData, scope, occurrenceDate) => {
             if (editingEvent) {
-              void handleUpdateEvent(editingEvent.id, eventData);
+              void handleUpdateEvent(editingEvent.id, eventData, scope, occurrenceDate);
             } else {
               void handleCreateEvent(eventData);
             }

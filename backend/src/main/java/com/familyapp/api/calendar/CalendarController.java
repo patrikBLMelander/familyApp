@@ -138,32 +138,82 @@ public class CalendarController {
             }
         }
         
-        var event = service.updateEvent(
-                eventId,
-                request.categoryId(),
-                request.title(),
-                request.description(),
-                request.startDateTime(),
-                request.endDateTime(),
-                request.isAllDay() != null ? request.isAllDay() : false,
-                request.location(),
-                request.participantIds() != null ? request.participantIds() : Set.of(),
-                recurringType,
-                request.recurringInterval(),
-                request.recurringEndDate(),
-                request.recurringEndCount(),
-                request.isTask(),
-                request.xpPoints(),
-                request.isRequired()
-        );
+        CalendarEvent event;
+        
+        // If scope is provided, use updateEventWithScope
+        if (request.scope() != null && request.occurrenceDate() != null) {
+            CalendarEvent.OccurrenceScope scope;
+            try {
+                scope = CalendarEvent.OccurrenceScope.valueOf(request.scope());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid scope: " + request.scope());
+            }
+            
+            event = service.updateEventWithScope(
+                    eventId,
+                    request.occurrenceDate(),
+                    scope,
+                    request.categoryId(),
+                    request.title(),
+                    request.description(),
+                    request.startDateTime(),
+                    request.endDateTime(),
+                    request.isAllDay() != null ? request.isAllDay() : false,
+                    request.location(),
+                    request.participantIds() != null ? request.participantIds() : Set.of(),
+                    recurringType,
+                    request.recurringInterval(),
+                    request.recurringEndDate(),
+                    request.recurringEndCount(),
+                    request.isTask(),
+                    request.xpPoints(),
+                    request.isRequired()
+            );
+        } else {
+            // Normal update (no scope)
+            event = service.updateEvent(
+                    eventId,
+                    request.categoryId(),
+                    request.title(),
+                    request.description(),
+                    request.startDateTime(),
+                    request.endDateTime(),
+                    request.isAllDay() != null ? request.isAllDay() : false,
+                    request.location(),
+                    request.participantIds() != null ? request.participantIds() : Set.of(),
+                    recurringType,
+                    request.recurringInterval(),
+                    request.recurringEndDate(),
+                    request.recurringEndCount(),
+                    request.isTask(),
+                    request.xpPoints(),
+                    request.isRequired()
+            );
+        }
         
         return toResponse(event);
     }
 
     @DeleteMapping("/events/{eventId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteEvent(@PathVariable("eventId") UUID eventId) {
-        service.deleteEvent(eventId);
+    public void deleteEvent(
+            @PathVariable("eventId") UUID eventId,
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "occurrenceDate", required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate occurrenceDate
+    ) {
+        // If scope is provided, use deleteEventWithScope
+        if (scope != null && occurrenceDate != null) {
+            CalendarEvent.OccurrenceScope occurrenceScope;
+            try {
+                occurrenceScope = CalendarEvent.OccurrenceScope.valueOf(scope);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid scope: " + scope);
+            }
+            service.deleteEventWithScope(eventId, occurrenceDate, occurrenceScope);
+        } else {
+            // Normal delete (no scope)
+            service.deleteEvent(eventId);
+        }
     }
 
     @GetMapping("/categories")
@@ -406,7 +456,10 @@ public class CalendarController {
             Integer recurringEndCount,
             Boolean isTask,  // TRUE = "Dagens Att Göra", FALSE = vanlig event
             Integer xpPoints,  // XP-poäng (only used when isTask = TRUE)
-            Boolean isRequired  // TRUE = obligatorisk, FALSE = extra (only used when isTask = TRUE)
+            Boolean isRequired,  // TRUE = obligatorisk, FALSE = extra (only used when isTask = TRUE)
+            String scope,  // For recurring events: "THIS", "THIS_AND_FOLLOWING", "ALL"
+            @DateTimeFormat(pattern = "yyyy-MM-dd")
+            LocalDate occurrenceDate  // For recurring events: which occurrence to modify
     ) {
     }
 

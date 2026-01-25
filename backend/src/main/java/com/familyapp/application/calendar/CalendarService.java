@@ -13,6 +13,8 @@ import com.familyapp.infrastructure.calendar.CalendarEventJpaRepository;
 import com.familyapp.infrastructure.calendar.CalendarEventTaskCompletionEntity;
 import com.familyapp.application.cache.CacheService;
 import com.familyapp.infrastructure.calendar.CalendarEventTaskCompletionJpaRepository;
+import com.familyapp.infrastructure.calendar.CalendarEventExceptionEntity;
+import com.familyapp.infrastructure.calendar.CalendarEventExceptionJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -39,6 +41,7 @@ public class CalendarService {
     private final FamilyMemberService memberService;
     private final FamilyJpaRepository familyRepository;
     private final CalendarEventTaskCompletionJpaRepository completionRepository;
+    private final CalendarEventExceptionJpaRepository exceptionRepository;
     private final XpService xpService;
     private final CacheService cacheService;
     private final CollectedFoodService foodService;
@@ -50,6 +53,7 @@ public class CalendarService {
             FamilyMemberService memberService,
             FamilyJpaRepository familyRepository,
             CalendarEventTaskCompletionJpaRepository completionRepository,
+            CalendarEventExceptionJpaRepository exceptionRepository,
             XpService xpService,
             CacheService cacheService,
             CollectedFoodService foodService
@@ -61,6 +65,7 @@ public class CalendarService {
         this.familyRepository = familyRepository;
         this.foodService = foodService;
         this.completionRepository = completionRepository;
+        this.exceptionRepository = exceptionRepository;
         this.xpService = xpService;
         this.cacheService = cacheService;
     }
@@ -70,6 +75,13 @@ public class CalendarService {
         var baseEvents = eventRepository.findByFamilyIdAndDateRange(familyId, startDate, endDate).stream()
                 .map(this::toDomain)
                 .toList();
+        
+        // Get all modified event IDs from exceptions (to filter them out from baseEvents to avoid duplicates)
+        var allExceptionEntities = exceptionRepository.findAll();
+        var modifiedEventIds = allExceptionEntities.stream()
+                .filter(e -> e.getModifiedEvent() != null)
+                .map(e -> e.getModifiedEvent().getId())
+                .collect(java.util.stream.Collectors.toSet());
         
         // Get recurring events that might generate instances in this range
         // Optimized: Only get recurring events that could potentially generate instances in the date range
@@ -92,16 +104,80 @@ public class CalendarService {
                 .toList();
         
         // Filter out recurring base events since we'll generate instances for them
+        // Also filter out modified events (they'll be added via exceptions)
         var nonRecurringBaseEvents = baseEvents.stream()
-                .filter(event -> !event.isRecurring())
+                .filter(event -> !event.isRecurring() && !modifiedEventIds.contains(event.id()))
                 .toList();
         
         var result = new java.util.ArrayList<CalendarEvent>(nonRecurringBaseEvents);
         
-        // Generate recurring instances only for events that could match the range
-        for (var recurringEvent : allRecurringEvents) {
-            var instances = generateRecurringInstances(recurringEvent, startDate, endDate);
-            result.addAll(instances);
+        // Batch fetch all exceptions to avoid N+1 query problem
+        // If there are no recurring events, skip the batch fetch
+        if (!allRecurringEvents.isEmpty()) {
+            var recurringEventIds = allRecurringEvents.stream()
+                    .map(CalendarEvent::id)
+                    .toList();
+            
+            // Batch fetch all exceptions for all recurring events in one query
+            var allExceptions = exceptionRepository.findByEventIds(recurringEventIds);
+            
+            // Batch fetch all excluded dates for all recurring events in one query
+            var allExcludedDatesData = exceptionRepository.findExcludedOccurrenceDatesForEvents(recurringEventIds);
+            
+            // Group exceptions by eventId for efficient lookup
+            var exceptionsByEventId = allExceptions.stream()
+                    .collect(Collectors.groupingBy(exception -> exception.getEvent().getId()));
+            
+            // Group excluded dates by eventId for efficient lookup
+            var excludedDatesByEventId = new java.util.HashMap<UUID, java.util.Set<LocalDate>>();
+            for (var row : allExcludedDatesData) {
+                var eventId = (UUID) row[0];
+                var occurrenceDate = (LocalDate) row[1];
+                excludedDatesByEventId.computeIfAbsent(eventId, k -> new java.util.HashSet<>()).add(occurrenceDate);
+            }
+            
+            // Generate recurring instances only for events that could match the range
+            for (var recurringEvent : allRecurringEvents) {
+                // Validate date range based on recurring type
+                validateDateRangeForRecurringType(recurringEvent.recurringType(), startDate, endDate);
+                
+                // Get excluded occurrence dates for this event from pre-fetched map
+                var excludedDatesSet = excludedDatesByEventId.getOrDefault(recurringEvent.id(), java.util.Collections.emptySet());
+                var excludedDates = new java.util.ArrayList<>(excludedDatesSet);
+                
+                var instances = generateRecurringInstances(recurringEvent, startDate, endDate, excludedDates);
+                result.addAll(instances);
+                
+                // Get modified events from exceptions (events created when editing a single occurrence)
+                var exceptions = exceptionsByEventId.getOrDefault(recurringEvent.id(), java.util.List.of());
+                for (var exception : exceptions) {
+                    if (exception.getModifiedEvent() != null) {
+                        var modifiedEventEntity = exception.getModifiedEvent();
+                        var modifiedEvent = toDomain(modifiedEventEntity);
+                        // Only include if modified event is within the date range
+                        if (!modifiedEvent.startDateTime().isBefore(startDate) && !modifiedEvent.startDateTime().isAfter(endDate)) {
+                            result.add(modifiedEvent);
+                        }
+                    }
+                }
+                
+                // Include base event if it's within the date range (for editing purposes)
+                // But only if no instances were generated for the base event's start date
+                // (to avoid duplicates)
+                var baseEventStart = recurringEvent.startDateTime();
+                if (!baseEventStart.isBefore(startDate) && !baseEventStart.isAfter(endDate)) {
+                    // Check if base event's start date is excluded
+                    if (!excludedDates.contains(baseEventStart.toLocalDate())) {
+                        // Check if there's already an instance for the base event's start date
+                        boolean hasInstanceForBaseDate = instances.stream()
+                                .anyMatch(instance -> instance.startDateTime().toLocalDate().equals(baseEventStart.toLocalDate()));
+                        if (!hasInstanceForBaseDate) {
+                            // Add base event if no instance exists for its start date
+                            result.add(recurringEvent);
+                        }
+                    }
+                }
+            }
         }
         
         return result.stream()
@@ -120,10 +196,89 @@ public class CalendarService {
         return getEventsForDateRange(familyId, now, defaultEndDate);
     }
     
+    /**
+     * Validates that the date range is acceptable for the given recurring type.
+     * Throws IllegalArgumentException if the range exceeds the maximum allowed.
+     * 
+     * Rules:
+     * - DAILY: max 1 year
+     * - WEEKLY: max 2 years
+     * - MONTHLY: max 3 years
+     * - YEARLY: max 10 years
+     */
+    private void validateDateRangeForRecurringType(
+            CalendarEvent.RecurringType recurringType,
+            LocalDateTime rangeStart,
+            LocalDateTime rangeEnd
+    ) {
+        if (recurringType == null) {
+            return; // Not a recurring event, no validation needed
+        }
+        
+        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(rangeStart, rangeEnd);
+        long maxDays;
+        
+        switch (recurringType) {
+            case DAILY -> maxDays = 365; // 1 year
+            case WEEKLY -> maxDays = 730; // 2 years
+            case MONTHLY -> maxDays = 1095; // 3 years
+            case YEARLY -> maxDays = 3650; // 10 years
+            default -> maxDays = 365; // Default to 1 year for safety
+        }
+        
+        if (daysBetween > maxDays) {
+            throw new IllegalArgumentException(
+                String.format("Date range exceeds maximum allowed for %s recurring events. " +
+                    "Maximum is %d days (approximately %s), but requested range is %d days.",
+                    recurringType.name(),
+                    maxDays,
+                    formatDaysAsYears(maxDays),
+                    daysBetween
+                )
+            );
+        }
+    }
+    
+    /**
+     * Helper method to format days as a human-readable string.
+     */
+    private String formatDaysAsYears(long days) {
+        if (days >= 3650) {
+            return String.format("%.1f years", days / 365.0);
+        } else if (days >= 365) {
+            return String.format("%.1f year%s", days / 365.0, days >= 730 ? "s" : "");
+        } else {
+            return String.format("%d days", days);
+        }
+    }
+    
+    /**
+     * Calculates a default recurring end date based on the recurring type.
+     * This ensures events don't recur indefinitely, which could cause memory issues.
+     * 
+     * Rules:
+     * - DAILY: 1 year from start date
+     * - WEEKLY: 2 years from start date
+     * - MONTHLY: 3 years from start date
+     * - YEARLY: 10 years from start date
+     */
+    private LocalDate calculateDefaultRecurringEndDate(
+            CalendarEvent.RecurringType recurringType,
+            LocalDate startDate
+    ) {
+        return switch (recurringType) {
+            case DAILY -> startDate.plusYears(1);
+            case WEEKLY -> startDate.plusYears(2);
+            case MONTHLY -> startDate.plusYears(3);
+            case YEARLY -> startDate.plusYears(10);
+        };
+    }
+    
     private List<CalendarEvent> generateRecurringInstances(
             CalendarEvent baseEvent,
             LocalDateTime rangeStart,
-            LocalDateTime rangeEnd
+            LocalDateTime rangeEnd,
+            List<LocalDate> excludedDates
     ) {
         var instances = new java.util.ArrayList<CalendarEvent>();
         var recurringType = baseEvent.recurringType();
@@ -169,7 +324,18 @@ public class CalendarService {
             }
             
             // Only add if within range (>= rangeStart and <= rangeEnd)
+            // and not excluded
             if (!currentStart.isBefore(rangeStart) && !currentStart.isAfter(rangeEnd)) {
+                // Skip if this occurrence is excluded
+                if (excludedDates.contains(currentStart.toLocalDate())) {
+                    iteration++;
+                    currentStart = getNextOccurrence(currentStart, recurringType, interval);
+                    if (currentEnd != null) {
+                        currentEnd = currentStart.plus(duration);
+                    }
+                    continue;
+                }
+                
                 // Create instance
                 instances.add(new CalendarEvent(
                         baseEvent.id(),
@@ -291,6 +457,13 @@ public class CalendarService {
         if (recurringType != null) {
             entity.setRecurringType(recurringType.name());
             entity.setRecurringInterval(recurringInterval != null ? recurringInterval : 1);
+            
+            // If no end date or end count is specified, set a default end date based on recurring type
+            // This prevents events from recurring indefinitely and causing memory issues
+            if (recurringEndDate == null && recurringEndCount == null) {
+                recurringEndDate = calculateDefaultRecurringEndDate(recurringType, startDateTime.toLocalDate());
+            }
+            
             entity.setRecurringEndDate(recurringEndDate);
             entity.setRecurringEndCount(recurringEndCount);
         } else {
@@ -372,7 +545,15 @@ public class CalendarService {
         if (recurringType != null) {
             entity.setRecurringType(recurringType.name());
             entity.setRecurringInterval(recurringInterval != null ? recurringInterval : 1);
-            entity.setRecurringEndDate(recurringEndDate);
+            
+            // If no end date or end count is specified, set a default end date based on recurring type
+            // This prevents events from recurring indefinitely and causing memory issues
+            LocalDate finalRecurringEndDate = recurringEndDate;
+            if (finalRecurringEndDate == null && recurringEndCount == null) {
+                finalRecurringEndDate = calculateDefaultRecurringEndDate(recurringType, startDateTime.toLocalDate());
+            }
+            
+            entity.setRecurringEndDate(finalRecurringEndDate);
             entity.setRecurringEndCount(recurringEndCount);
         } else {
             entity.setRecurringType(null);
@@ -413,6 +594,236 @@ public class CalendarService {
 
     public void deleteEvent(UUID eventId) {
         eventRepository.deleteById(eventId);
+    }
+
+    @CacheEvict(value = "events", allEntries = true)
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteEventWithScope(UUID eventId, LocalDate occurrenceDate, CalendarEvent.OccurrenceScope scope) {
+        // Validate inputs
+        if (eventId == null) {
+            throw new IllegalArgumentException("eventId cannot be null");
+        }
+        if (occurrenceDate == null) {
+            throw new IllegalArgumentException("occurrenceDate cannot be null");
+        }
+        if (scope == null) {
+            throw new IllegalArgumentException("scope cannot be null");
+        }
+        
+        var entity = eventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+        
+        var baseEvent = toDomain(entity);
+        
+        if (!baseEvent.isRecurring()) {
+            // Not a recurring event, just delete it
+            eventRepository.deleteById(eventId);
+            return;
+        }
+        
+        switch (scope) {
+            case THIS -> {
+                // Check if exception already exists (e.g., from a previous edit)
+                var existingException = exceptionRepository.findByEventIdAndOccurrenceDate(eventId, occurrenceDate);
+                
+                if (existingException.isPresent()) {
+                    var exception = existingException.get();
+                    // If there's a modified event, delete it first
+                    if (exception.getModifiedEvent() != null) {
+                        eventRepository.deleteById(exception.getModifiedEvent().getId());
+                    }
+                    // Delete the exception (it will be recreated below if needed, but for delete we just exclude)
+                    exceptionRepository.delete(exception);
+                }
+                
+                // Create exception for this occurrence to exclude it
+                var exception = new CalendarEventExceptionEntity();
+                exception.setId(UUID.randomUUID());
+                exception.setEvent(entity);
+                exception.setOccurrenceDate(occurrenceDate);
+                exception.setCreatedAt(OffsetDateTime.now());
+                // No modifiedEvent for delete operations
+                exceptionRepository.save(exception);
+            }
+            case THIS_AND_FOLLOWING -> {
+                // Set recurring end date to day before this occurrence
+                var endDate = occurrenceDate.minusDays(1);
+                entity.setRecurringEndDate(endDate);
+                entity.setUpdatedAt(OffsetDateTime.now());
+                eventRepository.save(entity);
+            }
+            case ALL -> {
+                // Delete entire event (cascade will handle exceptions)
+                eventRepository.deleteById(eventId);
+            }
+        }
+    }
+
+    @CacheEvict(value = "events", allEntries = true)
+    @Transactional(rollbackFor = Exception.class)
+    public CalendarEvent updateEventWithScope(
+            UUID eventId,
+            LocalDate occurrenceDate,
+            CalendarEvent.OccurrenceScope scope,
+            UUID categoryId,
+            String title,
+            String description,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            boolean isAllDay,
+            String location,
+            Set<UUID> participantIds,
+            CalendarEvent.RecurringType recurringType,
+            Integer recurringInterval,
+            java.time.LocalDate recurringEndDate,
+            Integer recurringEndCount,
+            Boolean isTask,
+            Integer xpPoints,
+            Boolean isRequired
+    ) {
+        // Validate inputs
+        if (eventId == null) {
+            throw new IllegalArgumentException("eventId cannot be null");
+        }
+        if (occurrenceDate == null) {
+            throw new IllegalArgumentException("occurrenceDate cannot be null");
+        }
+        if (scope == null) {
+            throw new IllegalArgumentException("scope cannot be null");
+        }
+        
+        var entity = eventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+        
+        var baseEvent = toDomain(entity);
+        
+        // IMPORTANT: For scope THIS, we should NOT modify the base event's recurring settings
+        // The base event should remain unchanged, we only create an exception and a new modified event
+        
+        if (!baseEvent.isRecurring()) {
+            // Not a recurring event, just update it normally
+            return updateEvent(eventId, categoryId, title, description, startDateTime, endDateTime, 
+                    isAllDay, location, participantIds, recurringType, recurringInterval, 
+                    recurringEndDate, recurringEndCount, isTask, xpPoints, isRequired);
+        }
+        
+        // Validate that recurringType is provided for scopes that require it
+        if ((scope == CalendarEvent.OccurrenceScope.THIS_AND_FOLLOWING || scope == CalendarEvent.OccurrenceScope.ALL) 
+                && recurringType == null) {
+            throw new IllegalArgumentException("recurringType is required for scope " + scope);
+        }
+        
+        switch (scope) {
+            case THIS -> {
+                // Check if exception already exists for this occurrence
+                // Handle potential race conditions: if two requests try to create exception simultaneously,
+                // the UNIQUE constraint will prevent duplicates, but we should handle it gracefully
+                var existingException = exceptionRepository.findByEventIdAndOccurrenceDate(eventId, occurrenceDate);
+                
+                CalendarEventExceptionEntity exception;
+                UUID oldModifiedEventId = null;
+                
+                if (existingException.isPresent()) {
+                    // Update existing exception
+                    exception = existingException.get();
+                    // If there's an existing modified event, we need to delete it to avoid orphaned events
+                    if (exception.getModifiedEvent() != null) {
+                        oldModifiedEventId = exception.getModifiedEvent().getId();
+                    }
+                } else {
+                    // Create new exception for original occurrence
+                    exception = new CalendarEventExceptionEntity();
+                    exception.setId(UUID.randomUUID());
+                    exception.setEvent(entity);
+                    exception.setOccurrenceDate(occurrenceDate);
+                    exception.setCreatedAt(OffsetDateTime.now());
+                    
+                    // Try to save, but handle race condition where another thread creates it between check and save
+                    try {
+                        exceptionRepository.save(exception);
+                    } catch (DataIntegrityViolationException e) {
+                        // Another thread created the exception, fetch it and use that instead
+                        existingException = exceptionRepository.findByEventIdAndOccurrenceDate(eventId, occurrenceDate);
+                        if (existingException.isEmpty()) {
+                            throw new IllegalStateException("Failed to create exception and could not find existing one", e);
+                        }
+                        exception = existingException.get();
+                        if (exception.getModifiedEvent() != null) {
+                            oldModifiedEventId = exception.getModifiedEvent().getId();
+                        }
+                    }
+                }
+                
+                // Create new event for modified occurrence
+                var newEvent = createEvent(
+                        baseEvent.familyId(),
+                        categoryId,
+                        title,
+                        description,
+                        startDateTime,
+                        endDateTime,
+                        isAllDay,
+                        location,
+                        baseEvent.createdById(),
+                        participantIds,
+                        null, // Not recurring
+                        null,
+                        null,
+                        null,
+                        isTask != null ? isTask : baseEvent.isTask(),
+                        xpPoints,
+                        isRequired != null ? isRequired : baseEvent.isRequired()
+                );
+                
+                var newEventEntity = eventRepository.findById(newEvent.id()).orElseThrow();
+                exception.setModifiedEvent(newEventEntity);
+                // Save or update exception (JPA will handle whether it's insert or update)
+                exceptionRepository.save(exception);
+                
+                // Delete old modified event if it existed (after saving new exception to ensure transaction consistency)
+                if (oldModifiedEventId != null) {
+                    eventRepository.deleteById(oldModifiedEventId);
+                }
+                
+                return newEvent;
+            }
+            case THIS_AND_FOLLOWING -> {
+                // Set recurring end date to day before this occurrence for original event
+                var endDate = occurrenceDate.minusDays(1);
+                entity.setRecurringEndDate(endDate);
+                entity.setUpdatedAt(OffsetDateTime.now());
+                eventRepository.save(entity);
+                
+                // Create new recurring event starting from this occurrence
+                return createEvent(
+                        baseEvent.familyId(),
+                        categoryId,
+                        title,
+                        description,
+                        startDateTime,
+                        endDateTime,
+                        isAllDay,
+                        location,
+                        baseEvent.createdById(),
+                        participantIds,
+                        recurringType,
+                        recurringInterval,
+                        recurringEndDate,
+                        recurringEndCount,
+                        isTask != null ? isTask : baseEvent.isTask(),
+                        xpPoints,
+                        isRequired != null ? isRequired : baseEvent.isRequired()
+                );
+            }
+            case ALL -> {
+                // Update entire recurring event
+                return updateEvent(eventId, categoryId, title, description, startDateTime, endDateTime,
+                        isAllDay, location, participantIds, recurringType, recurringInterval,
+                        recurringEndDate, recurringEndCount, isTask, xpPoints, isRequired);
+            }
+        }
+        
+        throw new IllegalArgumentException("Invalid scope: " + scope);
     }
 
     @Transactional(readOnly = true)

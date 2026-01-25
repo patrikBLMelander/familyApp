@@ -161,7 +161,9 @@ export async function updateCalendarEvent(
   recurringEndCount?: number | null,
   isTask?: boolean,
   xpPoints?: number | null,
-  isRequired?: boolean
+  isRequired?: boolean,
+  scope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL",
+  occurrenceDate?: string // YYYY-MM-DD format
 ): Promise<CalendarEventResponse> {
   const response = await fetch(`${API_BASE_URL}/calendar/events/${eventId}`, {
     method: "PATCH",
@@ -182,13 +184,25 @@ export async function updateCalendarEvent(
       isTask: isTask !== undefined ? isTask : false,
       xpPoints: xpPoints !== undefined ? xpPoints : null,
       isRequired: isRequired !== undefined ? isRequired : true,
+      scope: scope || null,
+      occurrenceDate: occurrenceDate || null,
     }),
   });
   return handleJson<CalendarEventResponse>(response);
 }
 
-export async function deleteCalendarEvent(eventId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/calendar/events/${eventId}`, {
+export async function deleteCalendarEvent(
+  eventId: string,
+  scope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL",
+  occurrenceDate?: string // YYYY-MM-DD format
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (scope && occurrenceDate) {
+    params.append("scope", scope);
+    params.append("occurrenceDate", occurrenceDate);
+  }
+  const url = `${API_BASE_URL}/calendar/events/${eventId}${params.toString() ? `?${params.toString()}` : ""}`;
+  const response = await fetch(url, {
     method: "DELETE",
     headers: getHeaders(),
   });

@@ -5,6 +5,7 @@ import { fetchMemberPet, PetResponse } from "../../../shared/api/pets";
 import { getPetFoodEmoji, getPetFoodName } from "../../pet/petFoodUtils";
 import { formatDateTimeRange } from "../utils/dateFormatters";
 import { MAX_RECURRING_DAYS } from "../constants";
+import { RecurringEventDialog } from "./RecurringEventDialog";
 
 type RollingViewProps = {
   showTasksOnly: boolean;
@@ -68,6 +69,8 @@ function getAllDayEventDates(event: CalendarEventResponse): string[] {
   return dates;
 }
 
+const SWIPE_THRESHOLD = 50; // px to trigger action
+
 export function RollingView({
   showTasksOnly,
   showAllMembers,
@@ -108,6 +111,65 @@ export function RollingView({
   const [hasSwiped, setHasSwiped] = useState(false);
   const [quickAddMemberId, setQuickAddMemberId] = useState<string | null>(null);
   const swipeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recurringDialogEvent, setRecurringDialogEvent] = useState<{ event: CalendarEventResponse; occurrenceDate: string; action: "delete" | "edit" } | null>(null);
+  
+  // Helper function to check if an event is part of a recurring series
+  // An event is part of a recurring series if:
+  // 1. It has recurringType (base event), OR
+  // 2. It doesn't have recurringType but there are other events with the same ID that have recurringType, OR
+  // 3. There are multiple events with the same ID and different startDateTime (instances)
+  const isRecurringEvent = useCallback((event: CalendarEventResponse): boolean => {
+    if (event.recurringType) {
+      return true; // Base recurring event
+    }
+    // Check if there are other events with same ID
+    const eventsWithSameId = events.filter(e => e.id === event.id);
+    if (eventsWithSameId.length <= 1) {
+      return false; // Only one event with this ID, not recurring
+    }
+    // If there are multiple events with same ID, check if:
+    // 1. Any has recurringType (base event), OR
+    // 2. They have different startDateTime (instances of recurring event)
+    const hasBaseEvent = eventsWithSameId.some(e => e.recurringType !== null);
+    if (hasBaseEvent) {
+      return true;
+    }
+    // Check if there are multiple events with same ID but different startDateTime
+    // This indicates instances of a recurring event (even if base event is not in the list)
+    const uniqueStartDates = new Set(eventsWithSameId.map(e => e.startDateTime));
+    return uniqueStartDates.size > 1;
+  }, [events]);
+  
+  // Get occurrence date from event (for instances, use startDateTime date part)
+  const getOccurrenceDate = useCallback((event: CalendarEventResponse): string => {
+    return event.startDateTime.substring(0, 10); // YYYY-MM-DD
+  }, []);
+  
+  // Handle delete with recurring check
+  const handleDeleteWithRecurringCheck = useCallback((event: CalendarEventResponse) => {
+    if (isRecurringEvent(event)) {
+      setRecurringDialogEvent({
+        event,
+        occurrenceDate: getOccurrenceDate(event),
+        action: "delete",
+      });
+    } else {
+      void handleDeleteEvent(event.id);
+    }
+  }, [isRecurringEvent, getOccurrenceDate, handleDeleteEvent]);
+  
+  // Handle edit with recurring check
+  const handleEditWithRecurringCheck = useCallback((event: CalendarEventResponse) => {
+    if (isRecurringEvent(event)) {
+      setRecurringDialogEvent({
+        event,
+        occurrenceDate: getOccurrenceDate(event),
+        action: "edit",
+      });
+    } else {
+      setEditingEvent(event);
+    }
+  }, [isRecurringEvent, getOccurrenceDate, setEditingEvent]);
   
   // Load pets for all children
   useEffect(() => {
@@ -986,21 +1048,29 @@ export function RollingView({
                               // Swipe left - show delete button
                               setSwipedEventId(event.id);
                               setSwipeOffset(Math.max(deltaX, -80));
-                            } else if (deltaX > 0 && isSwiped) {
-                              // Swipe right - close swipe
-                              setSwipedEventId(null);
-                              setSwipeOffset(0);
+                            } else if (deltaX > 0) {
+                              // Swipe right - show edit button
+                              setSwipedEventId(event.id);
+                              setSwipeOffset(Math.min(deltaX, 80));
                             }
                           }
                         }}
                         onTouchEnd={() => {
                           if (isSwiped) {
-                            // If swiped more than 50px, keep it open, otherwise close
-                            if (swipeOffset > -50) {
+                            // If swiped left more than threshold, keep delete button open
+                            if (swipeOffset < -SWIPE_THRESHOLD) {
+                              setSwipeOffset(-80);
+                            } 
+                            // If swiped right more than threshold, trigger edit
+                            else if (swipeOffset > SWIPE_THRESHOLD) {
+                              handleEditWithRecurringCheck(event);
                               setSwipedEventId(null);
                               setSwipeOffset(0);
-                            } else {
-                              setSwipeOffset(-80);
+                            } 
+                            // Otherwise close swipe
+                            else {
+                              setSwipedEventId(null);
+                              setSwipeOffset(0);
                             }
                           }
                           // Reset after a short delay to allow click event to check hasSwiped
@@ -1017,7 +1087,7 @@ export function RollingView({
                         onClick={(e) => {
                           // Only edit if not swiped and user has permission
                           if (!hasSwiped && !isSwiped && canEdit) {
-                            setEditingEvent(event);
+                            handleEditWithRecurringCheck(event);
                           }
                         }}
                       >
@@ -1101,7 +1171,7 @@ export function RollingView({
                                   className="todo-action-button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setEditingEvent(event);
+                                    handleEditWithRecurringCheck(event);
                                   }}
                                   style={{ fontSize: "0.8rem", padding: "4px 8px" }}
                                 >
@@ -1112,7 +1182,7 @@ export function RollingView({
                                   className="todo-action-button-danger"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    void handleDeleteEvent(event.id);
+                                    handleDeleteWithRecurringCheck(event);
                                   }}
                                   style={{ fontSize: "0.8rem", padding: "4px 8px", borderRadius: "8px" }}
                                 >
@@ -1122,34 +1192,38 @@ export function RollingView({
                             )}
                           </div>
                         </div>
-                        {/* Swipe delete button - shown when swiped on mobile */}
-                        {isSwiped && canEdit && (
+                        {/* Swipe edit button - shown when swiped right on mobile */}
+                        {isSwiped && canEdit && swipeOffset > 0 && (
                           <button
                             type="button"
-                            className="todo-action-button-danger"
+                            className="todo-edit-button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              void handleDeleteEvent(event.id);
+                              handleEditWithRecurringCheck(event);
                               setSwipedEventId(null);
                               setSwipeOffset(0);
                             }}
-                            style={{
-                              position: "absolute",
-                              right: 0,
-                              top: 0,
-                              bottom: 0,
-                              width: "80px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              background: "#dc3545",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "0 8px 8px 0",
-                              fontSize: "0.85rem",
-                              fontWeight: 600,
-                              cursor: "pointer",
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onTouchMove={(e) => e.stopPropagation()}
+                            onTouchEnd={(e) => e.stopPropagation()}
+                          >
+                            Redigera
+                          </button>
+                        )}
+                        {/* Swipe delete button - shown when swiped left on mobile */}
+                        {isSwiped && canEdit && swipeOffset < 0 && (
+                          <button
+                            type="button"
+                            className="todo-delete-button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteWithRecurringCheck(event);
+                              setSwipedEventId(null);
+                              setSwipeOffset(0);
                             }}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onTouchMove={(e) => e.stopPropagation()}
+                            onTouchEnd={(e) => e.stopPropagation()}
                           >
                             Ta bort
                           </button>
@@ -1167,6 +1241,31 @@ export function RollingView({
           )}
         </div>
         )
+      )}
+      
+      {/* Recurring event dialog */}
+      {recurringDialogEvent && (
+        <RecurringEventDialog
+          event={recurringDialogEvent.event}
+          occurrenceDate={recurringDialogEvent.occurrenceDate}
+          action={recurringDialogEvent.action}
+          onConfirm={(scope) => {
+            if (recurringDialogEvent.action === "delete") {
+              void handleDeleteEvent(recurringDialogEvent.event.id, scope, recurringDialogEvent.occurrenceDate);
+            } else {
+              // For edit, we need to set the event and scope, then open the form
+              // We'll handle this in useCalendarEvents
+              setEditingEvent(recurringDialogEvent.event);
+              // Store scope and occurrenceDate for use in EventForm
+              (recurringDialogEvent.event as any).__recurringScope = scope;
+              (recurringDialogEvent.event as any).__occurrenceDate = recurringDialogEvent.occurrenceDate;
+            }
+            setRecurringDialogEvent(null);
+          }}
+          onCancel={() => {
+            setRecurringDialogEvent(null);
+          }}
+        />
       )}
     </>
   );

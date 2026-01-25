@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { CalendarEventResponse, CalendarEventCategoryResponse } from "../../../shared/api/calendar";
 import { FamilyMemberResponse } from "../../../shared/api/familyMembers";
 import { EventFormData } from "../types/eventForm";
@@ -10,12 +10,13 @@ export type EventFormProps = {
   members: FamilyMemberResponse[];
   currentUserRole?: "CHILD" | "ASSISTANT" | "PARENT" | null;
   currentUserId?: string | null;
-  onSave: (eventData: EventFormData) => void;
+  onSave: (eventData: EventFormData, scope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL", occurrenceDate?: string) => void;
   onDelete?: () => void;
   onCancel: () => void;
+  allEvents?: CalendarEventResponse[]; // All events to find base recurring event
 };
 
-export function EventForm({ event, initialStartDate, categories, members, currentUserRole, currentUserId, onSave, onDelete, onCancel }: EventFormProps) {
+export function EventForm({ event, initialStartDate, categories, members, currentUserRole, currentUserId, onSave, onDelete, onCancel, allEvents }: EventFormProps) {
   const [title, setTitle] = useState(event?.title || "");
   const [description, setDescription] = useState(event?.description || "");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -82,26 +83,99 @@ export function EventForm({ event, initialStartDate, categories, members, curren
   const [participantIds, setParticipantIds] = useState<Set<string>>(
     new Set(event?.participantIds || [])
   );
-  const [isRecurring, setIsRecurring] = useState(!!event?.recurringType);
+  // Find base recurring event if this is an instance (recurringType is null but there are other events with same ID)
+  const effectiveEvent = useMemo(() => {
+    if (!event) return null;
+    
+    // If event has recurringType, it's the base event
+    if (event.recurringType) {
+      return event;
+    }
+    
+    // Otherwise, try to find the base event with same ID
+    // Base events should now be included in allEvents if they're within the date range
+    if (allEvents) {
+      const baseEvent = allEvents.find(e => e.id === event.id && e.recurringType);
+      if (baseEvent) {
+        return baseEvent;
+      }
+    }
+    
+    // If we can't find base event, it means base event is outside date range
+    // In this case, we'll use the instance but we know it's part of a recurring series
+    // because instances have the same ID as the base event
+    // We'll need to fetch the base event from backend, but for now return the instance
+    return event;
+  }, [event, allEvents]);
+  
+  // Get scope and occurrenceDate if they were set (from recurring dialog)
+  const recurringScope = (event as any)?.__recurringScope as "THIS" | "THIS_AND_FOLLOWING" | "ALL" | undefined;
+  const occurrenceDate = (event as any)?.__occurrenceDate as string | undefined;
+  
+  const [isRecurring, setIsRecurring] = useState(!!effectiveEvent?.recurringType);
   const [recurringType, setRecurringType] = useState<"DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "">(
-    (event?.recurringType as "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY") || ""
+    (effectiveEvent?.recurringType as "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY") || ""
   );
   const [recurringInterval, setRecurringInterval] = useState(
-    event?.recurringInterval?.toString() || "1"
+    effectiveEvent?.recurringInterval?.toString() || "1"
   );
   const [recurringEndDate, setRecurringEndDate] = useState(
-    event?.recurringEndDate ? new Date(event.recurringEndDate).toISOString().split("T")[0] : ""
+    effectiveEvent?.recurringEndDate ? new Date(effectiveEvent.recurringEndDate).toISOString().split("T")[0] : ""
   );
   const [recurringEndCount, setRecurringEndCount] = useState(
-    event?.recurringEndCount?.toString() || ""
+    effectiveEvent?.recurringEndCount?.toString() || ""
   );
   const [recurringEndType, setRecurringEndType] = useState<"never" | "date" | "count">(
-    event?.recurringEndDate ? "date" : event?.recurringEndCount ? "count" : "never"
+    effectiveEvent?.recurringEndDate ? "date" : effectiveEvent?.recurringEndCount ? "count" : "never"
   );
   const [showRecurringTypeDropdown, setShowRecurringTypeDropdown] = useState(false);
   const [isTask, setIsTask] = useState(event?.isTask || false);
   const [xpPoints, setXpPoints] = useState(event?.xpPoints?.toString() || "1");
   const [isRequired, setIsRequired] = useState(event?.isRequired !== undefined ? event.isRequired : true);
+
+  // Update isRecurring and recurring fields when event changes
+  useEffect(() => {
+    if (!effectiveEvent) {
+      setIsRecurring(false);
+      return;
+    }
+    
+    // Check if this is a recurring event (either base event or instance)
+    const isRecurring = !!effectiveEvent.recurringType || 
+                       (event && !event.recurringType && allEvents?.some(e => e.id === event.id && e.recurringType));
+    
+    if (isRecurring && effectiveEvent.recurringType) {
+      // We have the base event with recurring info
+      setIsRecurring(true);
+      setRecurringType((effectiveEvent.recurringType as "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY") || "");
+      setRecurringInterval(effectiveEvent.recurringInterval?.toString() || "1");
+      setRecurringEndDate(effectiveEvent.recurringEndDate ? new Date(effectiveEvent.recurringEndDate).toISOString().split("T")[0] : "");
+      setRecurringEndCount(effectiveEvent.recurringEndCount?.toString() || "");
+      setRecurringEndType(effectiveEvent.recurringEndDate ? "date" : effectiveEvent.recurringEndCount ? "count" : "never");
+    } else if (isRecurring && !effectiveEvent.recurringType) {
+      // This is an instance, but we know it's recurring - try to find base event
+      const baseEvent = allEvents?.find(e => e.id === event?.id && e.recurringType);
+      if (baseEvent) {
+        setIsRecurring(true);
+        setRecurringType((baseEvent.recurringType as "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY") || "");
+        setRecurringInterval(baseEvent.recurringInterval?.toString() || "1");
+        setRecurringEndDate(baseEvent.recurringEndDate ? new Date(baseEvent.recurringEndDate).toISOString().split("T")[0] : "");
+        setRecurringEndCount(baseEvent.recurringEndCount?.toString() || "");
+        setRecurringEndType(baseEvent.recurringEndDate ? "date" : baseEvent.recurringEndCount ? "count" : "never");
+      } else {
+        // Base event not found - it's outside date range, but we know it's recurring
+        // Set isRecurring to true but leave fields empty (user can fill them)
+        setIsRecurring(true);
+      }
+    } else {
+      setIsRecurring(false);
+      setRecurringType("");
+      setRecurringInterval("1");
+      setRecurringEndDate("");
+      setRecurringEndCount("");
+      setRecurringEndType("never");
+    }
+  }, [effectiveEvent, event, allEvents]);
 
   // When isTask is true, automatically set isAllDay to true
   useEffect(() => {
@@ -162,6 +236,12 @@ export function EventForm({ event, initialStartDate, categories, members, curren
       endDateTimeStr = endDate || null;
     }
 
+    // Always pass scope and occurrenceDate if they were set (from recurring dialog)
+    // This is important because when editing a single occurrence, the modified event itself is not recurring,
+    // but we still need to pass the scope to tell the backend to create an exception
+    const scope = event && recurringScope ? recurringScope : undefined;
+    const occDate = event && occurrenceDate ? occurrenceDate : undefined;
+    
     onSave({
       title: title.trim(),
       description: description.trim() || undefined,
@@ -178,7 +258,7 @@ export function EventForm({ event, initialStartDate, categories, members, curren
       isTask: isTask,
       xpPoints: isTask ? (xpPoints ? parseInt(xpPoints, 10) : 1) : null,
       isRequired: isTask ? isRequired : true,
-    });
+    }, scope, occDate);
   };
 
   const toggleParticipant = (memberId: string) => {

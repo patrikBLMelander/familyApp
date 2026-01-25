@@ -85,7 +85,9 @@ export function useCalendarEvents(
 
   const handleUpdateEvent = useCallback(async (
     eventId: string,
-    eventData: EventFormData
+    eventData: EventFormData,
+    scope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL",
+    occurrenceDate?: string
   ) => {
     try {
       await updateCalendarEvent(
@@ -104,7 +106,9 @@ export function useCalendarEvents(
         eventData.recurringEndCount,
         eventData.isTask,
         eventData.xpPoints,
-        eventData.isRequired
+        eventData.isRequired,
+        scope,
+        occurrenceDate
       );
       await loadData();
       setEditingEvent(null);
@@ -115,12 +119,17 @@ export function useCalendarEvents(
     }
   }, [loadData, setError, setEditingEvent]);
 
-  const handleDeleteEvent = useCallback(async (eventId: string) => {
-    if (!confirm("Är du säker på att du vill ta bort detta event?")) {
+  const handleDeleteEvent = useCallback(async (
+    eventId: string,
+    scope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL",
+    occurrenceDate?: string
+  ) => {
+    // Only show confirm dialog if scope is not provided (old behavior for non-recurring events)
+    if (!scope && !confirm("Är du säker på att du vill ta bort detta event?")) {
       return;
     }
     try {
-      await deleteCalendarEvent(eventId);
+      await deleteCalendarEvent(eventId, scope, occurrenceDate);
       // Force replace to ensure deleted event is removed from list
       await loadData(true);
       setEditingEvent(null);
