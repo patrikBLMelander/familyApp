@@ -24,21 +24,27 @@ public class FamilyMemberController {
     public List<FamilyMemberResponse> getAllMembers(
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        UUID familyId = null;
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var member = service.getMemberByDeviceToken(deviceToken);
-                familyId = member.familyId();
-            } catch (IllegalArgumentException e) {
-                // Invalid token, return empty list
-                // This prevents unauthorized access to family members
-                return List.of();
-            }
-        } else {
-            // No device token provided, return empty list
-            // This ensures only authenticated users can see family members
+        // SECURITY: Device token is required - no token means no access
+        if (deviceToken == null || deviceToken.isEmpty()) {
             return List.of();
         }
+        
+        UUID familyId;
+        try {
+            var member = service.getMemberByDeviceToken(deviceToken);
+            familyId = member.familyId();
+            
+            // SECURITY: Double-check that familyId is not null
+            if (familyId == null) {
+                throw new IllegalArgumentException("Member has no family ID");
+            }
+        } catch (IllegalArgumentException e) {
+            // Invalid token or member has no family, return empty list
+            // This prevents unauthorized access to family members
+            return List.of();
+        }
+        
+        // SECURITY: familyId is guaranteed to be non-null at this point
         return service.getAllMembers(familyId).stream()
                 .map(this::toResponse)
                 .toList();

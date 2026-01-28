@@ -6,6 +6,8 @@ import com.familyapp.domain.familymember.FamilyMember.Role;
 import com.familyapp.infrastructure.familymember.FamilyMemberEntity;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,6 +22,8 @@ import java.util.UUID;
 @Service
 @Transactional
 public class FamilyMemberService {
+
+    private static final Logger log = LoggerFactory.getLogger(FamilyMemberService.class);
 
     private final FamilyMemberJpaRepository repository;
     private final FamilyJpaRepository familyRepository;
@@ -39,19 +43,18 @@ public class FamilyMemberService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "familyMembers", key = "#familyId != null ? #familyId.toString() : 'all'")
+    @Cacheable(value = "familyMembers", key = "#familyId.toString()", condition = "#familyId != null")
     public List<FamilyMember> getAllMembers(UUID familyId) {
-        // Optimized: Use query instead of fetching all and filtering
-        if (familyId != null) {
-            return repository.findByFamilyIdOrderByNameAsc(familyId).stream()
-                    .map(this::toDomain)
-                    .toList();
-        } else {
-            // Fallback for legacy code (should not happen in production)
-            return repository.findAll().stream()
-                    .map(this::toDomain)
-                    .toList();
+        // SECURITY: familyId must never be null - this would expose all families' members
+        if (familyId == null) {
+            log.error("CRITICAL SECURITY ISSUE: getAllMembers called with null familyId - returning empty list");
+            return List.of();
         }
+        
+        // Optimized: Use query instead of fetching all and filtering
+        return repository.findByFamilyIdOrderByNameAsc(familyId).stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -60,9 +63,32 @@ public class FamilyMemberService {
         if (deviceToken == null || deviceToken.isEmpty()) {
             throw new IllegalArgumentException("Device token cannot be null or empty");
         }
-        return repository.findByDeviceToken(deviceToken)
+        // Always fetch from database to ensure we have the latest data
+        // Cache is used for performance, but we validate against DB
+        var member = repository.findByDeviceToken(deviceToken)
                 .map(this::toDomain)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found for device token"));
+                .orElseThrow(() -> {
+                    // Evict from cache if member not found (prevents stale cache)
+                    cacheService.evictDeviceToken(deviceToken);
+                    return new IllegalArgumentException("Family member not found for device token");
+                });
+        
+        // Double-check: If cached member exists but doesn't match DB, evict cache
+        // This prevents cache poisoning where wrong user is returned
+        try {
+            var cachedMember = cacheService.getDeviceToken(deviceToken);
+            if (cachedMember != null && !cachedMember.id().equals(member.id())) {
+                // Cache contains wrong user - evict it
+                log.warn("Cache mismatch detected for device token: {} - cached user: {}, DB user: {}. Evicting cache.",
+                    deviceToken, cachedMember.id(), member.id());
+                cacheService.evictDeviceToken(deviceToken);
+            }
+        } catch (Exception e) {
+            // If cache lookup fails, continue with DB result
+            log.debug("Cache lookup failed for device token: {}", deviceToken);
+        }
+        
+        return member;
     }
 
     @Transactional(readOnly = true)
@@ -116,7 +142,12 @@ public class FamilyMemberService {
         cacheService.putMember(result.id(), result);
         
         // Evict familyMembers cache for this specific family (targeted eviction)
+        // Also evict "all" cache entry to ensure consistency
         cacheService.evictFamilyMembers(familyId);
+        cacheService.evictFamilyMembers(null); // Evict "all" cache entry
+        
+        log.debug("Created new family member: {} (ID: {}) in family: {}. Cache evicted.", 
+            name, result.id(), familyId);
         
         return result;
     }

@@ -62,6 +62,16 @@ public class CacheService {
     }
 
     /**
+     * Get a member by device token from cache.
+     * 
+     * @param deviceToken The device token
+     * @return The cached member, or null if not in cache
+     */
+    public FamilyMember getDeviceToken(String deviceToken) {
+        return get("deviceTokens", deviceToken, FamilyMember.class);
+    }
+
+    /**
      * Evict a device token from cache.
      * 
      * @param deviceToken The device token to evict
@@ -75,20 +85,32 @@ public class CacheService {
     /**
      * Cache family members list by family ID.
      * 
-     * @param familyId The family ID
+     * SECURITY: familyId must never be null - caching with "all" key would expose all families' members
+     * 
+     * @param familyId The family ID (must not be null)
      * @param members The members list to cache
      */
     public void putFamilyMembers(UUID familyId, List<FamilyMember> members) {
-        put("familyMembers", familyId != null ? familyId.toString() : "all", members);
+        if (familyId == null) {
+            log.warn("SECURITY: Attempted to cache family members with null familyId - ignoring");
+            return;
+        }
+        put("familyMembers", familyId.toString(), members);
     }
 
     /**
      * Evict family members cache for a specific family.
      * 
-     * @param familyId The family ID to evict
+     * SECURITY: familyId must never be null - evicting "all" cache is a security risk
+     * 
+     * @param familyId The family ID to evict (must not be null)
      */
     public void evictFamilyMembers(UUID familyId) {
-        evict("familyMembers", familyId != null ? familyId.toString() : "all");
+        if (familyId == null) {
+            log.warn("SECURITY: Attempted to evict family members cache with null familyId - ignoring");
+            return;
+        }
+        evict("familyMembers", familyId.toString());
     }
 
     // ========== Categories Cache Operations ==========
@@ -96,10 +118,16 @@ public class CacheService {
     /**
      * Evict categories cache for a specific family.
      * 
-     * @param familyId The family ID to evict
+     * SECURITY: familyId must never be null - evicting "all" cache is a security risk
+     * 
+     * @param familyId The family ID to evict (must not be null)
      */
     public void evictCategories(UUID familyId) {
-        evict("categories", familyId != null ? familyId.toString() : "all");
+        if (familyId == null) {
+            log.warn("SECURITY: Attempted to evict categories cache with null familyId - ignoring");
+            return;
+        }
+        evict("categories", familyId.toString());
     }
 
     // ========== Generic Cache Operations ==========
@@ -127,6 +155,39 @@ public class CacheService {
             log.warn("Failed to cache {}:{} in cache {}: {}", 
                 key, cacheName, e.getMessage());
         }
+    }
+
+    /**
+     * Get a value from a cache.
+     * 
+     * @param cacheName The cache name
+     * @param key The cache key
+     * @param type The expected type
+     * @return The cached value, or null if not found
+     */
+    @SuppressWarnings("unchecked")
+    private <T> T get(String cacheName, String key, Class<T> type) {
+        if (key == null) {
+            return null;
+        }
+
+        try {
+            Cache cache = cacheManager.getCache(cacheName);
+            if (cache != null) {
+                Cache.ValueWrapper wrapper = cache.get(key);
+                if (wrapper != null) {
+                    Object value = wrapper.get();
+                    if (type.isInstance(value)) {
+                        return (T) value;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Log but don't fail the operation
+            log.warn("Failed to get {}:{} from cache {}: {}", 
+                key, cacheName, e.getMessage());
+        }
+        return null;
     }
 
     /**

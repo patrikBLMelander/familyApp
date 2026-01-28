@@ -17,6 +17,8 @@ import com.familyapp.infrastructure.calendar.CalendarEventExceptionEntity;
 import com.familyapp.infrastructure.calendar.CalendarEventExceptionJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.family.FamilyJpaRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -34,6 +36,8 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class CalendarService {
+
+    private static final Logger log = LoggerFactory.getLogger(CalendarService.class);
 
     private final CalendarEventJpaRepository eventRepository;
     private final CalendarEventCategoryJpaRepository categoryRepository;
@@ -827,8 +831,28 @@ public class CalendarService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "categories", key = "#familyId != null ? #familyId.toString() : 'all'")
+    public CalendarEvent getEventById(UUID eventId) {
+        return eventRepository.findById(eventId)
+                .map(this::toDomain)
+                .orElseThrow(() -> new IllegalArgumentException("Event not found: " + eventId));
+    }
+
+    @Transactional(readOnly = true)
+    public CalendarEventCategory getCategoryById(UUID categoryId) {
+        return categoryRepository.findById(categoryId)
+                .map(this::toDomainCategory)
+                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(value = "categories", key = "#familyId.toString()", condition = "#familyId != null")
     public List<CalendarEventCategory> getAllCategories(UUID familyId) {
+        // SECURITY: familyId must never be null - this would expose all families' categories
+        if (familyId == null) {
+            log.error("CRITICAL SECURITY ISSUE: getAllCategories called with null familyId - returning empty list");
+            return List.of();
+        }
+        
         return categoryRepository.findByFamilyIdOrderByNameAsc(familyId).stream()
                 .map(this::toDomainCategory)
                 .toList();

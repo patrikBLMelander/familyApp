@@ -120,12 +120,22 @@ public class CalendarController {
             @RequestBody UpdateCalendarEventRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Validate token (familyId not needed for update, but we validate token)
+        // Validate token and verify event belongs to same family
+        UUID requesterFamilyId = null;
         if (deviceToken != null && !deviceToken.isEmpty()) {
             try {
-                memberService.getMemberByDeviceToken(deviceToken);
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        // Verify event belongs to requester's family
+        if (requesterFamilyId != null) {
+            var event = service.getEventById(eventId);
+            if (!requesterFamilyId.equals(event.familyId())) {
+                throw new IllegalArgumentException("Access denied: Event does not belong to your family");
             }
         }
         
@@ -199,8 +209,27 @@ public class CalendarController {
     public void deleteEvent(
             @PathVariable("eventId") UUID eventId,
             @RequestParam(value = "scope", required = false) String scope,
-            @RequestParam(value = "occurrenceDate", required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate occurrenceDate
+            @RequestParam(value = "occurrenceDate", required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate occurrenceDate,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        // Validate token and verify event belongs to same family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        // Verify event belongs to requester's family
+        if (requesterFamilyId != null) {
+            var event = service.getEventById(eventId);
+            if (!requesterFamilyId.equals(event.familyId())) {
+                throw new IllegalArgumentException("Access denied: Event does not belong to your family");
+            }
+        }
         // If scope is provided, use deleteEventWithScope
         if (scope != null && occurrenceDate != null) {
             CalendarEvent.OccurrenceScope occurrenceScope;
@@ -220,20 +249,27 @@ public class CalendarController {
     public List<CalendarEventCategoryResponse> getCategories(
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        UUID familyId = null;
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var member = memberService.getMemberByDeviceToken(deviceToken);
-                familyId = member.familyId();
-            } catch (IllegalArgumentException e) {
-                return List.of();
-            }
-        }
-        
-        if (familyId == null) {
+        // SECURITY: Device token is required - no token means no access
+        if (deviceToken == null || deviceToken.isEmpty()) {
             return List.of();
         }
         
+        UUID familyId;
+        try {
+            var member = memberService.getMemberByDeviceToken(deviceToken);
+            familyId = member.familyId();
+            
+            // SECURITY: Double-check that familyId is not null
+            if (familyId == null) {
+                throw new IllegalArgumentException("Member has no family ID");
+            }
+        } catch (IllegalArgumentException e) {
+            // Invalid token or member has no family, return empty list
+            // This prevents unauthorized access to categories
+            return List.of();
+        }
+        
+        // SECURITY: familyId is guaranteed to be non-null at this point
         return service.getAllCategories(familyId).stream()
                 .map(this::toCategoryResponse)
                 .toList();
@@ -266,15 +302,57 @@ public class CalendarController {
     @PatchMapping("/categories/{categoryId}")
     public CalendarEventCategoryResponse updateCategory(
             @PathVariable("categoryId") UUID categoryId,
-            @RequestBody UpdateCalendarEventCategoryRequest request
+            @RequestBody UpdateCalendarEventCategoryRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        var category = service.updateCategory(categoryId, request.name(), request.color());
-        return toCategoryResponse(category);
+        // Validate token and verify category belongs to same family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        // Verify category belongs to requester's family
+        if (requesterFamilyId != null) {
+            var category = service.getCategoryById(categoryId);
+            if (!requesterFamilyId.equals(category.familyId())) {
+                throw new IllegalArgumentException("Access denied: Category does not belong to your family");
+            }
+        }
+        
+        var updatedCategory = service.updateCategory(categoryId, request.name(), request.color());
+        return toCategoryResponse(updatedCategory);
     }
 
     @DeleteMapping("/categories/{categoryId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteCategory(@PathVariable("categoryId") UUID categoryId) {
+    public void deleteCategory(
+            @PathVariable("categoryId") UUID categoryId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        // Validate token and verify category belongs to same family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        // Verify category belongs to requester's family
+        if (requesterFamilyId != null) {
+            var category = service.getCategoryById(categoryId);
+            if (!requesterFamilyId.equals(category.familyId())) {
+                throw new IllegalArgumentException("Access denied: Category does not belong to your family");
+            }
+        }
+        
         service.deleteCategory(categoryId);
     }
 
@@ -346,8 +424,28 @@ public class CalendarController {
 
     @GetMapping("/events/{eventId}/task-completion")
     public List<CalendarEventTaskCompletionResponse> getTaskCompletions(
-            @PathVariable("eventId") UUID eventId
+            @PathVariable("eventId") UUID eventId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        // Validate token and verify event belongs to same family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        // Verify event belongs to requester's family
+        if (requesterFamilyId != null) {
+            var event = service.getEventById(eventId);
+            if (!requesterFamilyId.equals(event.familyId())) {
+                throw new IllegalArgumentException("Access denied: Event does not belong to your family");
+            }
+        }
+        
         var completions = service.getTaskCompletions(eventId);
         return completions.stream()
                 .map(this::toCompletionResponse)
@@ -356,8 +454,24 @@ public class CalendarController {
 
     @GetMapping("/members/{memberId}/task-completions")
     public List<CalendarEventTaskCompletionResponse> getTaskCompletionsForMember(
-            @PathVariable("memberId") UUID memberId
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        // Validate token and verify member belongs to same family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+                var targetMember = memberService.getMemberById(memberId);
+                if (!requesterFamilyId.equals(targetMember.familyId())) {
+                    throw new IllegalArgumentException("Access denied: Member is not in the same family");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token or access denied");
+            }
+        }
+        
         var completions = service.getTaskCompletionsForMember(memberId);
         return completions.stream()
                 .map(this::toCompletionResponse)
