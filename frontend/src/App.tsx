@@ -186,9 +186,12 @@ export function App() {
     if (isChild) {
       const isAssistant = childMember?.role === "ASSISTANT";
       
-      // ASSISTANT can see calendar, CHILD cannot
+      // ASSISTANT can see calendar and todos, CHILD cannot
       if (isAssistant && currentView === "schedule") {
         return <CalendarView onNavigate={handleNavigate} />;
+      }
+      if (isAssistant && currentView === "todos") {
+        return <TodoListsView onNavigate={handleNavigate} />;
       }
       
       switch (currentView) {
@@ -273,13 +276,22 @@ export function App() {
               Dashboard
             </button>
             {childMember?.role === "ASSISTANT" && (
-              <button
-                type="button"
-                className="side-menu-item"
-                onClick={() => handleNavigate("schedule")}
-              >
-                Kalender
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="side-menu-item"
+                  onClick={() => handleNavigate("todos")}
+                >
+                  Listor
+                </button>
+                <button
+                  type="button"
+                  className="side-menu-item"
+                  onClick={() => handleNavigate("schedule")}
+                >
+                  Kalender
+                </button>
+              </>
             )}
             {/* PWA Install button - show if not installed */}
             {!isInstalled && (

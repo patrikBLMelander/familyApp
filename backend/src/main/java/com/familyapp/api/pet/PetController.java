@@ -62,9 +62,9 @@ public class PetController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
 
-                // Only children can select eggs
-                if (member.role() != FamilyMember.Role.CHILD) {
-                    throw new IllegalArgumentException("Only children can select eggs");
+                // Only children and assistants can select eggs
+                if (member.role() != FamilyMember.Role.CHILD && member.role() != FamilyMember.Role.ASSISTANT) {
+                    throw new IllegalArgumentException("Only children and assistants can select eggs");
                 }
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Invalid device token: " + e.getMessage());
@@ -171,9 +171,9 @@ public class PetController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
 
-                // Only children can feed pets
-                if (member.role() != FamilyMember.Role.CHILD) {
-                    throw new IllegalArgumentException("Only children can feed pets");
+                // Only children and assistants can feed pets
+                if (member.role() != FamilyMember.Role.CHILD && member.role() != FamilyMember.Role.ASSISTANT) {
+                    throw new IllegalArgumentException("Only children and assistants can feed pets");
                 }
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Invalid device token: " + e.getMessage());

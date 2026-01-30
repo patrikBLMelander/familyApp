@@ -66,9 +66,10 @@ public class PetService {
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
 
-        // Only children can have pets
-        if (!"CHILD".equals(member.getRole())) {
-            throw new IllegalArgumentException("Only children can select pets");
+        // Only children and assistants can have pets
+        String role = member.getRole();
+        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
+            throw new IllegalArgumentException("Only children and assistants can select pets");
         }
 
         // Validate egg type
@@ -216,9 +217,10 @@ public class PetService {
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
 
-        // Only children can feed pets
-        if (!"CHILD".equals(member.getRole())) {
-            throw new IllegalArgumentException("Only children can feed pets");
+        // Only children and assistants can feed pets
+        String role = member.getRole();
+        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
+            throw new IllegalArgumentException("Only children and assistants can feed pets");
         }
 
         // Award XP

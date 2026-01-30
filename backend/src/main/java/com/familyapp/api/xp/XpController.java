@@ -147,9 +147,9 @@ public class XpController {
                 throw new IllegalArgumentException("Only parents can award bonus XP");
             }
 
-            // Only award to children
-            if (member.role() != FamilyMember.Role.CHILD) {
-                throw new IllegalArgumentException("Bonus XP can only be awarded to children");
+            // Only award to children and assistants
+            if (member.role() != FamilyMember.Role.CHILD && member.role() != FamilyMember.Role.ASSISTANT) {
+                throw new IllegalArgumentException("Bonus XP can only be awarded to children and assistants");
             }
 
             // Validate XP amount (reasonable limit)

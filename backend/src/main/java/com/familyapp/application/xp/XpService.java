@@ -51,14 +51,15 @@ public class XpService {
 
     /**
      * Award XP to a member when they complete a task
-     * Only awards XP if the member is a child (CHILD role)
+     * Only awards XP if the member is a child or assistant (CHILD or ASSISTANT role)
      */
     public void awardXp(UUID memberId, int xpPoints) {
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
 
-        // Only award XP to children
-        if (!"CHILD".equals(member.getRole())) {
+        // Only award XP to children and assistants
+        String role = member.getRole();
+        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
             return;
         }
 
@@ -100,14 +101,15 @@ public class XpService {
     /**
      * Award bonus XP to a member (e.g., for special occasions)
      * This does NOT increment the task completion count
-     * Only awards XP to children
+     * Only awards XP to children and assistants
      */
     public void awardBonusXp(UUID memberId, int xpPoints) {
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
 
-        // Only award XP to children
-        if (!"CHILD".equals(member.getRole())) {
+        // Only award XP to children and assistants
+        String role = member.getRole();
+        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
             return;
         }
 
@@ -153,8 +155,9 @@ public class XpService {
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
 
-        // Only remove XP from children
-        if (!"CHILD".equals(member.getRole())) {
+        // Only remove XP from children and assistants
+        String role = member.getRole();
+        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
             return;
         }
 
