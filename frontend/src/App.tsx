@@ -11,6 +11,7 @@ import { XpDashboard } from "./features/xp/XpDashboard";
 import { ChildrenXpView } from "./features/xp/ChildrenXpView";
 import { EggSelectionView } from "./features/pet/EggSelectionView";
 import { PetTestView } from "./features/pet/PetTestView";
+import { ChildPetHistoryView } from "./features/pet/ChildPetHistoryView";
 import { useIsChild } from "./shared/hooks/useIsChild";
 import { usePwaInstall } from "./shared/hooks/usePwaInstall";
 import { getFamily } from "./shared/api/family";
@@ -18,7 +19,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory";
 
 export function App() {
   console.log("=== FamilyApp Frontend Starting - XP System: 24 XP per level (5 levels) ===");
@@ -197,6 +198,8 @@ export function App() {
       switch (currentView) {
         case "eggselection":
           return <EggSelectionView onEggSelected={handleEggSelected} />;
+        case "pethistory":
+          return <ChildPetHistoryView onNavigate={handleNavigate} childName={childMember?.name} />;
         case "xp":
           return <XpDashboard onNavigate={handleNavigate} />;
         case "dashboard":
@@ -274,6 +277,13 @@ export function App() {
               onClick={() => handleNavigate("dashboard")}
             >
               Dashboard
+            </button>
+            <button
+              type="button"
+              className="side-menu-item"
+              onClick={() => handleNavigate("pethistory")}
+            >
+              🐾 Mina tidigare djur
             </button>
             {childMember?.role === "ASSISTANT" && (
               <>

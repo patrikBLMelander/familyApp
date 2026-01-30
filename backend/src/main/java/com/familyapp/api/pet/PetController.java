@@ -223,6 +223,28 @@ public class PetController {
         );
     }
 
+    @GetMapping("/last-fed-date")
+    public LastFedDateResponse getLastFedDate(
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID memberId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var member = memberService.getMemberByDeviceToken(deviceToken);
+                memberId = member.id();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        } else {
+            throw new IllegalArgumentException("Device token is required");
+        }
+
+        var lastFedAt = foodService.getLastFedAt(memberId);
+        return new LastFedDateResponse(
+                lastFedAt != null ? lastFedAt.toString() : null
+        );
+    }
+
     public record SelectEggRequest(String eggType, String name) {
     }
 
@@ -240,6 +262,11 @@ public class PetController {
             String eventId, // null for bonus food
             int xpAmount,
             String collectedAt
+    ) {
+    }
+
+    public record LastFedDateResponse(
+            String lastFedAt // ISO 8601 string, or null if never fed
     ) {
     }
 

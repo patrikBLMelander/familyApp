@@ -34,5 +34,12 @@ public interface CollectedFoodJpaRepository extends JpaRepository<CollectedFoodE
     @Query("SELECT COALESCE(SUM(f.xpAmount), 0) FROM CollectedFoodEntity f WHERE f.member.id = :memberId AND f.isFed = false")
     int countUnfedFoodXpByMemberId(@Param("memberId") UUID memberId);
 
+    /**
+     * Get the most recent fedAt date for a member (when pet was last fed)
+     * Returns null if pet has never been fed
+     */
+    @Query("SELECT MAX(f.fedAt) FROM CollectedFoodEntity f WHERE f.member.id = :memberId AND f.isFed = true AND f.fedAt IS NOT NULL")
+    java.time.OffsetDateTime findLastFedAtByMemberId(@Param("memberId") UUID memberId);
+
     // Note: markFoodAsFed is handled in service layer for better control
 }

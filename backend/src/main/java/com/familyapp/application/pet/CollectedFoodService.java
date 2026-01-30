@@ -206,6 +206,15 @@ public class CollectedFoodService {
         return totalXp >= requiredXp;
     }
 
+    /**
+     * Get the date when the pet was last fed (most recent fedAt)
+     * Returns null if the pet has never been fed
+     */
+    @Transactional(readOnly = true)
+    public OffsetDateTime getLastFedAt(UUID memberId) {
+        return foodRepository.findLastFedAtByMemberId(memberId);
+    }
+
     private CollectedFood toDomain(CollectedFoodEntity entity) {
         return new CollectedFood(
                 entity.getId(),

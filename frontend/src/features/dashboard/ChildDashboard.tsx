@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, CollectedFoodResponse } from "../../shared/api/pets";
+import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, CollectedFoodResponse, getLastFedDate } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
 import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse } from "../../shared/api/calendar";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
@@ -10,7 +10,7 @@ import { HalfCircleProgress } from "./components/HalfCircleProgress";
 import { ConfettiAnimation } from "./components/ConfettiAnimation";
 import { FloatingXpNumber } from "./components/FloatingXpNumber";
 
-type ViewKey = "dailytasks" | "xp";
+type ViewKey = "dailytasks" | "xp" | "pethistory";
 
 type ChildDashboardProps = {
   onNavigate?: (view: ViewKey) => void;
@@ -39,7 +39,29 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
   const [petMessage, setPetMessage] = useState<string>("");
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
   const previousLevelRef = useRef<number>(0);
-  const lastFedDateRef = useRef<string>("");
+  
+  // Utility function to get today's date in local timezone (YYYY-MM-DD format)
+  const getTodayLocalDateString = (): string => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  // Check if a date string (ISO 8601) is today in local timezone
+  const isDateToday = (dateString: string | null): boolean => {
+    if (!dateString) return false;
+    try {
+      const date = new Date(dateString);
+      const today = getTodayLocalDateString();
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      return dateStr === today;
+    } catch (e) {
+      console.error("Error parsing date:", e);
+      return false;
+    }
+  };
   
   // Track window width for responsive design
   useEffect(() => {
@@ -66,12 +88,29 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         const member = await getMemberByDeviceToken(deviceToken);
         const memberId = member.id;
 
-        // Load pet, XP, tasks, and collected food in parallel
-        const [petData, xpData, tasksData, foodData] = await Promise.all([
-          fetchCurrentPet().catch(() => null),
-          fetchCurrentXpProgress().catch(() => null),
-          fetchTasksForToday(memberId).catch(() => []),
-          getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
+        // Load pet, XP, tasks, collected food, and last fed date in parallel
+        const [petData, xpData, tasksData, foodData, lastFedData] = await Promise.all([
+          fetchCurrentPet().catch((e) => {
+            console.error("Error fetching pet:", e);
+            return null;
+          }),
+          fetchCurrentXpProgress().catch((e) => {
+            console.error("Error fetching XP progress:", e);
+            return null;
+          }),
+          fetchTasksForToday(memberId).catch((e) => {
+            console.error("Error fetching tasks:", e);
+            return [];
+          }),
+          getCollectedFood().catch((e) => {
+            console.error("Error fetching collected food:", e);
+            return { foodItems: [], totalCount: 0 };
+          }),
+          getLastFedDate().catch((e) => {
+            console.error("Error fetching last fed date:", e);
+            // Fallback: assume not fed today if we can't get the data
+            return { lastFedAt: null };
+          }),
         ]);
 
         setPet(petData);
@@ -100,21 +139,17 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         // Set collected food count from backend
         setCollectedFoodCount(foodData.totalCount);
         
-        // Check pet mood based on today's date
-        const today = new Date().toISOString().split('T')[0];
-        if (lastFedDateRef.current !== today) {
-          // Check if any tasks were completed today
-          const todayCompletedTasks = sortedTasks.filter(t => t.completed);
-          if (todayCompletedTasks.length === 0) {
-            setPetMood("hungry");
-            setPetMessage(getRandomPetMessage("hungry"));
-          } else {
-            setPetMood("happy");
-            setPetMessage(getRandomPetMessage("happy"));
-          }
-        } else {
+        // Check pet mood based on whether it has been fed today (using backend data)
+        // Pet is happy if it has been fed today, hungry otherwise
+        const wasFedToday = isDateToday(lastFedData.lastFedAt);
+        if (wasFedToday) {
+          // Pet has been fed today - happy!
           setPetMood("happy");
           setPetMessage(getRandomPetMessage("happy"));
+        } else {
+          // Pet has not been fed today - hungry
+          setPetMood("hungry");
+          setPetMessage(getRandomPetMessage("hungry"));
         }
       } catch (e) {
         console.error("Error loading dashboard data:", e);
@@ -176,15 +211,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         setHasIntegratedImage(integratedExists);
       }
       
-      // Update pet mood
-      const todayCompletedTasks = tasksData.filter(t => t.completed);
-      if (todayCompletedTasks.length === 0) {
-        setPetMood("hungry");
-        setPetMessage(getRandomPetMessage("hungry"));
-      } else {
-        setPetMood("happy");
-        setPetMessage(getRandomPetMessage("happy"));
-      }
+      // Don't change pet mood when toggling tasks - mood is only based on whether pet has been fed today
+      // Pet mood will only change when actually feeding the pet
     } catch (e) {
       console.error("Error toggling task:", e);
       // Show user-friendly error message
@@ -222,17 +250,31 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
       // Show floating XP number
       setFloatingXp(feedAmount);
       
-      // Reload collected food count
-      const foodData = await getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 }));
+      // Reload collected food count and last fed date
+      const [foodData, lastFedData] = await Promise.all([
+        getCollectedFood().catch((e) => {
+          console.error("Error fetching collected food after feeding:", e);
+          return { foodItems: [], totalCount: 0 };
+        }),
+        getLastFedDate().catch((e) => {
+          console.error("Error fetching last fed date after feeding:", e);
+          // If we can't get the date, assume it was fed today (optimistic)
+          return { lastFedAt: new Date().toISOString() };
+        }),
+      ]);
       setCollectedFoodCount(foodData.totalCount);
       
-      // Update last fed date
-      const today = new Date().toISOString().split('T')[0];
-      lastFedDateRef.current = today;
-      
-      // Update pet mood
-      setPetMood("happy");
-      setPetMessage(getRandomPetMessage("happy"));
+      // Update pet mood - pet is happy when fed!
+      // Check if pet was fed today using backend data
+      const wasFedToday = isDateToday(lastFedData.lastFedAt);
+      if (wasFedToday) {
+        setPetMood("happy");
+        setPetMessage(getRandomPetMessage("happy"));
+      } else {
+        // This shouldn't happen after feeding, but handle it gracefully
+        setPetMood("hungry");
+        setPetMessage(getRandomPetMessage("hungry"));
+      }
       
       // Reload XP progress to check for level up
       const xpData = await fetchCurrentXpProgress().catch(() => null);
@@ -354,14 +396,26 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
               Ta hand om din {getPetNameSwedishLowercase(pet.petType)}!
             </p>
           </div>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={handleLogout}
-            style={{ fontSize: "0.85rem", padding: "8px 16px" }}
-          >
-            Logga ut
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            {onNavigate && (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => onNavigate("pethistory")}
+                style={{ fontSize: "0.85rem", padding: "8px 16px" }}
+              >
+                🐾 Mina djur
+              </button>
+            )}
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleLogout}
+              style={{ fontSize: "0.85rem", padding: "8px 16px" }}
+            >
+              Logga ut
+            </button>
+          </div>
         </div>
       )}
 
@@ -394,7 +448,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
         marginBottom: "24px",
         borderRadius: "24px",
         boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
-        overflow: "hidden",
+        overflow: "visible", // Changed from "hidden" to "visible" so progress ring is never clipped
         backgroundColor: "white",
         position: "relative",
       }}>
@@ -412,6 +466,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
             aspectRatio: "3 / 2", // 1440×960 aspect ratio
             position: "relative",
             animation: showConfetti ? "pulseGradient 2s ease-in-out" : undefined,
+            // Add padding-bottom to ensure progress ring always has space (if pet exists)
+            paddingBottom: pet ? (windowWidth < 768 ? "40px" : "60px") : "0",
           }}
         >
           {/* Only show PetVisualization if integrated image doesn't exist */}
@@ -436,7 +492,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           )}
           
           {/* Full circle progress bar at bottom - upper half goes up over image */}
-          {xpProgress && (
+          {/* Always show progress ring if we have a pet, even if xpProgress is null (will show 0 progress) */}
+          {pet && (
             <div style={{
               position: "absolute",
               bottom: windowWidth < 768 ? "-40px" : "-60px", // Position so upper half is over image
@@ -446,10 +503,11 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
+              zIndex: 10, // Ensure it's above other elements
             }}>
               <HalfCircleProgress
-                progress={progressPercentage}
-                currentLevel={xpProgress.currentLevel}
+                progress={xpProgress ? progressPercentage : 0}
+                currentLevel={xpProgress?.currentLevel || 1}
                 mood={petMood}
                 petName={pet.name || getPetNameSwedish(pet.petType)}
                 size={windowWidth < 768 ? 100 : 140}
@@ -464,6 +522,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           padding: "20px",
           textAlign: "center",
           borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+          // Add margin-top to account for progress ring if pet exists
+          marginTop: pet ? (windowWidth < 768 ? "20px" : "30px") : "0",
         }}>
           {/* Empty space - message moved to overlay */}
         </div>

@@ -122,3 +122,14 @@ export async function getCollectedFood(): Promise<CollectedFoodResponse> {
   });
   return handleJson<CollectedFoodResponse>(response);
 }
+
+export type LastFedDateResponse = {
+  lastFedAt: string | null; // ISO 8601 string, or null if never fed
+};
+
+export async function getLastFedDate(): Promise<LastFedDateResponse> {
+  const response = await fetch(`${API_BASE_URL}/pets/last-fed-date`, {
+    headers: getHeaders(),
+  });
+  return handleJson<LastFedDateResponse>(response);
+}
