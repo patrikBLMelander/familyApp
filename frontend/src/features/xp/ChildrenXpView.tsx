@@ -37,7 +37,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
       try {
         setLoading(true);
         const members = await fetchAllFamilyMembers();
-        const childrenMembers = members.filter(m => m.role === "CHILD");
+        const childrenMembers = members.filter(m => m.role === "CHILD" || m.role === "ASSISTANT");
         setChildren(childrenMembers);
 
         // Load XP data for all children in parallel (same approach as ChildDashboard)
