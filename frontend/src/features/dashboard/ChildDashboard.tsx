@@ -18,7 +18,7 @@ type ChildDashboardProps = {
   onLogout?: () => void;
 };
 
-const XP_PER_LEVEL = 24;
+const MAX_LEVEL = 5;
 
 // FoodItem is now managed by backend, we just track count
 
@@ -356,7 +356,11 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
   // Calculate energy (XP) progress
   // Clamp to 0-100 to ensure it doesn't exceed 100%
   const progressPercentage = xpProgress 
-    ? Math.min(100, Math.max(0, (xpProgress.xpInCurrentLevel / XP_PER_LEVEL) * 100))
+    ? xpProgress.currentLevel >= MAX_LEVEL
+      ? 100
+      : xpProgress.xpForNextLevel > 0
+        ? Math.min(100, Math.max(0, (xpProgress.xpInCurrentLevel / (xpProgress.xpInCurrentLevel + xpProgress.xpForNextLevel)) * 100))
+        : 0
     : 0;
   const totalEnergy = xpProgress?.currentXp || 0;
   const completedTasksCount = tasks.filter(t => t.completed).length;
@@ -669,7 +673,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           </button>
         </div>
         
-        {xpProgress && xpProgress.currentLevel < 10 && (
+        {xpProgress && xpProgress.currentLevel < MAX_LEVEL && (
           <p style={{
             margin: "12px 0 0",
             fontSize: "0.9rem",

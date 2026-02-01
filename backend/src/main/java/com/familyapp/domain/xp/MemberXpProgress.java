@@ -15,19 +15,30 @@ public record MemberXpProgress(
         OffsetDateTime updatedAt
 ) {
     public static final int MAX_LEVEL = 5;
-    public static final int XP_PER_LEVEL = 24;
+    
+    // XP thresholds for each level
+    // Level 1 → 2: 10 XP (0-9 XP = Level 1)
+    // Level 2 → 3: 25 XP (10-34 XP = Level 2, total 35)
+    // Level 3 → 4: 35 XP (35-69 XP = Level 3, total 70)
+    // Level 4 → 5: 55 XP (70-124 XP = Level 4, total 125)
+    // Level 5: 125+ XP
+    private static final int[] XP_THRESHOLDS = {0, 10, 35, 70, 125};
 
     /**
      * Calculate level based on XP (1-5)
-     * Level 1: 0-23 XP
-     * Level 2: 24-47 XP
-     * Level 3: 48-71 XP
-     * Level 4: 72-95 XP
-     * Level 5: 96-119 XP
+     * Level 1: 0-9 XP
+     * Level 2: 10-34 XP
+     * Level 3: 35-69 XP
+     * Level 4: 70-124 XP
+     * Level 5: 125+ XP
      */
     public static int calculateLevel(int xp) {
-        int level = (xp / XP_PER_LEVEL) + 1;
-        return Math.min(level, MAX_LEVEL);
+        for (int level = MAX_LEVEL; level >= 1; level--) {
+            if (xp >= XP_THRESHOLDS[level - 1]) {
+                return level;
+            }
+        }
+        return 1; // Default to level 1
     }
 
     /**
@@ -37,14 +48,20 @@ public record MemberXpProgress(
         if (currentLevel >= MAX_LEVEL) {
             return 0; // Already at max level
         }
-        return (currentLevel * XP_PER_LEVEL) - currentXp;
+        int xpForNextLevel = XP_THRESHOLDS[currentLevel];
+        int xpNeeded = xpForNextLevel - currentXp;
+        return Math.max(0, xpNeeded);
     }
 
     /**
-     * Get XP progress within current level (0-23)
+     * Get XP progress within current level
      */
     public int getXpInCurrentLevel() {
-        return currentXp % XP_PER_LEVEL;
+        if (currentLevel >= MAX_LEVEL) {
+            return 0; // At max level, no progress
+        }
+        int xpForCurrentLevel = XP_THRESHOLDS[currentLevel - 1];
+        return currentXp - xpForCurrentLevel;
     }
 }
 

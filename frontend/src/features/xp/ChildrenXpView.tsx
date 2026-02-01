@@ -12,7 +12,6 @@ type ChildrenXpViewProps = {
 };
 
 const MAX_LEVEL = 5;
-const XP_PER_LEVEL = 24;
 
 type ChildXpData = {
   member: FamilyMemberResponse;
@@ -279,7 +278,11 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           const petHistory = xpData?.petHistory || [];
 
           // Show pet even if no XP progress exists yet
-          const progressPercentage = progress ? (progress.xpInCurrentLevel / XP_PER_LEVEL) * 100 : 0;
+          const progressPercentage = progress && progress.xpForNextLevel > 0
+            ? (progress.xpInCurrentLevel / (progress.xpInCurrentLevel + progress.xpForNextLevel)) * 100
+            : progress && progress.currentLevel >= MAX_LEVEL
+            ? 100
+            : 0;
           
           // Get food emoji and name for this child's pet
           const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
@@ -414,7 +417,7 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   gap: "4px"
                 }}>
                   <span>Progress till Level {Math.min(progress.currentLevel + 1, MAX_LEVEL)}</span>
-                  <span>{progress.xpInCurrentLevel} / {XP_PER_LEVEL} {foodEmoji}</span>
+                  <span>{progress.xpInCurrentLevel} / {progress.xpInCurrentLevel + progress.xpForNextLevel} {foodEmoji}</span>
                 </div>
                 <div style={{
                   width: "100%",

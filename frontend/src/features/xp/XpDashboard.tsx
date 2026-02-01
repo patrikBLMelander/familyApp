@@ -10,7 +10,6 @@ type XpDashboardProps = {
 };
 
 const MAX_LEVEL = 5;
-const XP_PER_LEVEL = 24;
 
 export function XpDashboard({ onNavigate }: XpDashboardProps) {
   const [progress, setProgress] = useState<XpProgressResponse | null>(null);
@@ -81,7 +80,11 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
     );
   }
 
-  const progressPercentage = (progress.xpInCurrentLevel / XP_PER_LEVEL) * 100;
+  const progressPercentage = progress.currentLevel >= MAX_LEVEL 
+    ? 100 
+    : progress.xpForNextLevel > 0
+      ? (progress.xpInCurrentLevel / (progress.xpInCurrentLevel + progress.xpForNextLevel)) * 100
+      : 0;
   const monthNames = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
   const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
   const foodName = pet ? getPetFoodName(pet.petType) : "mat";
@@ -137,7 +140,7 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
             gap: "4px"
           }}>
             <span>Progress till Level {Math.min(progress.currentLevel + 1, MAX_LEVEL)}</span>
-            <span>{progress.xpInCurrentLevel} / {XP_PER_LEVEL} {foodEmoji}</span>
+            <span>{progress.xpInCurrentLevel} / {progress.xpInCurrentLevel + progress.xpForNextLevel} {foodEmoji}</span>
           </div>
           <div style={{
             width: "100%",
