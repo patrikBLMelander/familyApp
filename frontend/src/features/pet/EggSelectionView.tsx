@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { selectEgg, getAvailableEggTypes, fetchPetHistory, PetResponse } from "../../shared/api/pets";
-import { PetImage } from "./PetImage";
 import { EggImage } from "./EggImage";
 
 type EggSelectionViewProps = {
@@ -543,7 +542,7 @@ export function EggSelectionView({ onEggSelected }: EggSelectionViewProps) {
                 transform: "scale(0)",
                 animation: "popIn 0.5s ease-out 0.2s forwards",
               }}>
-                <PetImage petType={EGG_TO_PET[selectedEggType] || "dragon"} growthStage={1} size={160} />
+                <EggImage petType={EGG_TO_PET[selectedEggType] || "dragon"} eggStage={5} size={160} />
               </div>
               <h3 style={{
                 margin: 0,
