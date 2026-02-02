@@ -16,13 +16,20 @@ type ChildDashboardProps = {
   onNavigate?: (view: ViewKey) => void;
   childName?: string;
   onLogout?: () => void;
+  familyId?: string | null;
 };
+
+// Allowed family IDs for Spotify Charts link
+const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
+  "ce69194a-934d-4234-b046-dae7473700c0", // Production
+  "cdd48859-74c5-4dee-989f-0b091f62d630", // Localhost
+];
 
 const MAX_LEVEL = 5;
 
 // FoodItem is now managed by backend, we just track count
 
-export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboardProps) {
+export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: ChildDashboardProps) {
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
   const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
@@ -807,6 +814,50 @@ export function ChildDashboard({ onNavigate, childName, onLogout }: ChildDashboa
           </div>
         )}
       </section>
+      
+      {/* Spotify Charts Link - Only for specific families */}
+      {familyId && SPOTIFY_CHARTS_ALLOWED_FAMILIES.includes(familyId) && childName && (
+        <section className="card" style={{
+          background: "linear-gradient(135deg, #1DB954 0%, #1ed760 50%, #1DB954 100%)",
+          borderRadius: "16px",
+          padding: "16px 20px",
+          marginTop: "24px",
+          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+          textAlign: "left",
+        }}>
+          <a
+            href="https://spotify-charts-production.up.railway.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              textDecoration: "none",
+              color: "white",
+            }}
+          >
+            <div style={{ fontSize: "1.8rem" }}>🎵</div>
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontSize: "1.1rem",
+                fontWeight: 700,
+                color: "white",
+                marginBottom: "2px",
+              }}>
+                {childName}
+              </div>
+              <div style={{
+                fontSize: "0.85rem",
+                color: "rgba(255, 255, 255, 0.95)",
+                fontWeight: 500,
+              }}>
+                TOP 50
+              </div>
+            </div>
+          </a>
+        </section>
+      )}
       
       <style>{`
         @keyframes bounce {

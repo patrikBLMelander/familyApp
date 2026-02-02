@@ -208,7 +208,7 @@ export function App() {
           if (hasPet === false) {
             return <EggSelectionView onEggSelected={handleEggSelected} />;
           }
-          return <ChildDashboard onNavigate={handleNavigate} childName={childMember?.name} onLogout={handleLogout} />;
+          return <ChildDashboard onNavigate={handleNavigate} childName={childMember?.name} onLogout={handleLogout} familyId={family?.id} />;
       }
     }
 
@@ -237,14 +237,14 @@ export function App() {
       case "schedule":
         return <CalendarView onNavigate={handleNavigate} />;
       case "chores":
-        return <Dashboard placeholder="Sysslor-vy kommer här." onNavigate={handleNavigate} />;
+        return <Dashboard placeholder="Sysslor-vy kommer här." onNavigate={handleNavigate} familyId={family?.id} />;
       case "xp":
         return <XpDashboard onNavigate={handleNavigate} />;
       case "childrenxp":
         return <ChildrenXpView onNavigate={handleNavigate} />;
       case "dashboard":
       default:
-        return <Dashboard onNavigate={handleNavigate} />;
+        return <Dashboard onNavigate={handleNavigate} familyId={family?.id} />;
     }
   };
 
@@ -285,6 +285,26 @@ export function App() {
             >
               🐾 Mina tidigare djur
             </button>
+            {/* Spotify Charts Link - Only for specific families */}
+            {family && (family.id === "ce69194a-934d-4234-b046-dae7473700c0" || family.id === "cdd48859-74c5-4dee-989f-0b091f62d630") && (
+              <a
+                href="https://spotify-charts-production.up.railway.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="side-menu-item"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "#1DB954",
+                  color: "white",
+                  textDecoration: "none",
+                }}
+              >
+                <span style={{ fontSize: "1.2rem" }}>🎵</span>
+                <span>Spotify Charts</span>
+              </a>
+            )}
             {childMember?.role === "ASSISTANT" && (
               <>
                 <button
