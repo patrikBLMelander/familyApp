@@ -21,6 +21,12 @@ import { FamilyResponse } from "./shared/api/family";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory";
 
+// Allowed family IDs for Spotify Charts link
+const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
+  "ce69194a-934d-4234-b046-dae7473700c0", // Production
+  "cdd48859-74c5-4dee-989f-0b091f62d630", // Localhost
+];
+
 export function App() {
   console.log("=== FamilyApp Frontend Starting - XP System: 24 XP per level (5 levels) ===");
   const [currentView, setCurrentView] = useState<ViewKey>("login");
@@ -286,7 +292,7 @@ export function App() {
               🐾 Mina tidigare djur
             </button>
             {/* Spotify Charts Link - Only for specific families */}
-            {family && (family.id === "ce69194a-934d-4234-b046-dae7473700c0" || family.id === "cdd48859-74c5-4dee-989f-0b091f62d630") && (
+            {family && SPOTIFY_CHARTS_ALLOWED_FAMILIES.includes(family.id) && (
               <a
                 href="https://spotify-charts-production.up.railway.app/"
                 target="_blank"
