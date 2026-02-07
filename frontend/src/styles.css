@@ -185,7 +185,8 @@ body {
 
 .list-selector-scroll {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  align-items: center;
   overflow-x: auto;
   padding-bottom: 4px;
 }
@@ -339,6 +340,65 @@ body {
 .add-item-button:hover {
   transform: translateY(-1px);
   opacity: 0.9;
+}
+
+/* Create list button */
+.create-list-button {
+  min-width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  border: 2px solid rgba(220, 210, 200, 0.5);
+  background: white;
+  color: #2d5a2d;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: bold;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.create-list-button:hover {
+  background: rgba(184, 230, 184, 0.1);
+  border-color: rgba(184, 230, 184, 0.6);
+}
+
+.create-list-button:focus-visible {
+  outline: 2px solid #b8e6b8;
+  outline-offset: 2px;
+}
+
+.create-list-button:active {
+  transform: scale(0.95);
+}
+
+/* Inline form cancel button */
+.inline-form-cancel-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: #6b6b6b;
+  transition: color 0.2s ease;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.inline-form-cancel-button:hover {
+  color: #3a3a3a;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.inline-form-cancel-button:focus-visible {
+  outline: 2px solid #b8e6b8;
+  outline-offset: 2px;
 }
 
 .todo-card {

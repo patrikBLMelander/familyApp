@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   DndContext,
   closestCenter,
@@ -79,6 +79,8 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editItemDescription, setEditItemDescription] = useState("");
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
+  const [showCreateListInput, setShowCreateListInput] = useState(false);
+  const createListInputRef = useRef<HTMLInputElement>(null);
 
   // Configure sensors for @dnd-kit
   const sensors = useSensors(
@@ -120,6 +122,13 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // Prioritera create-list input om det är öppet
+        if (showCreateListInput) {
+          setShowCreateListInput(false);
+          setNewListName("");
+          return;
+        }
+        
         setMenuOpen(false);
         setEditingName(false);
         if (editingItemId && safeActiveList?.items) {
@@ -136,11 +145,14 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [editingItemId, safeActiveList]);
+  }, [editingItemId, safeActiveList, showCreateListInput]);
 
   const handleCreateList = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!newListName.trim()) return;
+    if (!newListName.trim()) {
+      setShowCreateListInput(false);
+      return;
+    }
 
     try {
       const created = await createTodoList(newListName.trim(), false);
@@ -148,6 +160,7 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
         [...prev, created].slice().sort((a, b) => a.position - b.position)
       );
       setNewListName("");
+      setShowCreateListInput(false);
       setActiveListId(created.id);
     } catch {
       setError("Kunde inte skapa lista.");
@@ -491,7 +504,7 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
           onDragStart={handleDragStart}
           onDragEnd={handleListsDragEnd}
         >
-          <div className="list-selector-scroll">
+          <div className="list-selector-scroll" style={{ alignItems: "center" }}>
             <SortableContext
               items={lists.map((l) => l.id)}
               strategy={horizontalListSortingStrategy}
@@ -509,17 +522,58 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
                 />
               ))}
             </SortableContext>
+            {showCreateListInput ? (
+              <form onSubmit={handleCreateList} className="inline-form" style={{ margin: 0, flexShrink: 0 }}>
+                <input
+                  ref={createListInputRef}
+                  type="text"
+                  placeholder="Ny lista, t.ex. Inköp"
+                  value={newListName}
+                  onChange={(event) => setNewListName(event.target.value)}
+                  onBlur={(e) => {
+                    // Vänta lite för att låta onClick på knappar köras först
+                    setTimeout(() => {
+                      const relatedTarget = e.relatedTarget as HTMLElement;
+                      // Om fokus flyttas till en knapp i samma form, låt formuläret hantera det
+                      if (relatedTarget && e.currentTarget.form?.contains(relatedTarget)) {
+                        return;
+                      }
+                      // Om input inte har fokus längre och är tomt, stäng det
+                      if (!newListName.trim() && document.activeElement !== createListInputRef.current) {
+                        setShowCreateListInput(false);
+                        setNewListName("");
+                      }
+                    }, 200);
+                  }}
+                  autoFocus
+                  style={{ minWidth: "150px" }}
+                />
+                <button type="submit">Skapa</button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setShowCreateListInput(false);
+                    setNewListName("");
+                  }}
+                  className="inline-form-cancel-button"
+                  aria-label="Avbryt"
+                >
+                  ✕
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowCreateListInput(true)}
+                className="create-list-button"
+                title="Skapa ny lista"
+                aria-label="Skapa ny lista"
+              >
+                +
+              </button>
+            )}
           </div>
         </DndContext>
-        <form onSubmit={handleCreateList} className="inline-form">
-          <input
-            type="text"
-            placeholder="Ny lista, t.ex. Inköp"
-            value={newListName}
-            onChange={(event) => setNewListName(event.target.value)}
-          />
-          <button type="submit">Skapa</button>
-        </form>
       </section>
 
       <section 
@@ -651,6 +705,26 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
                 )}
               </div>
             </div>
+
+            <form onSubmit={handleAddItem} className="inline-form" style={{ marginBottom: "16px" }}>
+              <input
+                type="text"
+                placeholder="Lägg till uppgift"
+                value={newItemDescription}
+                onChange={(event) => setNewItemDescription(event.target.value)}
+              />
+              <button 
+                type="submit"
+                className="add-item-button"
+                style={safeActiveList ? {
+                  background: TODO_COLORS.find(c => c.value === safeActiveList.color)?.gradient || "linear-gradient(135deg, #b8e6b8 0%, #a8d8a8 100%)",
+                  color: "#2d5a2d",
+                  boxShadow: `0 2px 6px ${TODO_COLORS.find(c => c.value === safeActiveList.color)?.border || "#a8d8a8"}30`
+                } : {}}
+              >
+                Lägg till
+              </button>
+            </form>
 
             {(() => {
               if (!safeActiveList || !safeActiveList.items) return null;
@@ -841,26 +915,6 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
                 </>
               );
             })()}
-
-            <form onSubmit={handleAddItem} className="inline-form">
-              <input
-                type="text"
-                placeholder="Lägg till uppgift"
-                value={newItemDescription}
-                onChange={(event) => setNewItemDescription(event.target.value)}
-              />
-              <button 
-                type="submit"
-                className="add-item-button"
-                style={safeActiveList ? {
-                  background: TODO_COLORS.find(c => c.value === safeActiveList.color)?.gradient || "linear-gradient(135deg, #b8e6b8 0%, #a8d8a8 100%)",
-                  color: "#2d5a2d",
-                  boxShadow: `0 2px 6px ${TODO_COLORS.find(c => c.value === safeActiveList.color)?.border || "#a8d8a8"}30`
-                } : {}}
-              >
-                Lägg till
-              </button>
-            </form>
           </>
         )}
       </section>
