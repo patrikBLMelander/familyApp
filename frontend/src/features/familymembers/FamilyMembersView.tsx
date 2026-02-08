@@ -13,6 +13,7 @@ import {
 } from "../../shared/api/familyMembers";
 import { updateMenstrualCycleSettings } from "../../shared/api/menstrualCycle";
 import { updatePetSettings } from "../../shared/api/familyMembers";
+import { GiveAllowanceDialog } from "../wallet/GiveAllowanceDialog";
 
 type FamilyMembersViewProps = {
   onNavigate?: (view: string) => void;
@@ -41,6 +42,7 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
   const [petSettingsId, setPetSettingsId] = useState<string | null>(null);
   const [petEnabled, setPetEnabled] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [allowanceDialogMember, setAllowanceDialogMember] = useState<{ id: string; name: string } | null>(null);
   const qrCodeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -955,6 +957,21 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                                   </button>
                                 )}
                                 
+                                {/* Give allowance - only for CHILD and ASSISTANT */}
+                                {(member.role === "CHILD" || member.role === "ASSISTANT") && (
+                                  <button
+                                    type="button"
+                                    className="todo-menu-item"
+                                    onClick={() => {
+                                      setAllowanceDialogMember({ id: member.id, name: member.name });
+                                      setOpenMenuId(null);
+                                    }}
+                                  >
+                                    <span style={{ marginRight: "8px", color: "#666" }}>💰</span>
+                                    Ge pengar
+                                  </button>
+                                )}
+                                
                                 {/* Delete option in menu */}
                                 {!isAdmin && (
                                   <button
@@ -1017,6 +1034,19 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
           </ul>
         )}
       </section>
+
+      {/* Give Allowance Dialog */}
+      {allowanceDialogMember && (
+        <GiveAllowanceDialog
+          childName={allowanceDialogMember.name}
+          childMemberId={allowanceDialogMember.id}
+          onClose={() => setAllowanceDialogMember(null)}
+          onSuccess={() => {
+            setAllowanceDialogMember(null);
+            // Optionally reload members or show success message
+          }}
+        />
+      )}
     </div>
   );
 }

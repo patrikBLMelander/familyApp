@@ -9,8 +9,11 @@ import { getPetFoodEmoji, getPetFoodName, getRandomPetMessage } from "../pet/pet
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
 import { ConfettiAnimation } from "./components/ConfettiAnimation";
 import { FloatingXpNumber } from "./components/FloatingXpNumber";
+import { WalletOverview } from "../wallet/WalletOverview";
+import { AllowanceNotificationPopup } from "../wallet/AllowanceNotificationPopup";
+import { getUnshownNotifications, markNotificationAsShown, WalletNotificationResponse } from "../../shared/api/wallet";
 
-type ViewKey = "dailytasks" | "xp" | "pethistory";
+type ViewKey = "dailytasks" | "xp" | "pethistory" | "wallet";
 
 type ChildDashboardProps = {
   onNavigate?: (view: ViewKey) => void;
@@ -46,6 +49,10 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
   const [petMessage, setPetMessage] = useState<string>("");
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
   const previousLevelRef = useRef<number>(0);
+  
+  // Wallet notification state
+  const [allowanceNotification, setAllowanceNotification] = useState<WalletNotificationResponse | null>(null);
+  const [showRecordExpenseDialog, setShowRecordExpenseDialog] = useState(false);
   
   // Utility function to get today's date in local timezone (YYYY-MM-DD format)
   const getTodayLocalDateString = (): string => {
@@ -95,8 +102,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
         const member = await getMemberByDeviceToken(deviceToken);
         const memberId = member.id;
 
-        // Load pet, XP, tasks, collected food, and last fed date in parallel
-        const [petData, xpData, tasksData, foodData, lastFedData] = await Promise.all([
+        // Load pet, XP, tasks, collected food, last fed date, and wallet notifications in parallel
+        const [petData, xpData, tasksData, foodData, lastFedData, notifications] = await Promise.all([
           fetchCurrentPet().catch((e) => {
             console.error("Error fetching pet:", e);
             return null;
@@ -118,7 +125,16 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
             // Fallback: assume not fed today if we can't get the data
             return { lastFedAt: null };
           }),
+          getUnshownNotifications().catch((e) => {
+            console.error("Error fetching wallet notifications:", e);
+            return [];
+          }),
         ]);
+
+        // Show first unshown notification if any
+        if (notifications && notifications.length > 0) {
+          setAllowanceNotification(notifications[0]);
+        }
 
         setPet(petData);
         setXpProgress(xpData);
@@ -403,6 +419,23 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
         <ConfettiAnimation
           onComplete={() => setShowConfetti(false)}
           duration={3000}
+        />
+      )}
+
+      {/* Allowance Notification Popup */}
+      {allowanceNotification && (
+        <AllowanceNotificationPopup
+          notification={allowanceNotification}
+          onClose={async () => {
+            try {
+              await markNotificationAsShown(allowanceNotification.id);
+              setAllowanceNotification(null);
+            } catch (e) {
+              console.error("Error marking notification as shown:", e);
+              // Still close the popup even if marking fails
+              setAllowanceNotification(null);
+            }
+          }}
         />
       )}
       
@@ -829,6 +862,9 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           </div>
         )}
       </section>
+
+      {/* Wallet Overview */}
+      <WalletOverview onNavigate={onNavigate} />
       
       {/* Spotify Charts Link - Only for specific families */}
       {familyId && SPOTIFY_CHARTS_ALLOWED_FAMILIES.includes(familyId) && childName && (
