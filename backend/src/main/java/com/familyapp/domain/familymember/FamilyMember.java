@@ -10,6 +10,8 @@ public record FamilyMember(
         String email,
         Role role,
         UUID familyId,
+        Boolean menstrualCycleEnabled,
+        Boolean menstrualCyclePrivate,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

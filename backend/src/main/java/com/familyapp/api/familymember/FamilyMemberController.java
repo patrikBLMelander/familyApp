@@ -125,6 +125,31 @@ public class FamilyMemberController {
         return toResponse(member);
     }
 
+    @PatchMapping("/{memberId}/menstrual-cycle-settings")
+    public FamilyMemberResponse updateMenstrualCycleSettings(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody UpdateMenstrualCycleSettingsRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID requesterId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = service.getMemberByDeviceToken(deviceToken);
+                requesterId = requester.id();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        var member = service.updateMenstrualCycleSettings(
+                memberId,
+                request.enabled(),
+                request.isPrivate(),
+                requesterId
+        );
+        return toResponse(member);
+    }
+
     @DeleteMapping("/{memberId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteMember(@PathVariable("memberId") UUID memberId) {
@@ -150,7 +175,9 @@ public class FamilyMemberController {
                 member.deviceToken(),
                 member.email(),
                 member.role(),
-                member.familyId() != null ? member.familyId().toString() : null
+                member.familyId() != null ? member.familyId().toString() : null,
+                member.menstrualCycleEnabled() != null ? member.menstrualCycleEnabled() : false,
+                member.menstrualCyclePrivate() != null ? member.menstrualCyclePrivate() : true
         );
     }
 
@@ -178,13 +205,21 @@ public class FamilyMemberController {
     ) {
     }
 
+    public record UpdateMenstrualCycleSettingsRequest(
+            Boolean enabled,
+            Boolean isPrivate
+    ) {
+    }
+
     public record FamilyMemberResponse(
             UUID id,
             String name,
             String deviceToken,
             String email,
             Role role,
-            String familyId
+            String familyId,
+            Boolean menstrualCycleEnabled,
+            Boolean menstrualCyclePrivate
     ) {
     }
 

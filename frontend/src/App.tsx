@@ -12,6 +12,7 @@ import { ChildrenXpView } from "./features/xp/ChildrenXpView";
 import { EggSelectionView } from "./features/pet/EggSelectionView";
 import { PetTestView } from "./features/pet/PetTestView";
 import { ChildPetHistoryView } from "./features/pet/ChildPetHistoryView";
+import { MenstrualCycleView } from "./features/menstrualcycle/MenstrualCycleView";
 import { useIsChild } from "./shared/hooks/useIsChild";
 import { usePwaInstall } from "./shared/hooks/usePwaInstall";
 import { getFamily } from "./shared/api/family";
@@ -19,7 +20,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle";
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -248,6 +249,8 @@ export function App() {
         return <XpDashboard onNavigate={handleNavigate} />;
       case "childrenxp":
         return <ChildrenXpView onNavigate={handleNavigate} />;
+      case "menstrualcycle":
+        return <MenstrualCycleView onNavigate={handleNavigate} />;
       case "dashboard":
       default:
         return <Dashboard onNavigate={handleNavigate} familyId={family?.id} />;
@@ -379,6 +382,13 @@ export function App() {
               onClick={() => handleNavigate("familymembers")}
             >
               Familjemedlemmar
+            </button>
+            <button
+              type="button"
+              className="side-menu-item"
+              onClick={() => handleNavigate("menstrualcycle")}
+            >
+              Menscykel
             </button>
             {/* PWA Install button - show if not installed */}
             {!isInstalled && (

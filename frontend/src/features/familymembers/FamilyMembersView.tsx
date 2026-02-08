@@ -11,6 +11,7 @@ import {
   FamilyMemberResponse,
   FamilyMemberRole,
 } from "../../shared/api/familyMembers";
+import { updateMenstrualCycleSettings } from "../../shared/api/menstrualCycle";
 
 type FamilyMembersViewProps = {
   onNavigate?: (view: string) => void;
@@ -33,6 +34,9 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
   const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
   const [emailEditingId, setEmailEditingId] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
+  const [menstrualCycleSettingsId, setMenstrualCycleSettingsId] = useState<string | null>(null);
+  const [menstrualCycleEnabled, setMenstrualCycleEnabled] = useState(false);
+  const [menstrualCyclePrivate, setMenstrualCyclePrivate] = useState(true);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const qrCodeRef = useRef<HTMLDivElement>(null);
 
@@ -210,6 +214,19 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       const errorMessage = e instanceof Error ? e.message : "Kunde inte uppdatera lösenord.";
       setError(errorMessage);
       console.error("Password update error:", e);
+    }
+  };
+
+  const handleUpdateMenstrualCycleSettings = async (memberId: string) => {
+    try {
+      await updateMenstrualCycleSettings(memberId, menstrualCycleEnabled, menstrualCyclePrivate);
+      await loadMembers();
+      setMenstrualCycleSettingsId(null);
+      setError(null);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte uppdatera menscykel-inställningar.";
+      setError(errorMessage);
+      console.error("Menstrual cycle settings update error:", e);
     }
   };
 
@@ -495,6 +512,67 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                       </button>
                     </div>
                   </div>
+                ) : menstrualCycleSettingsId === member.id ? (
+                  <div className="family-member-form">
+                    <div style={{ marginBottom: "16px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                        <input
+                          type="checkbox"
+                          checked={menstrualCycleEnabled}
+                          onChange={(e) => setMenstrualCycleEnabled(e.target.checked)}
+                          style={{ width: "18px", height: "18px" }}
+                        />
+                        <span>Aktivera menscykel-spårning</span>
+                      </label>
+                      {menstrualCycleEnabled && (
+                        <div style={{ marginLeft: "26px", marginTop: "12px" }}>
+                          <p style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#666" }}>
+                            Synlighet:
+                          </p>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                            <input
+                              type="radio"
+                              name={`menstrual-cycle-privacy-${member.id}`}
+                              checked={menstrualCyclePrivate}
+                              onChange={() => setMenstrualCyclePrivate(true)}
+                              style={{ width: "16px", height: "16px" }}
+                            />
+                            <span>Privat (bara synlig för mig)</span>
+                          </label>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <input
+                              type="radio"
+                              name={`menstrual-cycle-privacy-${member.id}`}
+                              checked={!menstrualCyclePrivate}
+                              onChange={() => setMenstrualCyclePrivate(false)}
+                              style={{ width: "16px", height: "16px" }}
+                            />
+                            <span>Delad med andra vuxna i familjen</span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        onClick={() => void handleUpdateMenstrualCycleSettings(member.id)}
+                        className="button-primary"
+                      >
+                        Spara inställningar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenstrualCycleSettingsId(null);
+                          setMenstrualCycleEnabled(false);
+                          setMenstrualCyclePrivate(true);
+                        }}
+                        className="button-secondary"
+                      >
+                        Avbryt
+                      </button>
+                    </div>
+                  </div>
                 ) : passwordEditingId === member.id ? (
                   <div className="family-member-form">
                     <div style={{ position: "relative" }}>
@@ -771,6 +849,7 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                                       setPasswordEditingId(member.id);
                                       setEditingId(null);
                                       setEmailEditingId(null);
+                                      setMenstrualCycleSettingsId(null);
                                       setShowCreateForm(false);
                                       setNewPassword("");
                                       setNewPasswordConfirm("");
@@ -779,6 +858,27 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                                   >
                                     <span style={{ marginRight: "8px", color: "#666" }}>🔐</span>
                                     Ändra lösenord
+                                  </button>
+                                )}
+                                
+                                {/* Menstrual cycle settings - only for PARENT and ASSISTANT */}
+                                {(member.role === "PARENT" || member.role === "ASSISTANT" || (member.role === "PARENT" && isAdmin)) && (
+                                  <button
+                                    type="button"
+                                    className="todo-menu-item"
+                                    onClick={() => {
+                                      setMenstrualCycleSettingsId(member.id);
+                                      setEditingId(null);
+                                      setEmailEditingId(null);
+                                      setPasswordEditingId(null);
+                                      setShowCreateForm(false);
+                                      setMenstrualCycleEnabled(member.menstrualCycleEnabled || false);
+                                      setMenstrualCyclePrivate(member.menstrualCyclePrivate !== false);
+                                      setOpenMenuId(null);
+                                    }}
+                                  >
+                                    <span style={{ marginRight: "8px", color: "#666" }}>🩸</span>
+                                    Menscykel-inställningar
                                   </button>
                                 )}
                                 

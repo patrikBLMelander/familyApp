@@ -9,6 +9,8 @@ export type FamilyMemberResponse = {
   email: string | null;
   role: FamilyMemberRole;
   familyId?: string;
+  menstrualCycleEnabled?: boolean;
+  menstrualCyclePrivate?: boolean;
 };
 
 async function handleJson<T>(response: Response): Promise<T> {

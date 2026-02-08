@@ -484,6 +484,65 @@ public class FamilyMemberService {
         return result;
     }
 
+    /**
+     * Updates menstrual cycle settings for a member.
+     * 
+     * Cache behavior:
+     * - Updates "members" cache with new member data (via @CachePut)
+     * - Evicts "familyMembers" cache for this member's family
+     * 
+     * @param memberId The member to update
+     * @param enabled Whether menstrual cycle tracking is enabled
+     * @param isPrivate Whether the data is private (true) or shared with other adults (false)
+     * @param requesterId The requester ID (for permission check)
+     * @return Updated member (cached)
+     */
+    @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
+    public FamilyMember updateMenstrualCycleSettings(UUID memberId, Boolean enabled, Boolean isPrivate, UUID requesterId) {
+        var entity = repository.findById(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+        
+        UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
+        
+        // Only allow menstrual cycle settings for PARENT or ASSISTANT role
+        if (!Role.PARENT.name().equals(entity.getRole()) && !Role.ASSISTANT.name().equals(entity.getRole())) {
+            throw new IllegalArgumentException("Menstrual cycle tracking can only be enabled for parent or assistant users");
+        }
+        
+        // Validate that requester is in the same family and has permission
+        if (requesterId != null) {
+            var requester = repository.findById(requesterId)
+                    .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
+            
+            // Requester must be in the same family
+            if (entity.getFamily() == null || requester.getFamily() == null ||
+                !entity.getFamily().getId().equals(requester.getFamily().getId())) {
+                throw new IllegalArgumentException("Cannot update menstrual cycle settings for member in different family");
+            }
+            
+            // Requester must be PARENT, or ASSISTANT updating their own settings
+            boolean isParent = Role.PARENT.name().equals(requester.getRole());
+            boolean isAssistantUpdatingSelf = Role.ASSISTANT.name().equals(requester.getRole()) && 
+                                             requester.getId().equals(memberId);
+            
+            if (!isParent && !isAssistantUpdatingSelf) {
+                throw new IllegalArgumentException("Only parents can update menstrual cycle settings for others, or assistants can update their own");
+            }
+        }
+        
+        entity.setMenstrualCycleEnabled(enabled != null ? enabled : false);
+        entity.setMenstrualCyclePrivate(isPrivate != null ? isPrivate : true);
+        entity.setUpdatedAt(OffsetDateTime.now());
+        
+        var saved = repository.save(entity);
+        var result = toDomain(saved);
+        
+        // Evict familyMembers cache for this specific family (targeted eviction)
+        cacheService.evictFamilyMembers(familyId);
+        
+        return result;
+    }
+
     private FamilyMember toDomain(FamilyMemberEntity entity) {
         Role role = Role.CHILD;
         if (entity.getRole() != null) {
@@ -502,6 +561,8 @@ public class FamilyMemberService {
                 entity.getEmail(),
                 role,
                 entity.getFamily() != null ? entity.getFamily().getId() : null,
+                entity.getMenstrualCycleEnabled() != null ? entity.getMenstrualCycleEnabled() : false,
+                entity.getMenstrualCyclePrivate() != null ? entity.getMenstrualCyclePrivate() : true,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
