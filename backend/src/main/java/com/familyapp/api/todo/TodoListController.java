@@ -83,8 +83,10 @@ public class TodoListController {
     @PatchMapping("/{listId}")
     public TodoListResponse updateListName(
             @PathVariable("listId") UUID listId,
-            @RequestBody UpdateTodoListRequest request
+            @RequestBody UpdateTodoListRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        validateListAccess(listId, deviceToken);
         var list = service.updateListName(listId, request.name());
         return toResponse(list);
     }
@@ -92,8 +94,10 @@ public class TodoListController {
     @PatchMapping("/{listId}/color")
     public TodoListResponse updateListColor(
             @PathVariable("listId") UUID listId,
-            @RequestBody UpdateTodoListColorRequest request
+            @RequestBody UpdateTodoListColorRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        validateListAccess(listId, deviceToken);
         var list = service.updateListColor(listId, request.color());
         return toResponse(list);
     }
@@ -101,8 +105,10 @@ public class TodoListController {
     @PatchMapping("/{listId}/privacy")
     public TodoListResponse updateListPrivacy(
             @PathVariable("listId") UUID listId,
-            @RequestBody UpdateTodoListPrivacyRequest request
+            @RequestBody UpdateTodoListPrivacyRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        validateListAccess(listId, deviceToken);
         var list = service.updateListPrivacy(listId, request.isPrivate());
         return toResponse(list);
     }
@@ -111,8 +117,10 @@ public class TodoListController {
     @ResponseStatus(HttpStatus.CREATED)
     public TodoListResponse addItem(
             @PathVariable("listId") UUID listId,
-            @RequestBody CreateTodoItemRequest request
+            @RequestBody CreateTodoItemRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        validateListAccess(listId, deviceToken);
         var list = service.addItem(listId, request.description());
         return toResponse(list);
     }
@@ -120,8 +128,10 @@ public class TodoListController {
     @PatchMapping("/{listId}/items/{itemId}/toggle")
     public TodoListResponse toggleItem(
             @PathVariable("listId") UUID listId,
-            @PathVariable("itemId") UUID itemId
+            @PathVariable("itemId") UUID itemId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        validateListAccess(listId, deviceToken);
         var list = service.toggleItem(listId, itemId);
         return toResponse(list);
     }
@@ -130,14 +140,20 @@ public class TodoListController {
     public TodoListResponse updateItem(
             @PathVariable("listId") UUID listId,
             @PathVariable("itemId") UUID itemId,
-            @RequestBody UpdateTodoItemRequest request
+            @RequestBody UpdateTodoItemRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        validateListAccess(listId, deviceToken);
         var list = service.updateItem(listId, itemId, request.description());
         return toResponse(list);
     }
 
     @DeleteMapping("/{listId}/items/done")
-    public TodoListResponse clearDone(@PathVariable("listId") UUID listId) {
+    public TodoListResponse clearDone(
+            @PathVariable("listId") UUID listId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        validateListAccess(listId, deviceToken);
         var list = service.clearDone(listId);
         return toResponse(list);
     }
@@ -145,8 +161,10 @@ public class TodoListController {
     @DeleteMapping("/{listId}/items/{itemId}")
     public TodoListResponse deleteItem(
             @PathVariable("listId") UUID listId,
-            @PathVariable("itemId") UUID itemId
+            @PathVariable("itemId") UUID itemId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        validateListAccess(listId, deviceToken);
         var list = service.deleteItem(listId, itemId);
         return toResponse(list);
     }
@@ -154,16 +172,36 @@ public class TodoListController {
     @PostMapping("/{listId}/items/reorder")
     public TodoListResponse reorderItems(
             @PathVariable("listId") UUID listId,
-            @RequestBody ReorderItemsRequest request
+            @RequestBody ReorderItemsRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        validateListAccess(listId, deviceToken);
         var list = service.reorderItems(listId, request.itemIds());
         return toResponse(list);
     }
 
     @PostMapping("/reorder")
     public List<TodoListResponse> reorderLists(
-            @RequestBody ReorderListsRequest request
+            @RequestBody ReorderListsRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        // Validate all lists belong to requester's family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        if (requesterFamilyId != null) {
+            for (UUID listId : request.listIds()) {
+                validateListAccess(listId, deviceToken);
+            }
+        }
+        
         return service.reorderLists(request.listIds()).stream()
                 .map(TodoListController::toResponse)
                 .toList();
@@ -171,8 +209,37 @@ public class TodoListController {
 
     @DeleteMapping("/{listId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteList(@PathVariable("listId") UUID listId) {
+    public void deleteList(
+            @PathVariable("listId") UUID listId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        validateListAccess(listId, deviceToken);
         service.deleteList(listId);
+    }
+
+    /**
+     * Validates that the requester has access to the list (same family).
+     */
+    private void validateListAccess(UUID listId, String deviceToken) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        
+        try {
+            var requester = memberService.getMemberByDeviceToken(deviceToken);
+            UUID requesterFamilyId = requester.familyId();
+            
+            // Get list and verify it belongs to same family
+            var list = service.getAllLists(requester.id(), requesterFamilyId).stream()
+                    .filter(l -> l.id().equals(listId))
+                    .findFirst();
+            
+            if (list.isEmpty()) {
+                throw new IllegalArgumentException("Access denied: List does not belong to your family");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid device token or access denied");
+        }
     }
 
     private static TodoListResponse toResponse(TodoList list) {

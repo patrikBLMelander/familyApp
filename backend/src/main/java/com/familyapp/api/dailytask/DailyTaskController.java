@@ -93,8 +93,29 @@ public class DailyTaskController {
             @RequestBody UpdateDailyTaskRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Note: updateTask doesn't change family, so we don't need to pass familyId
-        var task = service.updateTask(
+        // Validate token and verify task belongs to same family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        } else {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        
+        // Verify task belongs to requester's family
+        var allTasks = service.getAllTasks(requesterFamilyId);
+        var task = allTasks.stream()
+                .filter(t -> t.id().equals(taskId))
+                .findFirst();
+        if (task.isEmpty()) {
+            throw new IllegalArgumentException("Access denied: Task does not belong to your family");
+        }
+        
+        var updatedTask = service.updateTask(
                 taskId,
                 request.name(),
                 request.description(),
@@ -103,12 +124,37 @@ public class DailyTaskController {
                 request.isRequired() != null ? request.isRequired() : true,
                 request.xpPoints() != null ? request.xpPoints() : 1
         );
-        return toResponse(task);
+        return toResponse(updatedTask);
     }
 
     @DeleteMapping("/{taskId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteTask(@PathVariable("taskId") UUID taskId) {
+    public void deleteTask(
+            @PathVariable("taskId") UUID taskId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        // Validate token and verify task belongs to same family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        } else {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        
+        // Verify task belongs to requester's family
+        var allTasks = service.getAllTasks(requesterFamilyId);
+        var task = allTasks.stream()
+                .filter(t -> t.id().equals(taskId))
+                .findFirst();
+        if (task.isEmpty()) {
+            throw new IllegalArgumentException("Access denied: Task does not belong to your family");
+        }
+        
         service.deleteTask(taskId);
     }
 
@@ -119,21 +165,39 @@ public class DailyTaskController {
             @RequestParam(value = "memberId", required = false) UUID memberIdParam
     ) {
         UUID memberId = null;
-        // If memberId is provided as parameter, use it (for family mode)
-        if (memberIdParam != null) {
-            memberId = memberIdParam;
-        } else if (deviceToken != null && !deviceToken.isEmpty()) {
+        UUID requesterFamilyId = null;
+        
+        // Validate token and get requester's family
+        if (deviceToken != null && !deviceToken.isEmpty()) {
             try {
-                var member = memberService.getMemberByDeviceToken(deviceToken);
-                memberId = member.id();
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+                memberId = requester.id();
             } catch (IllegalArgumentException e) {
-                // Invalid token, use admin as default
-                memberId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+                throw new IllegalArgumentException("Invalid device token");
             }
         } else {
-            // No token, use admin as default
-            memberId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            throw new IllegalArgumentException("Device token is required");
         }
+        
+        // If memberId is provided as parameter, validate it belongs to same family
+        if (memberIdParam != null) {
+            var targetMember = memberService.getMemberById(memberIdParam);
+            if (!requesterFamilyId.equals(targetMember.familyId())) {
+                throw new IllegalArgumentException("Access denied: Member is not in the same family");
+            }
+            memberId = memberIdParam;
+        }
+        
+        // Verify task belongs to requester's family
+        var allTasks = service.getAllTasks(requesterFamilyId);
+        var task = allTasks.stream()
+                .filter(t -> t.id().equals(taskId))
+                .findFirst();
+        if (task.isEmpty()) {
+            throw new IllegalArgumentException("Access denied: Task does not belong to your family");
+        }
+        
         service.toggleTaskCompletion(taskId, memberId);
     }
 
@@ -158,7 +222,34 @@ public class DailyTaskController {
     }
 
     @PostMapping("/reorder")
-    public List<DailyTaskResponse> reorderTasks(@RequestBody ReorderTasksRequest request) {
+    public List<DailyTaskResponse> reorderTasks(
+            @RequestBody ReorderTasksRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        // Validate token and verify all tasks belong to same family
+        UUID requesterFamilyId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                requesterFamilyId = requester.familyId();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        } else {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        
+        // Verify all tasks belong to requester's family
+        var allTasks = service.getAllTasks(requesterFamilyId);
+        var taskIds = allTasks.stream()
+                .map(t -> t.id())
+                .collect(java.util.stream.Collectors.toSet());
+        for (UUID taskId : request.taskIds()) {
+            if (!taskIds.contains(taskId)) {
+                throw new IllegalArgumentException("Access denied: Task does not belong to your family");
+            }
+        }
+        
         return service.reorderTasks(request.taskIds()).stream()
                 .map(this::toResponse)
                 .toList();

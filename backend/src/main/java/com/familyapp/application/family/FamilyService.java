@@ -73,8 +73,29 @@ public class FamilyService {
         String hashedPassword = passwordEncoder.encode(password);
         adminEntity.setPasswordHash(hashedPassword);
         
-        // Generate device token for admin
-        String deviceToken = UUID.randomUUID().toString();
+        // Generate unique device token for admin
+        // Retry if token collision occurs (extremely rare but possible)
+        String deviceToken;
+        int maxRetries = 10;
+        int retries = 0;
+        do {
+            deviceToken = UUID.randomUUID().toString();
+            // Check if token already exists in database
+            var existingMember = memberRepository.findByDeviceToken(deviceToken);
+            if (existingMember.isEmpty()) {
+                // Token is unique, break out of loop
+                break;
+            }
+            retries++;
+            if (retries >= maxRetries) {
+                throw new IllegalStateException("Failed to generate unique device token after " + maxRetries + " attempts");
+            }
+            log.warn("Device token collision detected, retrying... (attempt {}/{})", retries, maxRetries);
+        } while (retries < maxRetries);
+        
+        // Evict any stale cache entry for this token (defensive)
+        cacheService.evictDeviceToken(deviceToken);
+        
         adminEntity.setDeviceToken(deviceToken);
         var savedAdmin = memberRepository.save(adminEntity);
         
@@ -174,8 +195,29 @@ public class FamilyService {
         // Get old token to evict from cache
         String oldToken = member.getDeviceToken();
         
-        // Generate new device token for login
-        String newDeviceToken = UUID.randomUUID().toString();
+        // Generate unique new device token for login
+        // Retry if token collision occurs (extremely rare but possible)
+        String newDeviceToken;
+        int maxRetries = 10;
+        int retries = 0;
+        do {
+            newDeviceToken = UUID.randomUUID().toString();
+            // Check if token already exists in database (and is not the old token)
+            var existingMember = memberRepository.findByDeviceToken(newDeviceToken);
+            if (existingMember.isEmpty() || (oldToken != null && newDeviceToken.equals(oldToken))) {
+                // Token is unique, break out of loop
+                break;
+            }
+            retries++;
+            if (retries >= maxRetries) {
+                throw new IllegalStateException("Failed to generate unique device token after " + maxRetries + " attempts");
+            }
+            log.warn("Device token collision detected during login, retrying... (attempt {}/{})", retries, maxRetries);
+        } while (retries < maxRetries);
+        
+        // Evict any stale cache entry for the new token (defensive)
+        cacheService.evictDeviceToken(newDeviceToken);
+        
         member.setDeviceToken(newDeviceToken);
         member.setUpdatedAt(OffsetDateTime.now());
         memberRepository.save(member);
@@ -222,6 +264,8 @@ public class FamilyService {
                 entity.getEmail(),
                 role,
                 entity.getFamily() != null ? entity.getFamily().getId() : null,
+                entity.getMenstrualCycleEnabled() != null ? entity.getMenstrualCycleEnabled() : false,
+                entity.getMenstrualCyclePrivate() != null ? entity.getMenstrualCyclePrivate() : true,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
