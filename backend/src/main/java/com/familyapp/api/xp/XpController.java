@@ -6,6 +6,8 @@ import com.familyapp.application.xp.XpService;
 import com.familyapp.domain.familymember.FamilyMember;
 import com.familyapp.domain.xp.MemberXpHistory;
 import com.familyapp.domain.xp.MemberXpProgress;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,7 +28,7 @@ public class XpController {
     }
 
     @GetMapping("/current")
-    public XpProgressResponse getCurrentProgress(
+    public ResponseEntity<XpProgressResponse> getCurrentProgress(
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         UUID memberId = null;
@@ -41,10 +43,12 @@ public class XpController {
             throw new IllegalArgumentException("Device token is required");
         }
 
-        var progress = xpService.getCurrentProgress(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("No XP progress found for member"));
+        var progress = xpService.getCurrentProgress(memberId);
+        if (progress.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
 
-        return toResponse(progress);
+        return ResponseEntity.ok(toResponse(progress.get()));
     }
 
     @GetMapping("/history")

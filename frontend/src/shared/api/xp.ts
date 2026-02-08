@@ -40,10 +40,13 @@ function getHeaders(): HeadersInit {
   return headers;
 }
 
-export async function fetchCurrentXpProgress(): Promise<XpProgressResponse> {
+export async function fetchCurrentXpProgress(): Promise<XpProgressResponse | null> {
   const response = await fetch(`${API_BASE_URL}/xp/current`, {
     headers: getHeaders()
   });
+  if (response.status === 404) {
+    return null; // No XP progress for member
+  }
   return handleJson<XpProgressResponse>(response);
 }
 

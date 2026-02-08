@@ -44,10 +44,13 @@ function getHeaders(): HeadersInit {
   return headers;
 }
 
-export async function fetchCurrentPet(): Promise<PetResponse> {
+export async function fetchCurrentPet(): Promise<PetResponse | null> {
   const response = await fetch(`${API_BASE_URL}/pets/current`, {
     headers: getHeaders(),
   });
+  if (response.status === 404) {
+    return null; // No pet for current month
+  }
   return handleJson<PetResponse>(response);
 }
 

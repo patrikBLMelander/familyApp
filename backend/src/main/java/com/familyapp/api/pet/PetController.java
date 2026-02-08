@@ -8,6 +8,7 @@ import com.familyapp.domain.pet.ChildPet;
 import com.familyapp.domain.pet.PetHistory;
 import com.familyapp.domain.pet.CollectedFood;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
@@ -29,7 +30,7 @@ public class PetController {
     }
 
     @GetMapping("/current")
-    public PetResponse getCurrentPet(
+    public ResponseEntity<PetResponse> getCurrentPet(
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         UUID memberId = null;
@@ -44,10 +45,12 @@ public class PetController {
             throw new IllegalArgumentException("Device token is required");
         }
 
-        var pet = petService.getCurrentPet(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("No pet found for current month"));
+        var pet = petService.getCurrentPet(memberId);
+        if (pet.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
 
-        return toResponse(pet);
+        return ResponseEntity.ok(toResponse(pet.get()));
     }
 
     @PostMapping("/select-egg")
@@ -62,9 +65,9 @@ public class PetController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
 
-                // Only children and assistants can select eggs
-                if (member.role() != FamilyMember.Role.CHILD && member.role() != FamilyMember.Role.ASSISTANT) {
-                    throw new IllegalArgumentException("Only children and assistants can select eggs");
+                // Children, assistants, and parents can select eggs
+                if (member.role() != FamilyMember.Role.CHILD && member.role() != FamilyMember.Role.ASSISTANT && member.role() != FamilyMember.Role.PARENT) {
+                    throw new IllegalArgumentException("Only children, assistants, and parents can select eggs");
                 }
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Invalid device token: " + e.getMessage());
@@ -171,9 +174,11 @@ public class PetController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
 
-                // Only children and assistants can feed pets
-                if (member.role() != FamilyMember.Role.CHILD && member.role() != FamilyMember.Role.ASSISTANT) {
-                    throw new IllegalArgumentException("Only children and assistants can feed pets");
+                // Children, assistants, and parents (with pets enabled) can feed pets
+                if (member.role() != FamilyMember.Role.CHILD && 
+                    member.role() != FamilyMember.Role.ASSISTANT && 
+                    member.role() != FamilyMember.Role.PARENT) {
+                    throw new IllegalArgumentException("Only children, assistants, and parents can feed pets");
                 }
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Invalid device token: " + e.getMessage());

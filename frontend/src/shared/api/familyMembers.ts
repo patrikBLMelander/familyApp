@@ -11,6 +11,7 @@ export type FamilyMemberResponse = {
   familyId?: string;
   menstrualCycleEnabled?: boolean;
   menstrualCyclePrivate?: boolean;
+  petEnabled?: boolean;
 };
 
 async function handleJson<T>(response: Response): Promise<T> {
@@ -133,3 +134,14 @@ export async function linkDeviceByInviteToken(
   return handleJson<FamilyMemberResponse>(response);
 }
 
+export async function updatePetSettings(
+  memberId: string,
+  enabled: boolean
+): Promise<FamilyMemberResponse> {
+  const response = await fetch(`${API_BASE_URL}/family-members/${memberId}/pet-settings`, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify({ enabled }),
+  });
+  return handleJson<FamilyMemberResponse>(response);
+}

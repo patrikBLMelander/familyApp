@@ -150,6 +150,30 @@ public class FamilyMemberController {
         return toResponse(member);
     }
 
+    @PatchMapping("/{memberId}/pet-settings")
+    public FamilyMemberResponse updatePetSettings(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody UpdatePetSettingsRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID requesterId = null;
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = service.getMemberByDeviceToken(deviceToken);
+                requesterId = requester.id();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token");
+            }
+        }
+        
+        var member = service.updatePetSettings(
+                memberId,
+                request.enabled(),
+                requesterId
+        );
+        return toResponse(member);
+    }
+
     @DeleteMapping("/{memberId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteMember(@PathVariable("memberId") UUID memberId) {
@@ -164,8 +188,12 @@ public class FamilyMemberController {
 
     @PostMapping("/link-device-by-token")
     public FamilyMemberResponse linkDeviceByInviteToken(@RequestBody LinkDeviceByTokenRequest request) {
-        var member = service.linkDeviceByInviteToken(request.inviteToken(), request.deviceToken());
-        return toResponse(member);
+        try {
+            var member = service.linkDeviceByInviteToken(request.inviteToken(), request.deviceToken());
+            return toResponse(member);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid invite token or device token: " + e.getMessage(), e);
+        }
     }
 
     private FamilyMemberResponse toResponse(FamilyMember member) {
@@ -177,7 +205,8 @@ public class FamilyMemberController {
                 member.role(),
                 member.familyId() != null ? member.familyId().toString() : null,
                 member.menstrualCycleEnabled() != null ? member.menstrualCycleEnabled() : false,
-                member.menstrualCyclePrivate() != null ? member.menstrualCyclePrivate() : true
+                member.menstrualCyclePrivate() != null ? member.menstrualCyclePrivate() : true,
+                member.petEnabled() != null ? member.petEnabled() : false
         );
     }
 
@@ -211,6 +240,11 @@ public class FamilyMemberController {
     ) {
     }
 
+    public record UpdatePetSettingsRequest(
+            Boolean enabled
+    ) {
+    }
+
     public record FamilyMemberResponse(
             UUID id,
             String name,
@@ -219,7 +253,8 @@ public class FamilyMemberController {
             Role role,
             String familyId,
             Boolean menstrualCycleEnabled,
-            Boolean menstrualCyclePrivate
+            Boolean menstrualCyclePrivate,
+            Boolean petEnabled
     ) {
     }
 

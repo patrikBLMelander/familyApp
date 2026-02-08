@@ -12,6 +12,7 @@ public record FamilyMember(
         UUID familyId,
         Boolean menstrualCycleEnabled,
         Boolean menstrualCyclePrivate,
+        Boolean petEnabled,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

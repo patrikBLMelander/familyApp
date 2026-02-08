@@ -543,6 +543,70 @@ public class FamilyMemberService {
         return result;
     }
 
+    /**
+     * Updates pet settings for a member.
+     * 
+     * Cache behavior:
+     * - Updates "members" cache with new member data (via @CachePut)
+     * - Evicts "familyMembers" cache for this member's family
+     * 
+     * @param memberId The member to update
+     * @param enabled Whether pets are enabled
+     * @param requesterId The requester ID (for permission check)
+     * @return Updated member (cached)
+     */
+    @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
+    public FamilyMember updatePetSettings(UUID memberId, Boolean enabled, UUID requesterId) {
+        var entity = repository.findById(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+        
+        UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
+        
+        // Only allow pet settings for PARENT role
+        if (!Role.PARENT.name().equals(entity.getRole())) {
+            throw new IllegalArgumentException("Pets can only be enabled for parent users");
+        }
+        
+        // Validate that requester is in the same family and has permission
+        if (requesterId != null) {
+            var requester = repository.findById(requesterId)
+                    .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
+            
+            // Requester must be in the same family
+            if (entity.getFamily() == null || requester.getFamily() == null ||
+                !entity.getFamily().getId().equals(requester.getFamily().getId())) {
+                throw new IllegalArgumentException("Cannot update pet settings for member in different family");
+            }
+            
+            // Requester must be PARENT, or updating their own settings
+            boolean isParent = Role.PARENT.name().equals(requester.getRole());
+            boolean isUpdatingSelf = requester.getId().equals(memberId);
+            
+            if (!isParent && !isUpdatingSelf) {
+                throw new IllegalArgumentException("Only parents can update pet settings");
+            }
+        }
+        
+        entity.setPetEnabled(enabled != null ? enabled : false);
+        entity.setUpdatedAt(OffsetDateTime.now());
+        
+        var saved = repository.save(entity);
+        var result = toDomain(saved);
+        
+        // Evict caches to ensure fresh data is returned
+        // Evict deviceTokens cache so getMemberByDeviceToken returns updated data
+        String deviceToken = entity.getDeviceToken();
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            cacheService.evictDeviceToken(deviceToken);
+        }
+        // Evict members cache
+        cacheService.evictMember(memberId);
+        // Evict familyMembers cache for this specific family (targeted eviction)
+        cacheService.evictFamilyMembers(familyId);
+        
+        return result;
+    }
+
     private FamilyMember toDomain(FamilyMemberEntity entity) {
         Role role = Role.CHILD;
         if (entity.getRole() != null) {
@@ -563,6 +627,7 @@ public class FamilyMemberService {
                 entity.getFamily() != null ? entity.getFamily().getId() : null,
                 entity.getMenstrualCycleEnabled() != null ? entity.getMenstrualCycleEnabled() : false,
                 entity.getMenstrualCyclePrivate() != null ? entity.getMenstrualCyclePrivate() : true,
+                entity.getPetEnabled() != null ? entity.getPetEnabled() : false,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

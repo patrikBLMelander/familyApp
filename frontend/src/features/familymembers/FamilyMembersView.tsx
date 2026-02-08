@@ -12,6 +12,7 @@ import {
   FamilyMemberRole,
 } from "../../shared/api/familyMembers";
 import { updateMenstrualCycleSettings } from "../../shared/api/menstrualCycle";
+import { updatePetSettings } from "../../shared/api/familyMembers";
 
 type FamilyMembersViewProps = {
   onNavigate?: (view: string) => void;
@@ -37,6 +38,8 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
   const [menstrualCycleSettingsId, setMenstrualCycleSettingsId] = useState<string | null>(null);
   const [menstrualCycleEnabled, setMenstrualCycleEnabled] = useState(false);
   const [menstrualCyclePrivate, setMenstrualCyclePrivate] = useState(true);
+  const [petSettingsId, setPetSettingsId] = useState<string | null>(null);
+  const [petEnabled, setPetEnabled] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const qrCodeRef = useRef<HTMLDivElement>(null);
 
@@ -227,6 +230,19 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       const errorMessage = e instanceof Error ? e.message : "Kunde inte uppdatera menscykel-inställningar.";
       setError(errorMessage);
       console.error("Menstrual cycle settings update error:", e);
+    }
+  };
+
+  const handleUpdatePetSettings = async (memberId: string) => {
+    try {
+      await updatePetSettings(memberId, petEnabled);
+      await loadMembers();
+      setPetSettingsId(null);
+      setError(null);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Kunde inte uppdatera djur-inställningar.";
+      setError(errorMessage);
+      console.error("Pet settings update error:", e);
     }
   };
 
@@ -658,6 +674,42 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                       </button>
                     </div>
                   </div>
+                ) : petSettingsId === member.id ? (
+                  <div className="family-member-form">
+                    <div style={{ marginBottom: "16px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                        <input
+                          type="checkbox"
+                          checked={petEnabled}
+                          onChange={(e) => setPetEnabled(e.target.checked)}
+                          style={{ width: "18px", height: "18px" }}
+                        />
+                        <span>Aktivera djur för denna vuxen</span>
+                      </label>
+                      <p style={{ marginLeft: "26px", fontSize: "0.85rem", color: "#666", marginTop: "8px" }}>
+                        När djur är aktiverat kan vuxna få djur, samla XP och mata sina djur precis som barnen.
+                      </p>
+                    </div>
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        onClick={() => void handleUpdatePetSettings(member.id)}
+                        className="button-primary"
+                      >
+                        Spara inställningar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPetSettingsId(null);
+                          setPetEnabled(false);
+                        }}
+                        className="button-secondary"
+                      >
+                        Avbryt
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <>
                     <div className="family-member-content">
@@ -879,6 +931,27 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                                   >
                                     <span style={{ marginRight: "8px", color: "#666" }}>🩸</span>
                                     Menscykel-inställningar
+                                  </button>
+                                )}
+                                
+                                {/* Pet settings - only for PARENT */}
+                                {member.role === "PARENT" && (
+                                  <button
+                                    type="button"
+                                    className="todo-menu-item"
+                                    onClick={() => {
+                                      setPetSettingsId(member.id);
+                                      setPetEnabled(member.petEnabled || false);
+                                      setEditingId(null);
+                                      setPasswordEditingId(null);
+                                      setEmailEditingId(null);
+                                      setMenstrualCycleSettingsId(null);
+                                      setShowCreateForm(false);
+                                      setOpenMenuId(null);
+                                    }}
+                                  >
+                                    <span style={{ marginRight: "8px", color: "#666" }}>🐾</span>
+                                    Djur-inställningar
                                   </button>
                                 )}
                                 

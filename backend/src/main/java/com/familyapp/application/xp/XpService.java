@@ -51,15 +51,15 @@ public class XpService {
 
     /**
      * Award XP to a member when they complete a task
-     * Only awards XP if the member is a child or assistant (CHILD or ASSISTANT role)
+     * Awards XP to children, assistants, and parents (if they have pets enabled)
      */
     public void awardXp(UUID memberId, int xpPoints) {
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
 
-        // Only award XP to children and assistants
+        // Award XP to children, assistants, and parents
         String role = member.getRole();
-        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
+        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role) && !"PARENT".equals(role)) {
             return;
         }
 
@@ -101,15 +101,15 @@ public class XpService {
     /**
      * Award bonus XP to a member (e.g., for special occasions)
      * This does NOT increment the task completion count
-     * Only awards XP to children and assistants
+     * Awards XP to children, assistants, and parents (if they have pets enabled)
      */
     public void awardBonusXp(UUID memberId, int xpPoints) {
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
 
-        // Only award XP to children and assistants
+        // Award XP to children, assistants, and parents
         String role = member.getRole();
-        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
+        if (!"CHILD".equals(role) && !"ASSISTANT".equals(role) && !"PARENT".equals(role)) {
             return;
         }
 

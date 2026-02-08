@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Dashboard } from "./features/dashboard/Dashboard";
+import { AdultDashboard } from "./features/dashboard/AdultDashboard";
 import { ChildDashboard } from "./features/dashboard/ChildDashboard";
 import { TodoListsView } from "./features/todos/TodoListsView";
 import { FamilyMembersView } from "./features/familymembers/FamilyMembersView";
@@ -174,9 +175,22 @@ export function App() {
     }
   };
 
-  const handleEggSelected = (pet: PetResponse) => {
+  const handleEggSelected = async (pet: PetResponse) => {
     setHasPet(true);
     setCurrentView("dashboard");
+    // Reload family info to refresh state
+    try {
+      const deviceToken = localStorage.getItem("deviceToken");
+      if (deviceToken) {
+        const member = await getMemberByDeviceToken(deviceToken);
+        if (member.familyId) {
+          const familyData = await getFamily(member.familyId);
+          setFamily(familyData);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to reload family after egg selection:", e);
+    }
   };
 
   const renderView = () => {
@@ -251,9 +265,11 @@ export function App() {
         return <ChildrenXpView onNavigate={handleNavigate} />;
       case "menstrualcycle":
         return <MenstrualCycleView onNavigate={handleNavigate} />;
+      case "eggselection":
+        return <EggSelectionView onEggSelected={handleEggSelected} />;
       case "dashboard":
       default:
-        return <Dashboard onNavigate={handleNavigate} familyId={family?.id} />;
+        return <AdultDashboard onNavigate={handleNavigate} familyId={family?.id} />;
     }
   };
 

@@ -46,6 +46,9 @@ public class FamilyMemberEntity {
     @Column(name = "menstrual_cycle_private")
     private Boolean menstrualCyclePrivate;
 
+    @Column(name = "pet_enabled")
+    private Boolean petEnabled;
+
     @ManyToOne
     @JoinColumn(name = "family_id")
     @Convert(converter = UuidConverter.class)
@@ -144,6 +147,14 @@ public class FamilyMemberEntity {
 
     public void setMenstrualCyclePrivate(Boolean menstrualCyclePrivate) {
         this.menstrualCyclePrivate = menstrualCyclePrivate;
+    }
+
+    public Boolean getPetEnabled() {
+        return petEnabled;
+    }
+
+    public void setPetEnabled(Boolean petEnabled) {
+        this.petEnabled = petEnabled;
     }
 }
 
