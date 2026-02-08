@@ -335,13 +335,26 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
     const now = new Date();
     const todayStr = now.toISOString().split("T")[0];
     
-    // Filter to only future events (today or later)
+    // Filter to only future events (today or later) and only events where current user is participant
     const futureEvents = calendarEvents.filter(event => {
-      if (event.isAllDay) {
-        const dates = getAllDayEventDates(event);
-        return dates.some(dateStr => dateStr >= todayStr);
+      // Filter by date (today or later)
+      const isFutureEvent = event.isAllDay
+        ? getAllDayEventDates(event).some(dateStr => dateStr >= todayStr)
+        : new Date(event.startDateTime) >= now;
+      
+      if (!isFutureEvent) return false;
+      
+      // For tasks, only show if current user is a participant
+      if (event.isTask && currentMember) {
+        return event.participantIds.includes(currentMember.id);
       }
-      return new Date(event.startDateTime) >= now;
+      
+      // For regular events, show if current user is a participant (or if no participants, show all)
+      if (currentMember) {
+        return event.participantIds.length === 0 || event.participantIds.includes(currentMember.id);
+      }
+      
+      return false;
     });
     
     // Group by date
@@ -368,7 +381,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
       }
       return acc;
     }, {} as Record<string, CalendarEventResponse[]>);
-  }, [calendarEvents]);
+  }, [calendarEvents, currentMember]);
 
   const sortedDates = useMemo(() => {
     return Object.keys(eventsByDate).sort();
