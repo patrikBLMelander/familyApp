@@ -3,6 +3,7 @@ import {
   CalendarEventResponse,
 } from "../../shared/api/calendar";
 import { EventForm } from "./components/EventForm";
+import { SimplifiedTaskForm } from "./components/SimplifiedTaskForm";
 import { WeekView } from "./components/WeekView";
 import { MonthView } from "./components/MonthView";
 import { CategoryManager } from "./components/CategoryManager";
@@ -271,7 +272,24 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
         </>
       )}
 
-      {(showCreateForm || editingEvent) && (
+      {/* Show simplified form when creating new tasks from "att göra" tab */}
+      {showCreateForm && !editingEvent && showTasksOnly && (
+        <SimplifiedTaskForm
+          members={members}
+          currentUserId={currentMemberId}
+          onSave={async () => {
+            await loadData();
+            setShowCreateForm(false);
+          }}
+          onCancel={() => {
+            setShowCreateForm(false);
+            setInitialStartDate(null);
+          }}
+        />
+      )}
+
+      {/* Show regular EventForm for calendar events or when editing tasks */}
+      {((showCreateForm && !showTasksOnly) || editingEvent) && (
         <EventForm
           event={editingEvent}
           initialStartDate={initialStartDate}
@@ -287,7 +305,9 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
               void handleCreateEvent(eventData);
             }
           }}
-          onDelete={editingEvent ? () => void handleDeleteEvent(editingEvent.id) : undefined}
+          onDelete={editingEvent ? (scope, occurrenceDate) => {
+            void handleDeleteEvent(editingEvent.id, scope, occurrenceDate);
+          } : undefined}
           onCancel={() => {
             setShowCreateForm(false);
             setEditingEvent(null);

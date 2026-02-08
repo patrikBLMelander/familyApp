@@ -11,12 +11,13 @@ export type EventFormProps = {
   currentUserRole?: "CHILD" | "ASSISTANT" | "PARENT" | null;
   currentUserId?: string | null;
   onSave: (eventData: EventFormData, scope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL", occurrenceDate?: string) => void;
-  onDelete?: () => void;
+  onDelete?: (scope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL", occurrenceDate?: string) => void;
   onCancel: () => void;
   allEvents?: CalendarEventResponse[]; // All events to find base recurring event
+  useSimplifiedForm?: boolean; // Force simplified form for tasks
 };
 
-export function EventForm({ event, initialStartDate, categories, members, currentUserRole, currentUserId, onSave, onDelete, onCancel, allEvents }: EventFormProps) {
+export function EventForm({ event, initialStartDate, categories, members, currentUserRole, currentUserId, onSave, onDelete, onCancel, allEvents, useSimplifiedForm }: EventFormProps) {
   const [title, setTitle] = useState(event?.title || "");
   const [description, setDescription] = useState(event?.description || "");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -132,6 +133,13 @@ export function EventForm({ event, initialStartDate, categories, members, curren
   const [isTask, setIsTask] = useState(event?.isTask || false);
   const [xpPoints, setXpPoints] = useState(event?.xpPoints?.toString() || "1");
   const [isRequired, setIsRequired] = useState(event?.isRequired !== undefined ? event.isRequired : true);
+  
+  // For simplified task form: scope selection when editing
+  const [editScope, setEditScope] = useState<"THIS" | "THIS_AND_FOLLOWING">("THIS");
+  const [deleteScope, setDeleteScope] = useState<"THIS" | "THIS_AND_FOLLOWING">("THIS");
+  
+  // Determine if we should show simplified form
+  const showSimplifiedForm = useSimplifiedForm || (event?.isTask === true && event?.recurringType === "WEEKLY" && event?.recurringInterval === 1);
 
   // Update isRecurring and recurring fields when event changes
   useEffect(() => {
@@ -236,11 +244,23 @@ export function EventForm({ event, initialStartDate, categories, members, curren
       endDateTimeStr = endDate || null;
     }
 
-    // Always pass scope and occurrenceDate if they were set (from recurring dialog)
+    // Always pass scope and occurrenceDate if they were set (from recurring dialog or simplified form)
     // This is important because when editing a single occurrence, the modified event itself is not recurring,
     // but we still need to pass the scope to tell the backend to create an exception
-    const scope = event && recurringScope ? recurringScope : undefined;
-    const occDate = event && occurrenceDate ? occurrenceDate : undefined;
+    let scope: "THIS" | "THIS_AND_FOLLOWING" | "ALL" | undefined;
+    let occDate: string | undefined;
+    
+    if (event) {
+      if (showSimplifiedForm && event.recurringType) {
+        // Use scope from simplified form
+        scope = editScope;
+        occDate = getOccurrenceDate();
+      } else if (recurringScope) {
+        // Use scope from recurring dialog
+        scope = recurringScope;
+        occDate = occurrenceDate;
+      }
+    }
     
     onSave({
       title: title.trim(),
@@ -272,6 +292,157 @@ export function EventForm({ event, initialStartDate, categories, members, curren
       return newSet;
     });
   };
+
+  // Get occurrence date from event (for recurring events)
+  const getOccurrenceDate = (): string | undefined => {
+    if (!event) return undefined;
+    // For recurring events, extract date from startDateTime
+    if (event.startDateTime) {
+      return event.startDateTime.substring(0, 10); // YYYY-MM-DD
+    }
+    return undefined;
+  };
+
+  // Simplified form for tasks
+  if (showSimplifiedForm && event) {
+    const occurrenceDate = getOccurrenceDate();
+    
+    return (
+      <section className="card">
+        <h3 style={{ marginTop: 0 }}>Redigera uppgift</h3>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div>
+            <label htmlFor="title" style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
+              Titel *
+            </label>
+            <input
+              id="title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>
+              Person *
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              {members.map((member) => (
+                <label key={member.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="checkbox"
+                    checked={participantIds.has(member.id)}
+                    onChange={() => toggleParticipant(member.id)}
+                  />
+                  <span>{member.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="xpPoints" style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
+              XP-poäng *
+            </label>
+            <input
+              id="xpPoints"
+              type="number"
+              min="0"
+              value={xpPoints}
+              onChange={(e) => setXpPoints(e.target.value)}
+              required
+              style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
+            />
+          </div>
+
+          {event.recurringType && (
+            <div>
+              <label style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>
+                Uppdatera
+              </label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="radio"
+                    name="editScope"
+                    checked={editScope === "THIS"}
+                    onChange={() => setEditScope("THIS")}
+                  />
+                  <span>Endast denna uppgift</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="radio"
+                    name="editScope"
+                    checked={editScope === "THIS_AND_FOLLOWING"}
+                    onChange={() => setEditScope("THIS_AND_FOLLOWING")}
+                  />
+                  <span>Denna och alla framtida på samma veckodag</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "8px", marginTop: "12px", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button type="submit" className="button-primary">
+                Spara ändringar
+              </button>
+              <button type="button" onClick={onCancel} className="todo-action-button">
+                Avbryt
+              </button>
+            </div>
+            {onDelete && (currentUserRole === "PARENT" || currentUserRole === "ASSISTANT") && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-end" }}>
+                {event.recurringType && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.85rem" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <input
+                        type="radio"
+                        name="deleteScope"
+                        checked={deleteScope === "THIS"}
+                        onChange={() => setDeleteScope("THIS")}
+                        style={{ margin: 0 }}
+                      />
+                      <span>Endast denna</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <input
+                        type="radio"
+                        name="deleteScope"
+                        checked={deleteScope === "THIS_AND_FOLLOWING"}
+                        onChange={() => setDeleteScope("THIS_AND_FOLLOWING")}
+                        style={{ margin: 0 }}
+                      />
+                      <span>Alla framtida</span>
+                    </label>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("Är du säker på att du vill ta bort denna uppgift?")) {
+                      onDelete(
+                        event.recurringType ? deleteScope : undefined,
+                        occurrenceDate
+                      );
+                    }
+                  }}
+                  className="todo-action-button-danger"
+                  style={{ borderRadius: "10px" }}
+                >
+                  Ta bort
+                </button>
+              </div>
+            )}
+          </div>
+        </form>
+      </section>
+    );
+  }
 
   return (
     <section className="card">
