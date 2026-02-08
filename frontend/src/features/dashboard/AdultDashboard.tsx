@@ -49,7 +49,6 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [calendarEndDate, setCalendarEndDate] = useState<Date | null>(null);
-  const [showCalendarQuickAdd, setShowCalendarQuickAdd] = useState(false);
   const [isLoadingMoreEvents, setIsLoadingMoreEvents] = useState(false);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
@@ -331,23 +330,23 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   };
 
   // Group events by date for calendar view
+  // Note: In calendar tab, we only show events (not tasks). Tasks are shown in "Att Göra" tab.
   const eventsByDate = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().split("T")[0];
     
     // Filter to only future events (today or later) and only events where current user is participant
+    // IMPORTANT: Exclude tasks (isTask=true) - tasks are shown in "Att Göra" tab, not in calendar
     const futureEvents = calendarEvents.filter(event => {
+      // Exclude tasks - calendar tab should only show events (rullande schema)
+      if (event.isTask) return false;
+      
       // Filter by date (today or later)
       const isFutureEvent = event.isAllDay
         ? getAllDayEventDates(event).some(dateStr => dateStr >= todayStr)
         : new Date(event.startDateTime) >= now;
       
       if (!isFutureEvent) return false;
-      
-      // For tasks, only show if current user is a participant
-      if (event.isTask && currentMember) {
-        return event.participantIds.includes(currentMember.id);
-      }
       
       // For regular events, show if current user is a participant (or if no participants, show all)
       if (currentMember) {
@@ -961,16 +960,6 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                 }}>
                   Kalender
                 </h3>
-                {currentMember && (
-                  <button
-                    type="button"
-                    className="button-primary"
-                    onClick={() => setShowCalendarQuickAdd(true)}
-                    style={{ fontSize: "0.9rem", padding: "8px 16px" }}
-                  >
-                    + Lägg till task
-                  </button>
-                )}
               </div>
 
               {loadingCalendar ? (
@@ -1044,9 +1033,9 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                                 key={`${event.id}-${event.startDateTime}`}
                                 style={{
                                   padding: "12px",
-                                  background: event.isTask ? "#fff7ed" : "#f7fafc",
+                                  background: "#f7fafc",
                                   borderRadius: "8px",
-                                  border: `2px solid ${event.isTask ? "#fed7aa" : categoryColor}`,
+                                  border: `2px solid ${categoryColor}`,
                                   cursor: "pointer",
                                   transition: "all 0.2s ease",
                                 }}
@@ -1073,15 +1062,6 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                                 }}>
                                   {formatDateTimeRange(event.startDateTime, event.endDateTime, event.isAllDay)}
                                 </div>
-                                {event.isTask && (
-                                  <div style={{
-                                    fontSize: "0.85rem",
-                                    color: "#718096",
-                                    marginTop: "4px",
-                                  }}>
-                                    {event.xpPoints ? `${event.xpPoints} XP` : "Uppgift"}
-                                  </div>
-                                )}
                               </div>
                             );
                           })}
@@ -1099,29 +1079,6 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                 </div>
               )}
             </section>
-
-            {showCalendarQuickAdd && currentMember && (
-              <SimplifiedTaskForm
-                members={members}
-                currentUserId={currentMember.id}
-                onSave={async () => {
-                  // Reload calendar after adding
-                  const now = new Date();
-                  const startDate = new Date(now);
-                  startDate.setHours(0, 0, 0, 0);
-                  
-                  const endDate = calendarEndDate || new Date(now);
-                  endDate.setDate(endDate.getDate() + 30);
-                  endDate.setHours(23, 59, 59, 999);
-                  
-                  const eventsData = await fetchCalendarEvents(startDate, endDate);
-                  setCalendarEvents(eventsData);
-                  setCalendarEndDate(endDate);
-                  setShowCalendarQuickAdd(false);
-                }}
-                onCancel={() => setShowCalendarQuickAdd(false)}
-              />
-            )}
           </div>
         )}
         
