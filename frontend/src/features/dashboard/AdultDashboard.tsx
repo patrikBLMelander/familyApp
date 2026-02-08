@@ -567,12 +567,28 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   };
 
   const MAX_LEVEL = 5;
+  // XP thresholds: [0, 10, 35, 70, 125]
+  // Level 1: 0-9 XP (range = 10)
+  // Level 2: 10-34 XP (range = 25)
+  // Level 3: 35-69 XP (range = 35)
+  // Level 4: 70-124 XP (range = 55)
+  // Level 5: 125+ XP
+  const XP_THRESHOLDS = [0, 10, 35, 70, 125];
   const progressPercentage = xpProgress 
     ? xpProgress.currentLevel >= MAX_LEVEL
       ? 100
-      : xpProgress.xpForNextLevel > 0
-        ? Math.min(100, Math.max(0, (xpProgress.xpInCurrentLevel / (xpProgress.xpInCurrentLevel + xpProgress.xpForNextLevel)) * 100))
-        : 0
+      : (() => {
+          const currentLevelIndex = xpProgress.currentLevel - 1; // 0-based index
+          const nextLevelThreshold = XP_THRESHOLDS[xpProgress.currentLevel]; // Threshold for next level
+          const currentLevelThreshold = XP_THRESHOLDS[currentLevelIndex]; // Threshold for current level
+          const xpRangeForCurrentLevel = nextLevelThreshold - currentLevelThreshold; // XP range for current level
+          
+          if (xpRangeForCurrentLevel <= 0) return 100; // Safety check
+          
+          // Calculate progress: how much XP we have in current level / total XP range for current level
+          const progress = (xpProgress.xpInCurrentLevel / xpRangeForCurrentLevel) * 100;
+          return Math.min(100, Math.max(0, progress));
+        })()
     : 0;
   const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
   const foodName = pet ? getPetFoodName(pet.petType) : "mat";

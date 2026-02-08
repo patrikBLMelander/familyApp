@@ -277,11 +277,28 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           const pet = xpData?.pet;
           const petHistory = xpData?.petHistory || [];
 
-          // Show pet even if no XP progress exists yet
-          const progressPercentage = progress && progress.xpForNextLevel > 0
-            ? (progress.xpInCurrentLevel / (progress.xpInCurrentLevel + progress.xpForNextLevel)) * 100
-            : progress && progress.currentLevel >= MAX_LEVEL
+          // XP thresholds: [0, 10, 35, 70, 125]
+          // Level 1: 0-9 XP (range = 10)
+          // Level 2: 10-34 XP (range = 25)
+          // Level 3: 35-69 XP (range = 35)
+          // Level 4: 70-124 XP (range = 55)
+          // Level 5: 125+ XP
+          const XP_THRESHOLDS = [0, 10, 35, 70, 125];
+          const progressPercentage = progress && progress.currentLevel >= MAX_LEVEL
             ? 100
+            : progress
+            ? (() => {
+                const currentLevelIndex = progress.currentLevel - 1; // 0-based index
+                const nextLevelThreshold = XP_THRESHOLDS[progress.currentLevel]; // Threshold for next level
+                const currentLevelThreshold = XP_THRESHOLDS[currentLevelIndex]; // Threshold for current level
+                const xpRangeForCurrentLevel = nextLevelThreshold - currentLevelThreshold; // XP range for current level
+                
+                if (xpRangeForCurrentLevel <= 0) return 100; // Safety check
+                
+                // Calculate progress: how much XP we have in current level / total XP range for current level
+                const progressValue = (progress.xpInCurrentLevel / xpRangeForCurrentLevel) * 100;
+                return Math.min(100, Math.max(0, progressValue));
+              })()
             : 0;
           
           // Get food emoji and name for this child's pet

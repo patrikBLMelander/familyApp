@@ -80,11 +80,27 @@ export function XpDashboard({ onNavigate }: XpDashboardProps) {
     );
   }
 
+  // XP thresholds: [0, 10, 35, 70, 125]
+  // Level 1: 0-9 XP (range = 10)
+  // Level 2: 10-34 XP (range = 25)
+  // Level 3: 35-69 XP (range = 35)
+  // Level 4: 70-124 XP (range = 55)
+  // Level 5: 125+ XP
+  const XP_THRESHOLDS = [0, 10, 35, 70, 125];
   const progressPercentage = progress.currentLevel >= MAX_LEVEL 
     ? 100 
-    : progress.xpForNextLevel > 0
-      ? (progress.xpInCurrentLevel / (progress.xpInCurrentLevel + progress.xpForNextLevel)) * 100
-      : 0;
+    : (() => {
+        const currentLevelIndex = progress.currentLevel - 1; // 0-based index
+        const nextLevelThreshold = XP_THRESHOLDS[progress.currentLevel]; // Threshold for next level
+        const currentLevelThreshold = XP_THRESHOLDS[currentLevelIndex]; // Threshold for current level
+        const xpRangeForCurrentLevel = nextLevelThreshold - currentLevelThreshold; // XP range for current level
+        
+        if (xpRangeForCurrentLevel <= 0) return 100; // Safety check
+        
+        // Calculate progress: how much XP we have in current level / total XP range for current level
+        const progressValue = (progress.xpInCurrentLevel / xpRangeForCurrentLevel) * 100;
+        return Math.min(100, Math.max(0, progressValue));
+      })();
   const monthNames = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
   const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
   const foodName = pet ? getPetFoodName(pet.petType) : "mat";
