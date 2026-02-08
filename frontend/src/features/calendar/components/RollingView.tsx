@@ -3,7 +3,7 @@ import { CalendarEventResponse, CalendarEventCategoryResponse, CalendarTaskWithC
 import { FamilyMemberResponse } from "../../../shared/api/familyMembers";
 import { fetchMemberPet, PetResponse } from "../../../shared/api/pets";
 import { getPetFoodEmoji, getPetFoodName } from "../../pet/petFoodUtils";
-import { formatDateTimeRange } from "../utils/dateFormatters";
+import { formatDateTimeRange, formatAllDayEventRange, getAllDayEventDates } from "../utils/dateFormatters";
 import { MAX_RECURRING_DAYS } from "../constants";
 import { RecurringEventDialog } from "./RecurringEventDialog";
 
@@ -31,43 +31,6 @@ type RollingViewProps = {
   currentUserRole: "CHILD" | "ASSISTANT" | "PARENT" | null;
 };
 
-// Helper function to get all dates for a multi-day all-day event
-function getAllDayEventDates(event: CalendarEventResponse): string[] {
-  if (!event.isAllDay) return [];
-  
-  const startDateStr = event.startDateTime.substring(0, 10);
-  if (!event.endDateTime) {
-    // Single day event
-    return [startDateStr];
-  }
-  
-  // Multi-day event - get all dates from start to end (inclusive)
-  const endDateStr = event.endDateTime.substring(0, 10);
-  const dates: string[] = [];
-  const startDate = new Date(startDateStr + "T00:00:00");
-  const endDate = new Date(endDateStr + "T00:00:00");
-  
-  // Safety check: if end is before start, just return start date
-  if (endDate < startDate) {
-    return [startDateStr];
-  }
-  
-  // Safety limit to prevent performance issues
-  let dayCount = 0;
-  
-  // Iterate through all dates from start to end (inclusive)
-  const currentDate = new Date(startDate);
-  while (currentDate <= endDate && dayCount < MAX_RECURRING_DAYS) {
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
-    const day = String(currentDate.getDate()).padStart(2, "0");
-    dates.push(`${year}-${month}-${day}`);
-    currentDate.setDate(currentDate.getDate() + 1);
-    dayCount++;
-  }
-  
-  return dates;
-}
 
 const SWIPE_THRESHOLD = 50; // px to trigger action
 
@@ -204,6 +167,8 @@ export function RollingView({
   const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
   
   // Filter by task/event type based on showTasksOnly
+  // IMPORTANT: For regular events (not tasks), we show ALL events regardless of participantIds
+  // This ensures all family members' events are visible in the calendar view
   let filteredEvents = events.filter(event => {
     if (showTasksOnly) {
       if (!event.isTask) return false;
@@ -213,6 +178,8 @@ export function RollingView({
       }
       return true;
     } else {
+      // IMPORTANT: For regular events (not tasks), show ALL events regardless of participantIds
+      // Do NOT filter by participantIds - show ALL family events
       return !event.isTask; // Show only non-task events
     }
   });
@@ -220,7 +187,7 @@ export function RollingView({
   // For rolling view, also filter by date (today or future)
   filteredEvents = filteredEvents.filter(event => {
     const isFutureEvent = event.isAllDay
-      ? getAllDayEventDates(event).some(dateStr => dateStr >= todayStr)
+      ? getAllDayEventDates(event, MAX_RECURRING_DAYS).some(dateStr => dateStr >= todayStr)
       : new Date(event.startDateTime) >= now;
     return isFutureEvent;
   });
@@ -230,7 +197,7 @@ export function RollingView({
     return filteredEvents.reduce((acc, event) => {
       if (event.isAllDay) {
         // For all-day events, get all dates the event spans
-        const dates = getAllDayEventDates(event);
+        const dates = getAllDayEventDates(event, MAX_RECURRING_DAYS);
         dates.forEach(dateKey => {
           if (!acc[dateKey]) {
             acc[dateKey] = [];
@@ -1108,38 +1075,10 @@ export function RollingView({
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 600, marginBottom: "4px" }}>{event.title}</div>
                               <div style={{ fontSize: "0.85rem", color: "#6b6b6b", marginBottom: "4px" }}>
-                                {event.isAllDay ? (
-                                  // For all-day events, show date range if multi-day, otherwise just the date
-                                  (() => {
-                                    const startDate = new Date(event.startDateTime.substring(0, 10));
-                                    const startDateStr = startDate.toLocaleDateString("sv-SE", {
-                                      year: "numeric",
-                                      month: "long",
-                                      day: "numeric",
-                                    });
-                                    
-                                    if (event.endDateTime) {
-                                      const endDate = new Date(event.endDateTime.substring(0, 10));
-                                      const endDateStr = endDate.toLocaleDateString("sv-SE", {
-                                        year: "numeric",
-                                        month: "long",
-                                        day: "numeric",
-                                      });
-                                      
-                                      // Check if same day
-                                      if (event.startDateTime.substring(0, 10) === event.endDateTime.substring(0, 10)) {
-                                        return `${startDateStr} - Heldag`;
-                                      }
-                                      
-                                      // Multi-day: show range
-                                      return `${startDateStr} - ${endDateStr} - Heldag`;
-                                    }
-                                    
-                                    return `${startDateStr} - Heldag`;
-                                  })()
-                                ) : (
-                                  formatDateTimeRange(event.startDateTime, event.endDateTime, false)
-                                )}
+                                {event.isAllDay 
+                                  ? formatAllDayEventRange(event.startDateTime, event.endDateTime)
+                                  : formatDateTimeRange(event.startDateTime, event.endDateTime, false)
+                                }
                               </div>
                               {event.description && (
                                 <div style={{ fontSize: "0.9rem", color: "#6b6b6b", marginBottom: "4px" }}>

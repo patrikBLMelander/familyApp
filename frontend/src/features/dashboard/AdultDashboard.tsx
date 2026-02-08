@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse, CalendarEventResponse, fetchCalendarEvents } from "../../shared/api/calendar";
+import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse, CalendarEventResponse, fetchCalendarEvents, fetchCalendarCategories, CalendarEventCategoryResponse } from "../../shared/api/calendar";
 import { getMemberByDeviceToken, fetchAllFamilyMembers } from "../../shared/api/familyMembers";
 import { SimplifiedTaskForm } from "../calendar/components/SimplifiedTaskForm";
 import { FamilyMemberResponse } from "../../shared/api/familyMembers";
-import { formatDateTimeRange } from "../calendar/utils/dateFormatters";
-import { CALENDAR_VIEW_TYPES } from "../calendar/constants";
+import { formatDateTimeRange, formatAllDayEventRange, getAllDayEventDates } from "../calendar/utils/dateFormatters";
+import { CALENDAR_VIEW_TYPES, MAX_RECURRING_DAYS } from "../calendar/constants";
 import { fetchTodoLists, TodoListResponse, TODO_COLORS } from "../../shared/api/todos";
 import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, getLastFedDate } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
@@ -32,6 +32,55 @@ const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
   "cdd48859-74c5-4dee-989f-0b091f62d630", // Localhost
 ];
 
+// Constants for calendar event styling
+const CATEGORY_BACKGROUND_OPACITY = 0.2;
+const FALLBACK_BACKGROUND_COLOR = "rgba(240, 240, 240, 0.5)";
+const FALLBACK_BORDER_COLOR = "#b8e6b8";
+
+/**
+ * Converts a hex color to rgba with opacity.
+ * Includes validation and fallback handling for invalid colors.
+ * 
+ * @param hex - Hex color string (e.g., "#b8e6b8" or "b8e6b8")
+ * @param opacity - Opacity value between 0 and 1
+ * @returns RGBA color string (e.g., "rgba(184, 230, 184, 0.2)")
+ */
+function hexToRgba(hex: string, opacity: number): string {
+  // Validate inputs
+  if (!hex || typeof hex !== 'string') {
+    return `rgba(184, 230, 184, ${CATEGORY_BACKGROUND_OPACITY})`; // Fallback to green
+  }
+  
+  // Validate and clamp opacity
+  const validOpacity = Math.max(0, Math.min(1, opacity));
+  
+  // Remove # if present
+  const cleanHex = hex.replace("#", "");
+  
+  // Handle both 3 and 6 character hex
+  let fullHex = cleanHex;
+  if (cleanHex.length === 3) {
+    fullHex = cleanHex.split('').map(char => char + char).join('');
+  }
+  
+  // Validate hex length
+  if (fullHex.length !== 6) {
+    return `rgba(184, 230, 184, ${validOpacity})`; // Fallback
+  }
+  
+  // Parse RGB values
+  const r = parseInt(fullHex.substring(0, 2), 16);
+  const g = parseInt(fullHex.substring(2, 4), 16);
+  const b = parseInt(fullHex.substring(4, 6), 16);
+  
+  // Validate that parsing succeeded
+  if (isNaN(r) || isNaN(g) || isNaN(b)) {
+    return `rgba(184, 230, 184, ${validOpacity})`; // Fallback
+  }
+  
+  return `rgba(${r}, ${g}, ${b}, ${validOpacity})`;
+}
+
 export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>("calendar");
   const showSpotifyLink = familyId && SPOTIFY_CHARTS_ALLOWED_FAMILIES.includes(familyId);
@@ -46,6 +95,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   
   // Kalender-tab state
   const [calendarEvents, setCalendarEvents] = useState<CalendarEventResponse[]>([]);
+  const [calendarCategories, setCalendarCategories] = useState<CalendarEventCategoryResponse[]>([]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [calendarEndDate, setCalendarEndDate] = useState<Date | null>(null);
@@ -202,6 +252,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   }, [currentMember?.petEnabled]);
 
   // Reload member and pet data when returning from other views (focus or visibility change)
+  // Also reload calendar events if calendar tab is active
   useEffect(() => {
     const reloadMemberData = async () => {
       try {
@@ -214,6 +265,29 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
         
         // Reload pet data if pet is enabled
         await loadPetData(member);
+        
+        // Reload calendar events if calendar tab is active
+        if (activeTab === "calendar") {
+          const now = new Date();
+          const startDate = new Date(now);
+          startDate.setHours(0, 0, 0, 0);
+          
+          const endDate = new Date(now);
+          endDate.setDate(endDate.getDate() + 30);
+          endDate.setHours(23, 59, 59, 999);
+          
+          try {
+            const [eventsData, categoriesData] = await Promise.all([
+              fetchCalendarEvents(startDate, endDate),
+              fetchCalendarCategories()
+            ]);
+            setCalendarEvents(eventsData);
+            setCalendarCategories(categoriesData);
+            setCalendarEndDate(endDate);
+          } catch (e) {
+            console.error("Error reloading calendar events:", e);
+          }
+        }
       } catch (e) {
         console.error("Error reloading member data:", e);
       }
@@ -236,7 +310,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadPetData]);
+  }, [loadPetData, activeTab]);
 
   // Load tasks when Att Göra-tab is active
   useEffect(() => {
@@ -261,9 +335,11 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
     }
   }, [activeTab, currentMember]);
 
-  // Load calendar events when Kalender-tab is active
+  // Load calendar events and categories when Kalender-tab is active
   useEffect(() => {
     if (activeTab === "calendar") {
+      let cancelled = false;
+      
       const loadCalendar = async () => {
         try {
           setLoadingCalendar(true);
@@ -272,22 +348,41 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
           const startDate = new Date(now);
           startDate.setHours(0, 0, 0, 0);
           
+          // Load 30 days ahead initially - same as RollingView
+          // More events will be loaded automatically when scrolling (loadMoreEvents)
           const endDate = new Date(now);
-          endDate.setDate(endDate.getDate() + 30); // Load 30 days ahead
+          endDate.setDate(endDate.getDate() + 30);
           endDate.setHours(23, 59, 59, 999);
           
-          const eventsData = await fetchCalendarEvents(startDate, endDate);
-          setCalendarEvents(eventsData);
-          setCalendarEndDate(endDate);
+          const [eventsData, categoriesData] = await Promise.all([
+            fetchCalendarEvents(startDate, endDate),
+            fetchCalendarCategories()
+          ]);
+          
+          // Only update state if component is still mounted
+          if (!cancelled) {
+            setCalendarEvents(eventsData);
+            setCalendarCategories(categoriesData);
+            setCalendarEndDate(endDate);
+          }
         } catch (e) {
-          console.error("Error loading calendar:", e);
-          setCalendarError("Kunde inte ladda kalender. Försök igen.");
+          if (!cancelled) {
+            console.error("Error loading calendar:", e);
+            setCalendarError("Kunde inte ladda kalender. Försök igen.");
+          }
         } finally {
-          setLoadingCalendar(false);
+          if (!cancelled) {
+            setLoadingCalendar(false);
+          }
         }
       };
       
       void loadCalendar();
+      
+      // Cleanup function to prevent state updates after unmount
+      return () => {
+        cancelled = true;
+      };
     }
   }, [activeTab]);
 
@@ -312,79 +407,80 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
     }
   }, [activeTab]);
 
-  // Helper function to get all dates for a multi-day all-day event
-  const getAllDayEventDates = (event: CalendarEventResponse): string[] => {
-    if (!event.isAllDay || !event.endDateTime) return [];
-    
-    const start = new Date(event.startDateTime);
-    const end = new Date(event.endDateTime);
-    const dates: string[] = [];
-    
-    const current = new Date(start);
-    while (current <= end) {
-      dates.push(current.toISOString().split("T")[0]);
-      current.setDate(current.getDate() + 1);
-    }
-    
-    return dates;
-  };
 
-  // Group events by date for calendar view
+  // Group events by date for calendar view - use EXACT same logic as RollingView
   // Note: In calendar tab, we only show events (not tasks). Tasks are shown in "Att Göra" tab.
+  // IMPORTANT: Calendar tab shows ALL family members' events, not just current user's events
+  // IMPORTANT: We do NOT filter by participantIds for regular events - show ALL family events
   const eventsByDate = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
     
-    // Filter to only future events (today or later) and only events where current user is participant
-    // IMPORTANT: Exclude tasks (isTask=true) - tasks are shown in "Att Göra" tab, not in calendar
-    const futureEvents = calendarEvents.filter(event => {
+    // Filter by task/event type - same as RollingView
+    // IMPORTANT: For regular events (not tasks), we show ALL events regardless of participantIds
+    // This ensures all family members' events are visible in the calendar view
+    let filteredEvents = calendarEvents.filter(event => {
       // Exclude tasks - calendar tab should only show events (rullande schema)
-      if (event.isTask) return false;
-      
-      // Filter by date (today or later)
-      const isFutureEvent = event.isAllDay
-        ? getAllDayEventDates(event).some(dateStr => dateStr >= todayStr)
-        : new Date(event.startDateTime) >= now;
-      
-      if (!isFutureEvent) return false;
-      
-      // For regular events, show if current user is a participant (or if no participants, show all)
-      if (currentMember) {
-        return event.participantIds.length === 0 || event.participantIds.includes(currentMember.id);
-      }
-      
-      return false;
+      // Do NOT filter by participantIds - show ALL family events
+      return !event.isTask; // Show only non-task events
     });
     
-    // Group by date
-    return futureEvents.reduce((acc, event) => {
+    // For calendar view, also filter by date (today or future) - same as RollingView
+    filteredEvents = filteredEvents.filter(event => {
+      const isFutureEvent = event.isAllDay
+        ? getAllDayEventDates(event, MAX_RECURRING_DAYS).some(dateStr => dateStr >= todayStr)
+        : new Date(event.startDateTime) >= now;
+      return isFutureEvent;
+    });
+
+    // Group events by date - memoized to prevent unnecessary recalculations - EXACT same as RollingView
+    return filteredEvents.reduce((acc, event) => {
       if (event.isAllDay) {
-        const dates = getAllDayEventDates(event);
+        // For all-day events, get all dates the event spans
+        const dates = getAllDayEventDates(event, MAX_RECURRING_DAYS);
         dates.forEach(dateKey => {
-          if (dateKey >= todayStr) {
-            if (!acc[dateKey]) {
-              acc[dateKey] = [];
-            }
-            acc[dateKey].push(event);
-          }
-        });
-      } else {
-        const date = new Date(event.startDateTime);
-        const dateKey = date.toISOString().split("T")[0];
-        if (dateKey >= todayStr) {
           if (!acc[dateKey]) {
             acc[dateKey] = [];
           }
           acc[dateKey].push(event);
+        });
+      } else {
+        // For regular events, parse the datetime - EXACT same as RollingView
+        const date = new Date(event.startDateTime);
+        const dateKey = date.toISOString().split("T")[0];
+        if (!acc[dateKey]) {
+          acc[dateKey] = [];
         }
+        acc[dateKey].push(event);
       }
       return acc;
     }, {} as Record<string, CalendarEventResponse[]>);
-  }, [calendarEvents, currentMember]);
+  }, [calendarEvents]);
 
   const sortedDates = useMemo(() => {
     return Object.keys(eventsByDate).sort();
   }, [eventsByDate]);
+
+  // Create Maps for O(1) lookup performance
+  const categoryMap = useMemo(() => {
+    const map = new Map<string, CalendarEventCategoryResponse>();
+    (calendarCategories || []).forEach(cat => {
+      if (cat?.id) {
+        map.set(String(cat.id), cat);
+      }
+    });
+    return map;
+  }, [calendarCategories]);
+
+  const membersMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (members || []).forEach(member => {
+      if (member?.id && member?.name) {
+        map.set(member.id, member.name);
+      }
+    });
+    return map;
+  }, [members]);
 
   // Load more events when scrolling to bottom
   const loadMoreEvents = useCallback(async () => {
@@ -433,7 +529,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
           void loadMoreEvents();
         }
       },
-      { root: null, rootMargin: "100px", threshold: 0.1 }
+      { root: null, rootMargin: "200px", threshold: 0.1 }
     );
 
     observer.observe(loadMoreTriggerRef.current);
@@ -1042,14 +1138,20 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                         </h4>
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                           {dateEvents.map((event) => {
-                            const categoryColor = event.category?.color || "#e2e8f0";
+                            // Find category using Map for O(1) lookup
+                            const category = event.categoryId 
+                              ? categoryMap.get(String(event.categoryId))
+                              : undefined;
+                            const categoryColor = category?.color || FALLBACK_BORDER_COLOR;
                             
                             return (
                               <div
                                 key={`${event.id}-${event.startDateTime}`}
                                 style={{
                                   padding: "12px",
-                                  background: "#f7fafc",
+                                  background: category?.color
+                                    ? hexToRgba(category.color, CATEGORY_BACKGROUND_OPACITY)
+                                    : FALLBACK_BACKGROUND_COLOR,
                                   borderRadius: "8px",
                                   border: `2px solid ${categoryColor}`,
                                   cursor: "pointer",
@@ -1074,10 +1176,47 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                                 </div>
                                 <div style={{
                                   fontSize: "0.85rem",
-                                  color: "#718096",
+                                  color: "#6b6b6b",
+                                  marginBottom: event.description || event.location || event.participantIds.length > 0 ? "4px" : "0",
                                 }}>
-                                  {formatDateTimeRange(event.startDateTime, event.endDateTime, event.isAllDay)}
+                                  {event.isAllDay 
+                                    ? formatAllDayEventRange(event.startDateTime, event.endDateTime)
+                                    : formatDateTimeRange(event.startDateTime, event.endDateTime, false)
+                                  }
                                 </div>
+                                {event.description && (
+                                  <div style={{
+                                    fontSize: "0.9rem",
+                                    color: "#6b6b6b",
+                                    marginBottom: event.location || event.participantIds.length > 0 ? "4px" : "0",
+                                  }}>
+                                    {event.description}
+                                  </div>
+                                )}
+                                {event.location && (
+                                  <div style={{
+                                    fontSize: "0.85rem",
+                                    color: "#6b6b6b",
+                                    marginBottom: event.participantIds.length > 0 ? "4px" : "0",
+                                  }}>
+                                    📍 {event.location}
+                                  </div>
+                                )}
+                                {event.participantIds.length > 0 && (() => {
+                                  const participantNames = event.participantIds
+                                    .map(id => membersMap.get(id))
+                                    .filter(Boolean)
+                                    .join(", ");
+                                  
+                                  return participantNames ? (
+                                    <div style={{
+                                      fontSize: "0.85rem",
+                                      color: "#6b6b6b",
+                                    }}>
+                                      👥 {participantNames}
+                                    </div>
+                                  ) : null;
+                                })()}
                               </div>
                             );
                           })}

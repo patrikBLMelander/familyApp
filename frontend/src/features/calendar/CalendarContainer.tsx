@@ -136,6 +136,8 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
   }, [showTasksOnly, viewType, currentMemberId, selectedDate, showAllMembers, loadTasks, loadTasksForAllMembers]);
 
   // Filter events for week/month views (rolling view handles its own filtering)
+  // IMPORTANT: For regular events (not tasks), we show ALL events regardless of participantIds
+  // This ensures all family members' events are visible in the calendar view
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
       if (showTasksOnly) {
@@ -146,6 +148,8 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
         }
         return true;
       } else {
+        // IMPORTANT: For regular events (not tasks), show ALL events regardless of participantIds
+        // Do NOT filter by participantIds - show ALL family events
         return !event.isTask; // Show only non-task events
       }
     });
