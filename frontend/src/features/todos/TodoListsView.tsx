@@ -53,6 +53,7 @@ type TodoList = {
 
 type TodoListsViewProps = {
   onNavigate?: (view: "dashboard") => void;
+  initialListId?: string | null;
 };
 
 // Swipe constants
@@ -60,13 +61,13 @@ const SWIPE_THRESHOLD = 50; // px to trigger action
 const MAX_SWIPE_OFFSET = 80; // px max swipe distance
 const MIN_SWIPE_DISTANCE = 10; // px minimum to start swipe detection
 
-export function TodoListsView({ onNavigate }: TodoListsViewProps) {
+export function TodoListsView({ onNavigate, initialListId }: TodoListsViewProps) {
   const [lists, setLists] = useState<TodoList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newListName, setNewListName] = useState("");
   const [newItemDescription, setNewItemDescription] = useState("");
-  const [activeListId, setActiveListId] = useState<string | null>(null);
+  const [activeListId, setActiveListId] = useState<string | null>(initialListId || null);
   const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
   const [swipeStartY, setSwipeStartY] = useState<number | null>(null);
   const [swipeOffset, setSwipeOffset] = useState<number>(0);
@@ -94,16 +95,17 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
     })
   );
 
+  // Load lists on mount
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         const data = await fetchTodoLists();
-        setLists(
-          data.slice().sort((a, b) => a.position - b.position)
-        );
-        if (data.length > 0 && !activeListId) {
-          setActiveListId(data[0].id);
+        const sortedLists = data.slice().sort((a, b) => a.position - b.position);
+        setLists(sortedLists);
+        // Set default active list if none is set
+        if (sortedLists.length > 0 && !activeListId) {
+          setActiveListId(sortedLists[0].id);
         }
       } catch (e) {
         setError("Kunde inte hämta to do-listor just nu.");
@@ -113,7 +115,27 @@ export function TodoListsView({ onNavigate }: TodoListsViewProps) {
     };
 
     void load();
-  }, [activeListId]);
+  }, []);
+  
+  // Update activeListId when initialListId changes or when lists are loaded
+  // This handles both initial navigation with a listId and subsequent changes
+  useEffect(() => {
+    if (lists.length > 0) {
+      if (initialListId) {
+        const listExists = lists.find(l => l.id === initialListId);
+        if (listExists && activeListId !== initialListId) {
+          setActiveListId(initialListId);
+        } else if (!listExists && activeListId !== initialListId) {
+          // Fallback to first list if initialListId doesn't exist
+          console.warn(`List with id ${initialListId} not found, falling back to first list`);
+          setActiveListId(lists[0].id);
+        }
+      } else if (!activeListId) {
+        // No initialListId provided, use first list
+        setActiveListId(lists[0].id);
+      }
+    }
+  }, [initialListId, lists, activeListId]);
 
   // Calculate activeList and safeActiveList before they're used
   const activeList = lists.find((l) => l.id === activeListId) ?? (lists.length > 0 ? lists[0] : undefined);

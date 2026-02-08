@@ -19,7 +19,7 @@ import { sortTasksByRequiredAndTitle } from "./utils/taskSorting";
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "childrenxp";
 
 type AdultDashboardProps = {
-  onNavigate?: (view: ViewKey) => void;
+  onNavigate?: (view: ViewKey, params?: { listId?: string }) => void;
   familyId?: string | null;
   key?: string | number; // Allow key prop to force remount
 };
@@ -1328,7 +1328,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                     return (
                       <div
                         key={list.id}
-                        onClick={() => onNavigate?.("todos")}
+                        onClick={() => onNavigate?.("todos", { listId: list.id })}
                         style={{
                           padding: "16px",
                           background: colorConfig.gradient,

@@ -40,6 +40,7 @@ export function App() {
   const { isChild, childMember, loading: childLoading } = useIsChild();
   const { isInstallable, isInstalled, isIOS, handleInstallClick } = usePwaInstall();
   const [hasPet, setHasPet] = useState<boolean | null>(null);
+  const [navigationParams, setNavigationParams] = useState<{ listId?: string } | null>(null);
 
   // Check for hash-based routing (for test views) - must run first
   useEffect(() => {
@@ -124,9 +125,15 @@ export function App() {
     }
   }, [isChild, childLoading, isAuthenticated, hasPet]);
 
-  const handleNavigate = (view: ViewKey) => {
+  const handleNavigate = (view: ViewKey, params?: { listId?: string }) => {
     setCurrentView(view);
     setMenuOpen(false);
+    // Only set navigation params for todos view, clear otherwise
+    if (view === "todos") {
+      setNavigationParams(params || null);
+    } else {
+      setNavigationParams(null);
+    }
   };
 
   const handleLogout = () => {
@@ -256,7 +263,7 @@ export function App() {
         // In production, redirect to dashboard
         return null;
       case "todos":
-        return <TodoListsView onNavigate={handleNavigate} />;
+        return <TodoListsView onNavigate={handleNavigate} initialListId={navigationParams?.listId} />;
       case "familymembers":
         return <FamilyMembersView onNavigate={handleNavigate} />;
       case "schedule":
