@@ -405,6 +405,8 @@ public class CalendarService {
         };
     }
 
+    @CacheEvict(value = "events", allEntries = true)
+    @Transactional(rollbackFor = Exception.class)
     public CalendarEvent createEvent(
             UUID familyId,
             UUID categoryId,
@@ -501,6 +503,8 @@ public class CalendarService {
         return toDomain(saved);
     }
 
+    @CacheEvict(value = "events", allEntries = true)
+    @Transactional(rollbackFor = Exception.class)
     public CalendarEvent updateEvent(
             UUID eventId,
             UUID categoryId,
@@ -596,6 +600,8 @@ public class CalendarService {
         return toDomain(saved);
     }
 
+    @CacheEvict(value = "events", allEntries = true)
+    @Transactional(rollbackFor = Exception.class)
     public void deleteEvent(UUID eventId) {
         eventRepository.deleteById(eventId);
     }
