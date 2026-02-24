@@ -99,8 +99,9 @@ export function App() {
     const checkPet = async () => {
       if (!childLoading && isChild && isAuthenticated) {
         try {
-          await fetchCurrentPet();
-          setHasPet(true);
+          const pet = await fetchCurrentPet();
+          // fetchCurrentPet() returns null on 404 (no pet selected yet)
+          setHasPet(pet !== null);
         } catch (e) {
           // Pet doesn't exist or error
           setHasPet(false);
