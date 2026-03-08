@@ -16,6 +16,7 @@ import { ChildPetHistoryView } from "./features/pet/ChildPetHistoryView";
 import { MenstrualCycleView } from "./features/menstrualcycle/MenstrualCycleView";
 import { WalletDetailView } from "./features/wallet/WalletDetailView";
 import { ChildrenWalletView } from "./features/wallet/ChildrenWalletView";
+import { PrivacyPolicyView } from "./features/legal/PrivacyPolicyView";
 import { useIsChild } from "./shared/hooks/useIsChild";
 import { usePwaInstall } from "./shared/hooks/usePwaInstall";
 import { getFamily } from "./shared/api/family";
@@ -23,7 +24,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet" | "privacy";
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -85,12 +86,14 @@ export function App() {
     void loadFamily();
   }, []);
 
-  // Check if we're on an invite page
+  // Check if we're on an invite page or public page
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith("/invite/")) {
       setCurrentView("invite");
       setIsAuthenticated(true); // Allow invite view even without token initially
+    } else if (path === "/privacy") {
+      setCurrentView("privacy");
     }
   }, []);
 
@@ -207,6 +210,11 @@ export function App() {
     // Show test views first (they work without auth in dev)
     if (currentView === "pettest" && import.meta.env.DEV) {
       return <PetTestView />;
+    }
+
+    // Public pages (no auth required)
+    if (currentView === "privacy") {
+      return <PrivacyPolicyView />;
     }
 
     // Show login/register if not authenticated

@@ -221,6 +221,9 @@ export function LoginRegisterView({ onLogin }: LoginRegisterViewProps) {
             <button type="submit" className="button-primary" disabled={loading}>
               {loading ? "Loggar in..." : "Logga in"}
             </button>
+            <p style={{ textAlign: "center", marginTop: "1rem", fontSize: "0.8rem", color: "#999" }}>
+              <a href="/privacy" style={{ color: "#999" }}>Integritetspolicy</a>
+            </p>
           </form>
         ) : (
           <form onSubmit={handleRegister} className="auth-form">
