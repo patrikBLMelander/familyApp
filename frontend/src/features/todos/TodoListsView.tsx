@@ -604,8 +604,21 @@ export function TodoListsView({ onNavigate, initialListId }: TodoListsViewProps)
           border: `2px solid ${TODO_COLORS.find(c => c.value === safeActiveList.color)?.border || "#a8d8a8"}`
         } : {}}
       >
-        {loading && <p>Laddar...</p>}
-        {!loading && !safeActiveList && <p>Skapa din första lista för att komma igång.</p>}
+        {loading && (
+          <div className="todo-skeleton">
+            <div className="skeleton-line" style={{ height: "22px", width: "45%", borderRadius: "6px" }} />
+            <div className="skeleton-line" style={{ height: "38px", borderRadius: "999px" }} />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton-line" style={{ height: "34px", borderRadius: "8px", opacity: 1 - i * 0.15 }} />
+            ))}
+          </div>
+        )}
+        {!loading && !safeActiveList && (
+          <div className="todo-empty-state">
+            <div className="todo-empty-state-icon">📋</div>
+            <p>Skapa din första lista för att komma igång.</p>
+          </div>
+        )}
 
         {safeActiveList && (
           <>
@@ -707,19 +720,21 @@ export function TodoListsView({ onNavigate, initialListId }: TodoListsViewProps)
                       </div>
                       <div className="todo-color-options">
                         {TODO_COLORS.map((color) => (
-                          <button
-                            key={color.value}
-                            type="button"
-                            className="todo-color-option"
-                            onClick={() => handleChangeColor(color.value)}
-                            style={{
-                              background: color.gradient,
-                              border: activeList?.color === color.value ? `2px solid ${color.border}` : "1px solid rgba(220, 210, 200, 0.5)"
-                            }}
-                            title={color.label}
-                          >
-                            {activeList?.color === color.value && "✓"}
-                          </button>
+                          <div key={color.value} className="todo-color-option-wrap">
+                            <button
+                              type="button"
+                              className="todo-color-option"
+                              onClick={() => handleChangeColor(color.value)}
+                              style={{
+                                background: color.gradient,
+                                border: activeList?.color === color.value ? `2px solid ${color.border}` : "1px solid rgba(220, 210, 200, 0.5)"
+                              }}
+                              title={color.label}
+                            >
+                              {activeList?.color === color.value && "✓"}
+                            </button>
+                            <span className="todo-color-label">{color.label}</span>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -792,10 +807,26 @@ export function TodoListsView({ onNavigate, initialListId }: TodoListsViewProps)
                     </SortableContext>
                   </DndContext>
 
+                  {activeItems.length === 0 && doneItems.length === 0 && (
+                    <div className="todo-empty-state">
+                      <div className="todo-empty-state-icon">✅</div>
+                      <p>Inga uppgifter än — lägg till din första!</p>
+                    </div>
+                  )}
+
                   {doneItems.length > 0 && (
                     <>
                       <div className="todo-separator">
                         <span>Klart</span>
+                        <span className="todo-separator-count">{doneItems.length}</span>
+                        <button
+                          type="button"
+                          className="todo-separator-clear"
+                          onClick={handleClearDone}
+                          title="Rensa alla klara uppgifter"
+                        >
+                          Rensa
+                        </button>
                       </div>
                       <ul className="todo-items todo-items-done">
                         {doneItems.map((item) => (
@@ -882,8 +913,8 @@ export function TodoListsView({ onNavigate, initialListId }: TodoListsViewProps)
                                 )}
                               </form>
                             ) : (
-                              <>
-                                <div className="todo-item-content">
+                              <div className="todo-item-row">
+                                <div className="todo-item-content" style={{ flex: 1 }}>
                                   <label>
                                     <input
                                       type="checkbox"
@@ -893,15 +924,26 @@ export function TodoListsView({ onNavigate, initialListId }: TodoListsViewProps)
                                     <span className={item.done ? "todo-done" : ""}>{item.description}</span>
                                   </label>
                                 </div>
+                                <div className="todo-item-actions">
+                                  <button
+                                    type="button"
+                                    className="todo-item-action-btn"
+                                    onClick={(e) => { e.stopPropagation(); startEditingItem(item); }}
+                                    title="Redigera"
+                                  >✏️</button>
+                                  <button
+                                    type="button"
+                                    className="todo-item-action-btn danger"
+                                    onClick={(e) => { e.stopPropagation(); void handleDeleteItem(item.id); }}
+                                    title="Ta bort"
+                                  >🗑️</button>
+                                </div>
                                 {swipedItemId === item.id && (
                                   <>
                                     {swipeOffset > 0 && (
                                       <button
                                         className="todo-edit-button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          startEditingItem(item);
-                                        }}
+                                        onClick={(e) => { e.stopPropagation(); startEditingItem(item); }}
                                         onTouchStart={(e) => e.stopPropagation()}
                                         onTouchMove={(e) => e.stopPropagation()}
                                         onTouchEnd={(e) => e.stopPropagation()}
@@ -913,10 +955,7 @@ export function TodoListsView({ onNavigate, initialListId }: TodoListsViewProps)
                                     {swipeOffset < 0 && (
                                       <button
                                         className="todo-delete-button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          void handleDeleteItem(item.id);
-                                        }}
+                                        onClick={(e) => { e.stopPropagation(); void handleDeleteItem(item.id); }}
                                         onTouchStart={(e) => e.stopPropagation()}
                                         onTouchMove={(e) => e.stopPropagation()}
                                         onTouchEnd={(e) => e.stopPropagation()}
@@ -927,7 +966,7 @@ export function TodoListsView({ onNavigate, initialListId }: TodoListsViewProps)
                                     )}
                                   </>
                                 )}
-                              </>
+                              </div>
                             )}
                           </li>
                         ))}
@@ -1090,8 +1129,9 @@ function SortableTodoItem({
           )}
         </form>
       ) : (
-        <>
-          <div className="todo-item-content" {...attributes} {...listeners}>
+        <div className="todo-item-row">
+          <span className="todo-drag-handle" {...attributes} {...listeners} title="Dra för att ändra ordning">⠿</span>
+          <div className="todo-item-content" style={{ flex: 1 }}>
             <label>
               <input
                 type="checkbox"
@@ -1101,15 +1141,26 @@ function SortableTodoItem({
               <span className={item.done ? "todo-done" : ""}>{item.description}</span>
             </label>
           </div>
+          <div className="todo-item-actions">
+            <button
+              type="button"
+              className="todo-item-action-btn"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              title="Redigera"
+            >✏️</button>
+            <button
+              type="button"
+              className="todo-item-action-btn danger"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              title="Ta bort"
+            >🗑️</button>
+          </div>
           {swipedItemId === item.id && (
             <>
               {swipeOffset > 0 && (
                 <button
                   className="todo-edit-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onEdit(); }}
                   onTouchStart={(e) => e.stopPropagation()}
                   onTouchMove={(e) => e.stopPropagation()}
                   onTouchEnd={(e) => e.stopPropagation()}
@@ -1121,10 +1172,7 @@ function SortableTodoItem({
               {swipeOffset < 0 && (
                 <button
                   className="todo-delete-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
                   onTouchStart={(e) => e.stopPropagation()}
                   onTouchMove={(e) => e.stopPropagation()}
                   onTouchEnd={(e) => e.stopPropagation()}
@@ -1135,7 +1183,7 @@ function SortableTodoItem({
               )}
             </>
           )}
-        </>
+        </div>
       )}
     </li>
   );
@@ -1166,28 +1214,35 @@ function SortableTodoListChip({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const pendingCount = list.items.filter((i) => !i.done).length;
+
   return (
     <button
       ref={setNodeRef}
       style={{
         ...style,
         background: TODO_COLORS.find(c => c.value === list.color)?.gradient || "linear-gradient(90deg, #b8e6b8 0%, #a8d8a8 100%)",
-        border: isActive 
+        border: isActive
           ? `2px solid ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}`
           : `1px solid ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}80`,
         color: "#2d5a2d",
-        boxShadow: isActive 
+        boxShadow: isActive
           ? `0 2px 8px ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}40`
           : `0 1px 3px ${TODO_COLORS.find(c => c.value === list.color)?.border || "#a8d8a8"}30`,
         fontWeight: isActive ? "600" : "500",
         position: "relative",
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
       }}
       className={`chip chip-draggable${isActive ? " chip-active" : ""}${isDragging ? " chip-dragging" : ""}`}
       onClick={onClick}
       {...attributes}
       {...listeners}
     >
+      {list.isPrivate && <span style={{ fontSize: "0.75em", opacity: 0.65 }}>🔒</span>}
       {list.name}
+      {pendingCount > 0 && <span className="chip-badge">{pendingCount}</span>}
     </button>
   );
 }
