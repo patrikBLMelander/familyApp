@@ -80,9 +80,12 @@ public class CalendarService {
                 .map(this::toDomain)
                 .toList();
         
-        // Get all modified event IDs from exceptions (to filter them out from baseEvents to avoid duplicates)
-        var allExceptionEntities = exceptionRepository.findAll();
-        var modifiedEventIds = allExceptionEntities.stream()
+        // Build modified-event ID set scoped to this family's base events — no global findAll needed
+        var baseEventIds = baseEvents.stream().map(CalendarEvent::id).toList();
+        var modifiedEventIds = (baseEventIds.isEmpty()
+                ? java.util.List.<com.familyapp.infrastructure.calendar.CalendarEventExceptionEntity>of()
+                : exceptionRepository.findByEventIds(baseEventIds))
+                .stream()
                 .filter(e -> e.getModifiedEvent() != null)
                 .map(e -> e.getModifiedEvent().getId())
                 .collect(java.util.stream.Collectors.toSet());
@@ -172,12 +175,19 @@ public class CalendarService {
                 if (!baseEventStart.isBefore(startDate) && !baseEventStart.isAfter(endDate)) {
                     // Check if base event's start date is excluded
                     if (!excludedDates.contains(baseEventStart.toLocalDate())) {
-                        // Check if there's already an instance for the base event's start date
-                        boolean hasInstanceForBaseDate = instances.stream()
-                                .anyMatch(instance -> instance.startDateTime().toLocalDate().equals(baseEventStart.toLocalDate()));
-                        if (!hasInstanceForBaseDate) {
-                            // Add base event if no instance exists for its start date
-                            result.add(recurringEvent);
+                        // Don't include if the recurring series has already ended before this date
+                        // (e.g. after THIS_AND_FOLLOWING edit, old series ends at today-1 but starts today)
+                        var seriesEndDate = recurringEvent.recurringEndDate();
+                        boolean seriesStillActiveOnStart = seriesEndDate == null
+                                || !baseEventStart.toLocalDate().isAfter(seriesEndDate);
+                        if (seriesStillActiveOnStart) {
+                            // Check if there's already an instance for the base event's start date
+                            boolean hasInstanceForBaseDate = instances.stream()
+                                    .anyMatch(instance -> instance.startDateTime().toLocalDate().equals(baseEventStart.toLocalDate()));
+                            if (!hasInstanceForBaseDate) {
+                                // Add base event if no instance exists for its start date
+                                result.add(recurringEvent);
+                            }
                         }
                     }
                 }
@@ -352,10 +362,10 @@ public class CalendarService {
                         baseEvent.isAllDay(),
                         baseEvent.location(),
                         baseEvent.createdById(),
-                        null, // Recurring type is null for instances
-                        null,
-                        null,
-                        null,
+                        baseEvent.recurringType(),
+                        baseEvent.recurringInterval(),
+                        baseEvent.recurringEndDate(),
+                        baseEvent.recurringEndCount(),
                         baseEvent.isTask(),
                         baseEvent.xpPoints(),
                         baseEvent.isRequired(),

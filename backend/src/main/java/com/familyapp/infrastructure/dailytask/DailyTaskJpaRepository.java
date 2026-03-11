@@ -35,5 +35,22 @@ public interface DailyTaskJpaRepository extends JpaRepository<DailyTaskEntity, U
      */
     @Query("SELECT COALESCE(MAX(t.position), 0) FROM DailyTaskEntity t WHERE t.family.id = :familyId")
     Integer findMaxPositionByFamilyId(@Param("familyId") UUID familyId);
+
+    /** Check whether a task exists and belongs to the given family — O(1) indexed lookup. */
+    @Query("SELECT COUNT(t) > 0 FROM DailyTaskEntity t WHERE t.id = :taskId AND t.family.id = :familyId")
+    boolean existsByIdAndFamilyId(@Param("taskId") UUID taskId, @Param("familyId") UUID familyId);
+
+    /** Tasks active on the given day of week, scoped to one family. Replaces the global findByDayOfWeek. */
+    @Query("SELECT DISTINCT t FROM DailyTaskEntity t " +
+           "WHERE t.family.id = :familyId AND (" +
+           "(:day = 'MONDAY' AND t.monday = true) OR " +
+           "(:day = 'TUESDAY' AND t.tuesday = true) OR " +
+           "(:day = 'WEDNESDAY' AND t.wednesday = true) OR " +
+           "(:day = 'THURSDAY' AND t.thursday = true) OR " +
+           "(:day = 'FRIDAY' AND t.friday = true) OR " +
+           "(:day = 'SATURDAY' AND t.saturday = true) OR " +
+           "(:day = 'SUNDAY' AND t.sunday = true)) " +
+           "ORDER BY t.position ASC")
+    List<DailyTaskEntity> findByDayOfWeekAndFamilyId(@Param("day") String day, @Param("familyId") UUID familyId);
 }
 

@@ -47,62 +47,36 @@ public class DailyTaskService {
     public List<DailyTaskWithCompletion> getTasksForToday(UUID memberId, UUID familyId) {
         LocalDate today = LocalDate.now();
         String dayOfWeek = today.getDayOfWeek().name();
-        
-        var allTasks = taskRepository.findByDayOfWeek(dayOfWeek);
-        
-        // Filter tasks that apply to this member and family
-        var tasks = allTasks.stream()
+
+        // Family-scoped query — no in-memory cross-family filtering needed
+        var familyTasks = familyId != null
+                ? taskRepository.findByDayOfWeekAndFamilyId(dayOfWeek, familyId)
+                : List.<DailyTaskEntity>of();
+
+        var tasks = familyTasks.stream()
                 .filter(task -> {
-                    // Filter by family - if familyId is provided, task must belong to that family
-                    // If task has no family set, skip it (legacy data or invalid)
-                    if (familyId != null) {
-                        if (task.getFamily() == null) {
-                            return false; // Task has no family, skip it
-                        }
-                        if (!task.getFamily().getId().equals(familyId)) {
-                            return false; // Task belongs to different family
-                        }
-                    } else {
-                        // No familyId provided, but we should have one for proper filtering
-                        // Skip tasks without family to avoid showing wrong data
-                        if (task.getFamily() == null) {
-                            return false;
-                        }
-                    }
-                    
-                    // If task has no members assigned, it applies to all members in the family
                     if (task.getMembers().isEmpty()) {
-                        return true;
+                        return true; // applies to all family members
                     }
-                    
-                    // Otherwise, check if this specific member is in the assigned members list
                     if (memberId == null) {
-                        return false; // No memberId provided, can't match
+                        return false;
                     }
-                    
-                    return task.getMembers().stream()
-                            .anyMatch(m -> m.getId().equals(memberId));
+                    return task.getMembers().stream().anyMatch(m -> m.getId().equals(memberId));
                 })
                 .toList();
-        
-        // Get completions for these tasks for this specific member
+
+        // Family-scoped completions query — replaces the global findByCompletedDate
         var taskIds = tasks.stream().map(DailyTaskEntity::getId).collect(Collectors.toSet());
-        var completions = completionRepository.findByCompletedDate(today).stream()
+        List<DailyTaskCompletionEntity> rawCompletions = familyId != null
+                ? completionRepository.findByCompletedDateAndFamilyId(today, familyId)
+                : List.of();
+        var completions = rawCompletions.stream()
                 .filter(c -> taskIds.contains(c.getTask().getId()))
                 .filter(c -> memberId == null || (c.getMember() != null && c.getMember().getId().equals(memberId)))
-                .collect(Collectors.toMap(
-                        c -> c.getTask().getId(),
-                        c -> true
-                ));
-        
+                .collect(Collectors.toMap(c -> c.getTask().getId(), c -> true));
+
         return tasks.stream()
-                .map(task -> {
-                    boolean completed = completions.containsKey(task.getId());
-                    return new DailyTaskWithCompletion(
-                            toDomain(task),
-                            completed
-                    );
-                })
+                .map(task -> new DailyTaskWithCompletion(toDomain(task), completions.containsKey(task.getId())))
                 .toList();
     }
 
@@ -111,10 +85,10 @@ public class DailyTaskService {
         LocalDate today = LocalDate.now();
         String dayOfWeek = today.getDayOfWeek().name();
         
-        // Filter tasks by family
-        var allTasks = taskRepository.findByDayOfWeek(dayOfWeek).stream()
-                .filter(task -> familyId == null || (task.getFamily() != null && task.getFamily().getId().equals(familyId)))
-                .toList();
+        // Family-scoped query — no in-memory cross-family filtering needed
+        var allTasks = familyId != null
+                ? taskRepository.findByDayOfWeekAndFamilyId(dayOfWeek, familyId)
+                : List.<DailyTaskEntity>of();
         
         // Get all children in the family (members with role CHILD)
         // Optimized: Use query instead of fetching all and filtering in memory
@@ -195,6 +169,12 @@ public class DailyTaskService {
     }
     
     public record DailyTaskWithChildrenCompletion(DailyTask task, List<ChildCompletion> childCompletions) {
+    }
+
+    /** Returns true iff the task exists and belongs to the given family. O(1) indexed check. */
+    @Transactional(readOnly = true)
+    public boolean taskBelongsToFamily(UUID taskId, UUID familyId) {
+        return taskRepository.existsByIdAndFamilyId(taskId, familyId);
     }
 
     @Transactional(readOnly = true)
@@ -301,37 +281,34 @@ public class DailyTaskService {
         if (memberId == null) {
             throw new IllegalArgumentException("Member ID is required to toggle task completion");
         }
-        
+
         LocalDate today = LocalDate.now();
-        
-        // Find existing completion for this specific task, date, and member
-        var existing = completionRepository.findByTaskIdAndCompletedDateAndMemberId(taskId, today, memberId);
-        
+
+        // SELECT … FOR UPDATE serializes concurrent toggles for the same task/member/date.
+        // Without this, two rapid requests could both see "no completion" and both insert,
+        // causing double-XP or a constraint violation.
+        var existing = completionRepository.findByTaskIdAndCompletedDateAndMemberIdForUpdate(taskId, today, memberId);
+
         if (existing.isPresent()) {
-            // Delete the completion (uncheck)
             var completion = existing.get();
             var task = completion.getTask();
-            // Remove XP when unchecking
             xpService.removeXp(memberId, task.getXpPoints());
             completionRepository.delete(completion);
         } else {
-            // Create a new completion (check)
             var task = taskRepository.findById(taskId)
                     .orElseThrow(() -> new IllegalArgumentException("Daily task not found: " + taskId));
-            
+
             var member = memberRepository.findById(memberId)
                     .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
-            
+
             var completion = new DailyTaskCompletionEntity();
             completion.setId(UUID.randomUUID());
             completion.setTask(task);
             completion.setMember(member);
             completion.setCompletedDate(today);
             completion.setCompletedAt(OffsetDateTime.now());
-            
+
             completionRepository.save(completion);
-            
-            // Award XP when checking (only for children)
             xpService.awardXp(memberId, task.getXpPoints());
         }
     }

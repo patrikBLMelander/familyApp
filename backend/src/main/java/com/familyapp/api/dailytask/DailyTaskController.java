@@ -189,15 +189,11 @@ public class DailyTaskController {
             memberId = memberIdParam;
         }
         
-        // Verify task belongs to requester's family
-        var allTasks = service.getAllTasks(requesterFamilyId);
-        var task = allTasks.stream()
-                .filter(t -> t.id().equals(taskId))
-                .findFirst();
-        if (task.isEmpty()) {
+        // Verify task belongs to requester's family — single indexed existence check
+        if (!service.taskBelongsToFamily(taskId, requesterFamilyId)) {
             throw new IllegalArgumentException("Access denied: Task does not belong to your family");
         }
-        
+
         service.toggleTaskCompletion(taskId, memberId);
     }
 
