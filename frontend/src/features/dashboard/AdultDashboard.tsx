@@ -1,12 +1,8 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse, CalendarEventResponse, fetchCalendarEvents, fetchCalendarCategories, CalendarEventCategoryResponse } from "../../shared/api/calendar";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { fetchTasksForToday, CalendarTaskWithCompletionResponse, getTaskCompletionsForMember, CalendarEventTaskCompletionResponse } from "../../shared/api/calendar";
 import { getMemberByDeviceToken, fetchAllFamilyMembers } from "../../shared/api/familyMembers";
-import { SimplifiedTaskForm } from "../calendar/components/SimplifiedTaskForm";
 import { FamilyMemberResponse } from "../../shared/api/familyMembers";
-import { formatDateTimeRange, formatAllDayEventRange, getAllDayEventDates } from "../calendar/utils/dateFormatters";
-import { CALENDAR_VIEW_TYPES, MAX_RECURRING_DAYS } from "../calendar/constants";
-import { fetchTodoLists, TodoListResponse, TODO_COLORS } from "../../shared/api/todos";
-import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, getLastFedDate } from "../../shared/api/pets";
+import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, getLastFedDate, fetchMemberPet } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
 import { PetVisualization } from "../pet/PetVisualization";
 import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
@@ -14,17 +10,22 @@ import { getPetFoodEmoji, getPetFoodName, getRandomPetMessage } from "../pet/pet
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
 import { ConfettiAnimation } from "./components/ConfettiAnimation";
 import { FloatingXpNumber } from "./components/FloatingXpNumber";
-import { sortTasksByRequiredAndTitle } from "./utils/taskSorting";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "childrenxp";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "childrenxp" | "childrenwallet" | "childview";
 
 type AdultDashboardProps = {
-  onNavigate?: (view: ViewKey, params?: { listId?: string }) => void;
+  onNavigate?: (view: ViewKey, params?: { listId?: string; childId?: string; childName?: string }) => void;
   familyId?: string | null;
   key?: string | number; // Allow key prop to force remount
 };
 
-type TabType = "calendar" | "todos" | "lists";
+type ChildSummary = {
+  todaysDone: number;
+  todaysTotal: number;
+  hasPet: boolean;
+  streakDays: number;
+  nextTaskTitle: string | null;
+};
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -32,82 +33,12 @@ const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
   "cdd48859-74c5-4dee-989f-0b091f62d630", // Localhost
 ];
 
-// Constants for calendar event styling
-const CATEGORY_BACKGROUND_OPACITY = 0.2;
-const FALLBACK_BACKGROUND_COLOR = "rgba(240, 240, 240, 0.5)";
-const FALLBACK_BORDER_COLOR = "#b8e6b8";
-
-/**
- * Converts a hex color to rgba with opacity.
- * Includes validation and fallback handling for invalid colors.
- * 
- * @param hex - Hex color string (e.g., "#b8e6b8" or "b8e6b8")
- * @param opacity - Opacity value between 0 and 1
- * @returns RGBA color string (e.g., "rgba(184, 230, 184, 0.2)")
- */
-function hexToRgba(hex: string, opacity: number): string {
-  // Validate inputs
-  if (!hex || typeof hex !== 'string') {
-    return `rgba(184, 230, 184, ${CATEGORY_BACKGROUND_OPACITY})`; // Fallback to green
-  }
-  
-  // Validate and clamp opacity
-  const validOpacity = Math.max(0, Math.min(1, opacity));
-  
-  // Remove # if present
-  const cleanHex = hex.replace("#", "");
-  
-  // Handle both 3 and 6 character hex
-  let fullHex = cleanHex;
-  if (cleanHex.length === 3) {
-    fullHex = cleanHex.split('').map(char => char + char).join('');
-  }
-  
-  // Validate hex length
-  if (fullHex.length !== 6) {
-    return `rgba(184, 230, 184, ${validOpacity})`; // Fallback
-  }
-  
-  // Parse RGB values
-  const r = parseInt(fullHex.substring(0, 2), 16);
-  const g = parseInt(fullHex.substring(2, 4), 16);
-  const b = parseInt(fullHex.substring(4, 6), 16);
-  
-  // Validate that parsing succeeded
-  if (isNaN(r) || isNaN(g) || isNaN(b)) {
-    return `rgba(184, 230, 184, ${validOpacity})`; // Fallback
-  }
-  
-  return `rgba(${r}, ${g}, ${b}, ${validOpacity})`;
-}
-
 export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>("calendar");
   const showSpotifyLink = familyId && SPOTIFY_CHARTS_ALLOWED_FAMILIES.includes(familyId);
-  
-  // Att Göra-tab state
-  const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
-  const [loadingTasks, setLoadingTasks] = useState(false);
-  const [tasksError, setTasksError] = useState<string | null>(null);
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
+
   const [currentMember, setCurrentMember] = useState<FamilyMemberResponse | null>(null);
   const [members, setMembers] = useState<FamilyMemberResponse[]>([]);
-  
-  // Kalender-tab state
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEventResponse[]>([]);
-  const [calendarCategories, setCalendarCategories] = useState<CalendarEventCategoryResponse[]>([]);
-  const [loadingCalendar, setLoadingCalendar] = useState(false);
-  const [calendarError, setCalendarError] = useState<string | null>(null);
-  const [calendarEndDate, setCalendarEndDate] = useState<Date | null>(null);
-  const [isLoadingMoreEvents, setIsLoadingMoreEvents] = useState(false);
-  const calendarScrollRef = useRef<HTMLDivElement>(null);
-  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
-  
-  // Listor-tab state
-  const [todoLists, setTodoLists] = useState<TodoListResponse[]>([]);
-  const [loadingLists, setLoadingLists] = useState(false);
-  const [listsError, setListsError] = useState<string | null>(null);
-  
+
   // Pet state (for adults with pets enabled)
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
@@ -121,12 +52,16 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
   const previousLevelRef = useRef<number>(0);
 
+  // Child summary state
+  const [childSummaries, setChildSummaries] = useState<Record<string, ChildSummary>>({});
+  const [loadingChildren, setLoadingChildren] = useState(false);
+
   // Track window width for responsive design
   useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
     };
-    
+
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -139,7 +74,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
     const day = String(now.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-  
+
   // Check if a date string (ISO 8601) is today in local timezone
   // Made stable with useCallback to avoid dependency issues in loadPetData
   const isDateToday = useCallback((dateString: string | null): boolean => {
@@ -168,7 +103,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
       setHasIntegratedImage(false);
       return;
     }
-    
+
     try {
       const [petData, xpData, foodData, lastFedData] = await Promise.all([
         fetchCurrentPet().catch(() => null),
@@ -176,20 +111,20 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
         getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
         getLastFedDate().catch(() => ({ lastFedAt: null })),
       ]);
-      
+
       if (petData) {
         setPet(petData);
         setXpProgress(xpData);
         setCollectedFoodCount(foodData.totalCount);
-        
+
         if (xpData) {
           previousLevelRef.current = xpData.currentLevel;
         }
-        
+
         // Check if integrated image exists
         const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
         setHasIntegratedImage(integratedExists);
-        
+
         // Check pet mood
         const wasFedToday = isDateToday(lastFedData.lastFedAt);
         if (wasFedToday) {
@@ -219,25 +154,25 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
       try {
         const deviceToken = localStorage.getItem("deviceToken");
         if (!deviceToken) return;
-        
+
         // Always reload member to get latest petEnabled status
         const member = await getMemberByDeviceToken(deviceToken);
         setCurrentMember(member);
-        
-        // Load all members for SimplifiedTaskForm
+
+        // Load all members
         const allMembers = await fetchAllFamilyMembers();
         setMembers(allMembers);
-        
+
         // Load pet data for adult (will check petEnabled inside)
         await loadPetData(member);
       } catch (e) {
         console.error("Error loading member:", e);
       }
     };
-    
+
     void loadMember();
   }, [loadPetData]);
-  
+
   // Clear pet state if petEnabled becomes false
   useEffect(() => {
     if (currentMember?.role === "PARENT" && currentMember?.petEnabled !== true) {
@@ -252,397 +187,111 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   }, [currentMember?.petEnabled]);
 
   // Reload member and pet data when returning from other views (focus or visibility change)
-  // Also reload calendar events if calendar tab is active
   useEffect(() => {
     const reloadMemberData = async () => {
       try {
         const deviceToken = localStorage.getItem("deviceToken");
         if (!deviceToken) return;
-        
+
         // Reload member to get updated petEnabled status
         const member = await getMemberByDeviceToken(deviceToken);
         setCurrentMember(member);
-        
+
         // Reload pet data if pet is enabled
         await loadPetData(member);
-        
-        // Reload calendar events if calendar tab is active
-        if (activeTab === "calendar") {
-          const now = new Date();
-          const startDate = new Date(now);
-          startDate.setHours(0, 0, 0, 0);
-          
-          const endDate = new Date(now);
-          endDate.setDate(endDate.getDate() + 30);
-          endDate.setHours(23, 59, 59, 999);
-          
-          try {
-            const [eventsData, categoriesData] = await Promise.all([
-              fetchCalendarEvents(startDate, endDate),
-              fetchCalendarCategories()
-            ]);
-            setCalendarEvents(eventsData);
-            setCalendarCategories(categoriesData);
-            setCalendarEndDate(endDate);
-          } catch (e) {
-            console.error("Error reloading calendar events:", e);
-          }
-        }
       } catch (e) {
         console.error("Error reloading member data:", e);
       }
     };
-    
+
     const handleFocus = () => {
       void reloadMemberData();
     };
-    
+
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         void reloadMemberData();
       }
     };
-    
+
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    
+
     return () => {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadPetData, activeTab]);
+  }, [loadPetData]);
 
-  // Load tasks when Att Göra-tab is active
+  // Load child summaries when members change
   useEffect(() => {
-    if (activeTab === "todos" && currentMember) {
-      const loadTasks = async () => {
-        try {
-          setLoadingTasks(true);
-          setTasksError(null);
-          const tasksData = await fetchTasksForToday(currentMember.id);
-          // Sort: required first, then by title
-          const sortedTasks = sortTasksByRequiredAndTitle(tasksData);
-          setTasks(sortedTasks);
-        } catch (e) {
-          console.error("Error loading tasks:", e);
-          setTasksError("Kunde inte ladda tasks. Försök igen.");
-        } finally {
-          setLoadingTasks(false);
-        }
-      };
-      
-      void loadTasks();
-    }
-  }, [activeTab, currentMember]);
-
-  // Load calendar events and categories when Kalender-tab is active
-  useEffect(() => {
-    if (activeTab === "calendar") {
-      let cancelled = false;
-      
-      const loadCalendar = async () => {
-        try {
-          setLoadingCalendar(true);
-          setCalendarError(null);
-          const now = new Date();
-          const startDate = new Date(now);
-          startDate.setHours(0, 0, 0, 0);
-          
-          // Load 30 days ahead initially - same as RollingView
-          // More events will be loaded automatically when scrolling (loadMoreEvents)
-          const endDate = new Date(now);
-          endDate.setDate(endDate.getDate() + 30);
-          endDate.setHours(23, 59, 59, 999);
-          
-          const [eventsData, categoriesData] = await Promise.all([
-            fetchCalendarEvents(startDate, endDate),
-            fetchCalendarCategories()
-          ]);
-          
-          // Only update state if component is still mounted
-          if (!cancelled) {
-            setCalendarEvents(eventsData);
-            setCalendarCategories(categoriesData);
-            setCalendarEndDate(endDate);
-          }
-        } catch (e) {
-          if (!cancelled) {
-            console.error("Error loading calendar:", e);
-            setCalendarError("Kunde inte ladda kalender. Försök igen.");
-          }
-        } finally {
-          if (!cancelled) {
-            setLoadingCalendar(false);
-          }
-        }
-      };
-      
-      void loadCalendar();
-      
-      // Cleanup function to prevent state updates after unmount
-      return () => {
-        cancelled = true;
-      };
-    }
-  }, [activeTab]);
-
-  // Load todo lists when Listor-tab is active
-  useEffect(() => {
-    if (activeTab === "lists") {
-      const loadLists = async () => {
-        try {
-          setLoadingLists(true);
-          setListsError(null);
-          const listsData = await fetchTodoLists();
-          setTodoLists(listsData);
-        } catch (e) {
-          console.error("Error loading todo lists:", e);
-          setListsError("Kunde inte ladda listor. Försök igen.");
-        } finally {
-          setLoadingLists(false);
-        }
-      };
-      
-      void loadLists();
-    }
-  }, [activeTab]);
-
-
-  // Group events by date for calendar view - use EXACT same logic as RollingView
-  // Note: In calendar tab, we only show events (not tasks). Tasks are shown in "Att Göra" tab.
-  // IMPORTANT: Calendar tab shows ALL family members' events, not just current user's events
-  // IMPORTANT: We do NOT filter by participantIds for regular events - show ALL family events
-  const eventsByDate = useMemo(() => {
-    const now = new Date();
-    const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
-    
-    // Filter by task/event type - same as RollingView
-    // IMPORTANT: For regular events (not tasks), we show ALL events regardless of participantIds
-    // This ensures all family members' events are visible in the calendar view
-    let filteredEvents = calendarEvents.filter(event => {
-      // Exclude tasks - calendar tab should only show events (rullande schema)
-      // Do NOT filter by participantIds - show ALL family events
-      return !event.isTask; // Show only non-task events
-    });
-    
-    // For calendar view, also filter by date (today or future) - same as RollingView
-    filteredEvents = filteredEvents.filter(event => {
-      const isFutureEvent = event.isAllDay
-        ? getAllDayEventDates(event, MAX_RECURRING_DAYS).some(dateStr => dateStr >= todayStr)
-        : new Date(event.startDateTime) >= now;
-      return isFutureEvent;
-    });
-
-    // Group events by date - memoized to prevent unnecessary recalculations - EXACT same as RollingView
-    return filteredEvents.reduce((acc, event) => {
-      if (event.isAllDay) {
-        // For all-day events, get all dates the event spans
-        const dates = getAllDayEventDates(event, MAX_RECURRING_DAYS);
-        dates.forEach(dateKey => {
-          if (!acc[dateKey]) {
-            acc[dateKey] = [];
-          }
-          acc[dateKey].push(event);
-        });
-      } else {
-        // For regular events, parse the datetime - EXACT same as RollingView
-        const date = new Date(event.startDateTime);
-        const dateKey = date.toISOString().split("T")[0];
-        if (!acc[dateKey]) {
-          acc[dateKey] = [];
-        }
-        acc[dateKey].push(event);
-      }
-      return acc;
-    }, {} as Record<string, CalendarEventResponse[]>);
-  }, [calendarEvents]);
-
-  const sortedDates = useMemo(() => {
-    return Object.keys(eventsByDate).sort();
-  }, [eventsByDate]);
-
-  // Create Maps for O(1) lookup performance
-  const categoryMap = useMemo(() => {
-    const map = new Map<string, CalendarEventCategoryResponse>();
-    (calendarCategories || []).forEach(cat => {
-      if (cat?.id) {
-        map.set(String(cat.id), cat);
-      }
-    });
-    return map;
-  }, [calendarCategories]);
-
-  const membersMap = useMemo(() => {
-    const map = new Map<string, string>();
-    (members || []).forEach(member => {
-      if (member?.id && member?.name) {
-        map.set(member.id, member.name);
-      }
-    });
-    return map;
-  }, [members]);
-
-  // Load more events when scrolling to bottom
-  const loadMoreEvents = useCallback(async () => {
-    if (isLoadingMoreEvents || !calendarEndDate) return;
-    
-    setIsLoadingMoreEvents(true);
-    try {
-      const newEndDate = new Date(calendarEndDate);
-      newEndDate.setDate(newEndDate.getDate() + 30); // Load 30 more days
-      newEndDate.setHours(23, 59, 59, 999);
-      
-      // Fetch only new events (after current end date)
-      const fetchStartDate = new Date(calendarEndDate);
-      fetchStartDate.setDate(fetchStartDate.getDate() + 1);
-      fetchStartDate.setHours(0, 0, 0, 0);
-      
-      const newEvents = await fetchCalendarEvents(fetchStartDate, newEndDate);
-      
-      // Merge with existing events, avoiding duplicates
-      setCalendarEvents(prev => {
-        const existingKeys = new Set(prev.map(e => `${e.id}:${e.startDateTime}`));
-        const uniqueNewEvents = newEvents.filter(
-          e => !existingKeys.has(`${e.id}:${e.startDateTime}`)
-        );
-        return [...prev, ...uniqueNewEvents].sort((a, b) => 
-          new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime()
-        );
-      });
-      
-      setCalendarEndDate(newEndDate);
-    } catch (e) {
-      console.error("Error loading more events:", e);
-    } finally {
-      setIsLoadingMoreEvents(false);
-    }
-  }, [calendarEndDate, isLoadingMoreEvents]);
-
-  // Set up intersection observer for infinite scroll
-  useEffect(() => {
-    if (activeTab !== "calendar" || !loadMoreTriggerRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && !isLoadingMoreEvents) {
-          void loadMoreEvents();
-        }
-      },
-      { root: null, rootMargin: "200px", threshold: 0.1 }
-    );
-
-    observer.observe(loadMoreTriggerRef.current);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [activeTab, isLoadingMoreEvents, loadMoreEvents]);
-
-  const handleToggleTask = async (eventId: string) => {
-    if (!currentMember) return;
-    
-    // Optimistic update
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.event.id === eventId
-          ? { ...t, completed: !t.completed }
-          : t
-      )
-    );
-
-    try {
-      await toggleTaskCompletion(eventId, currentMember.id);
-      // Reload tasks
-      const tasksData = await fetchTasksForToday(currentMember.id).catch(() => []);
-      
-      const sortedTasks = sortTasksByRequiredAndTitle(tasksData);
-      setTasks(sortedTasks);
-      
-      // Update pet-related data if adult has pet enabled
-      if (currentMember.petEnabled === true) {
-        try {
-          const [xpData, petData, foodData] = await Promise.all([
-            fetchCurrentXpProgress().catch(() => null),
-            fetchCurrentPet().catch(() => null),
-            getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
-          ]);
-          
-          // Update pet-related data if pet exists
-          if (petData) {
-            setPet(petData);
-            if (xpData) {
-              const previousLevel = previousLevelRef.current;
-              setXpProgress(xpData);
-              
-              if (xpData.currentLevel > previousLevel) {
-                setShowConfetti(true);
-                previousLevelRef.current = xpData.currentLevel;
-                
-                const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
-                setHasIntegratedImage(integratedExists);
-              }
+    const childMembers = members.filter(m => m.role === "CHILD" || m.role === "ASSISTANT");
+    if (childMembers.length === 0) { setLoadingChildren(false); return; }
+    setLoadingChildren(true);
+    const fetchSummaries = async () => {
+      const entries = await Promise.all(
+        childMembers.map(async (child) => {
+          try {
+            const [tasks, childPet, completions] = await Promise.all([
+              fetchTasksForToday(child.id).catch(() => [] as CalendarTaskWithCompletionResponse[]),
+              fetchMemberPet(child.id).catch(() => null),
+              getTaskCompletionsForMember(child.id).catch(() => [] as CalendarEventTaskCompletionResponse[]),
+            ]);
+            const todaysDone = tasks.filter(t => t.completed).length;
+            const todaysTotal = tasks.length;
+            const nextTaskTitle = tasks.find(t => !t.completed)?.event.title ?? null;
+            let streakDays = 0;
+            const d = new Date();
+            while (streakDays < 365) {
+              const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              if (completions.some(c => c.occurrenceDate === ds)) { streakDays++; d.setDate(d.getDate()-1); } else break;
             }
-            setCollectedFoodCount(foodData.totalCount);
+            return [child.id, { todaysDone, todaysTotal, hasPet: childPet !== null, streakDays, nextTaskTitle }] as const;
+          } catch {
+            return [child.id, { todaysDone: 0, todaysTotal: 0, hasPet: false, streakDays: 0, nextTaskTitle: null }] as const;
           }
-        } catch (e) {
-          // Silently ignore pet-related errors (404 is expected if no pet)
-          console.debug("Pet data update skipped:", e);
-        }
-      }
-    } catch (e) {
-      console.error("Error toggling task:", e);
-      // Reload on error to revert
-      const tasksData = await fetchTasksForToday(currentMember.id);
-      const sortedTasks = sortTasksByRequiredAndTitle(tasksData);
-      setTasks(sortedTasks);
-    }
-  };
-
-  const handleQuickAddSave = async () => {
-    // Reload tasks after adding
-    if (currentMember) {
-      const tasksData = await fetchTasksForToday(currentMember.id);
-      const sortedTasks = sortTasksByRequiredAndTitle(tasksData);
-      setTasks(sortedTasks);
-    }
-    setShowQuickAdd(false);
-  };
+        })
+      );
+      setChildSummaries(Object.fromEntries(entries));
+      setLoadingChildren(false);
+    };
+    void fetchSummaries();
+  }, [members]);
 
   const handleFeed = async (amount: number | null = null) => {
     if (!pet || !currentMember || currentMember.petEnabled !== true) return;
     const feedAmount = amount ?? collectedFoodCount;
-    
+
     if (feedAmount === 0 || isFeeding || feedAmount > collectedFoodCount) return;
-    
+
     setIsFeeding(true);
-    
+
     try {
       await feedPet(feedAmount);
       setFloatingXp(feedAmount);
-      
+
       const [foodData, lastFedData, xpData] = await Promise.all([
         getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
         getLastFedDate().catch(() => ({ lastFedAt: null })),
         fetchCurrentXpProgress().catch(() => null),
       ]);
-      
+
       setCollectedFoodCount(foodData.totalCount);
-      
+
       const wasFedToday = isDateToday(lastFedData.lastFedAt);
       if (wasFedToday) {
         setPetMood("happy");
         setPetMessage(getRandomPetMessage("happy"));
       }
-      
+
       if (xpData) {
         const previousLevel = previousLevelRef.current;
         setXpProgress(xpData);
-        
+
         if (xpData.currentLevel > previousLevel) {
           setShowConfetti(true);
           previousLevelRef.current = xpData.currentLevel;
-          
+
           const petData = await fetchCurrentPet().catch(() => null);
           if (petData) {
             setPet(petData);
@@ -670,7 +319,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   // Level 4: 70-124 XP (range = 55)
   // Level 5: 125+ XP
   const XP_THRESHOLDS = [0, 10, 35, 70, 125];
-  const progressPercentage = xpProgress 
+  const progressPercentage = xpProgress
     ? xpProgress.currentLevel >= MAX_LEVEL
       ? 100
       : (() => {
@@ -678,9 +327,9 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
           const nextLevelThreshold = XP_THRESHOLDS[xpProgress.currentLevel]; // Threshold for next level
           const currentLevelThreshold = XP_THRESHOLDS[currentLevelIndex]; // Threshold for current level
           const xpRangeForCurrentLevel = nextLevelThreshold - currentLevelThreshold; // XP range for current level
-          
+
           if (xpRangeForCurrentLevel <= 0) return 100; // Safety check
-          
+
           // Calculate progress: how much XP we have in current level / total XP range for current level
           const progress = (xpProgress.xpInCurrentLevel / xpRangeForCurrentLevel) * 100;
           return Math.min(100, Math.max(0, progress));
@@ -692,13 +341,48 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   // Determine if pet section should be shown
   // Only show if: user is PARENT AND petEnabled is explicitly true
   const shouldShowPetSection = Boolean(
-    currentMember?.role === "PARENT" && 
+    currentMember?.role === "PARENT" &&
     currentMember?.petEnabled === true
   );
   const hasPet = pet !== null;
 
+  // Computed values for family overview
+  const childrenMembers = members.filter(m => m.role === "CHILD" || m.role === "ASSISTANT");
+  const summaryList = childrenMembers.map(c => childSummaries[c.id]).filter(Boolean) as ChildSummary[];
+  const totalTasksToday = summaryList.reduce((sum, s) => sum + s.todaysTotal, 0);
+  const totalCompletedToday = summaryList.reduce((sum, s) => sum + s.todaysDone, 0);
+  const childrenWithPet = summaryList.filter(s => s.hasPet).length;
+  const suggestion = childrenMembers
+    .filter(c => childSummaries[c.id] !== undefined && childSummaries[c.id].todaysTotal > 0)
+    .sort((a, b) => {
+      const sa = childSummaries[a.id]!;
+      const sb = childSummaries[b.id]!;
+      return (sa.todaysDone / sa.todaysTotal) - (sb.todaysDone / sb.todaysTotal);
+    })[0] ?? null;
+  const suggestionChild = suggestion ? childSummaries[suggestion.id] : null;
+  const suggestionMessage = suggestion && suggestionChild
+    ? suggestionChild.todaysDone >= suggestionChild.todaysTotal
+      ? `Ge extra beröm – ${suggestion.name} har gjort alla sina uppgifter idag!`
+      : suggestionChild.nextTaskTitle
+        ? `Påminn ${suggestion.name} om "${suggestionChild.nextTaskTitle}" för att mata sitt djur.`
+        : `Påminn ${suggestion.name} om dagens uppgifter.`
+    : null;
+
+  const glassCard = {
+    background: "rgba(255, 255, 255, 0.82)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    borderRadius: "16px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  } as const;
+
   return (
-    <div className="dashboard adult-dashboard">
+    <div className="dashboard adult-dashboard" style={{
+      background: "linear-gradient(160deg, #E0E7FF 0%, #E0F2FE 100%)",
+      minHeight: "100vh",
+      margin: "0 -16px -24px",
+      padding: "20px 16px",
+    }}>
       {/* Pet Section (if adult has pets enabled and has pet) OR "Välj ägg" button (if enabled but no pet) */}
       {shouldShowPetSection && hasPet ? (
         <>
@@ -709,7 +393,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
               duration={3000}
             />
           )}
-          
+
           {/* Pet mood message */}
           {petMessage && (
             <div style={{
@@ -743,9 +427,9 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
             backgroundColor: "white",
             position: "relative",
           }}>
-            <div 
+            <div
               style={{
-                backgroundImage: hasIntegratedImage 
+                backgroundImage: hasIntegratedImage
                   ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
                   : `url(${getPetBackgroundImagePath(pet.petType)})`,
                 backgroundSize: "cover",
@@ -755,6 +439,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                 width: "100%",
                 aspectRatio: "3 / 2",
                 position: "relative",
+                borderRadius: "24px 24px 0 0",
                 paddingBottom: windowWidth < 768 ? "40px" : "60px",
               }}
             >
@@ -769,14 +454,14 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                   <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
                 </div>
               )}
-              
+
               {floatingXp !== null && (
                 <FloatingXpNumber
                   xp={floatingXp}
                   onComplete={() => setFloatingXp(null)}
                 />
               )}
-              
+
               {pet && (
                 <div style={{
                   position: "absolute",
@@ -804,7 +489,9 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
 
           {/* Food Collection & Feeding Section */}
           <section className="card" style={{
-            background: "white",
+            background: "rgba(255, 255, 255, 0.82)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
             borderRadius: "20px",
             padding: "24px",
             marginBottom: "24px",
@@ -832,9 +519,9 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                 {collectedFoodCount} {foodName}
               </span>
             </div>
-            
+
             <div style={{
-              background: "linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)",
+              background: "#f7fafc",
               borderRadius: "16px",
               padding: "20px",
               marginBottom: "16px",
@@ -868,7 +555,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                 ))
               )}
             </div>
-            
+
             <div style={{
               display: "flex",
               gap: "12px",
@@ -885,7 +572,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                   color: "white",
                   background: collectedFoodCount < 1 || isFeeding
                     ? "#cbd5e0"
-                    : "linear-gradient(135deg, #48bb78 0%, #38a169 100%)",
+                    : "#48bb78",
                   border: "none",
                   borderRadius: "12px",
                   cursor: collectedFoodCount < 1 || isFeeding ? "not-allowed" : "pointer",
@@ -909,7 +596,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                   color: "white",
                   background: collectedFoodCount === 0 || isFeeding
                     ? "#cbd5e0"
-                    : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    : "#764ba2",
                   border: "none",
                   borderRadius: "12px",
                   cursor: collectedFoodCount === 0 || isFeeding ? "not-allowed" : "pointer",
@@ -922,7 +609,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                 {isFeeding ? "Ger mat..." : collectedFoodCount > 0 ? `Mata allt (${collectedFoodCount})` : "Ingen mat"}
               </button>
             </div>
-            
+
             {xpProgress && xpProgress.currentLevel < MAX_LEVEL && (
               <p style={{
                 margin: "12px 0 0",
@@ -938,7 +625,9 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
       ) : shouldShowPetSection && !hasPet ? (
         // Show "Välj ägg" button if adult doesn't have pet
         <section className="card" style={{
-          background: "white",
+          background: "rgba(255, 255, 255, 0.82)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
           borderRadius: "20px",
           padding: "24px",
           marginBottom: "24px",
@@ -966,7 +655,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
           <button
             type="button"
             className="button-primary"
-            onClick={() => onNavigate?.("eggselection")}
+            onClick={() => onNavigate?.("eggselection" as ViewKey)}
             style={{
               padding: "16px 32px",
               fontSize: "1rem",
@@ -978,560 +667,145 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
         </section>
       ) : null}
 
-      {/* Tab Navigation */}
-      <div style={{
-        display: "flex",
-        borderBottom: "2px solid #e2e8f0",
-        marginBottom: "20px",
-        gap: "8px",
-      }}>
-        <button
-          type="button"
-          onClick={() => setActiveTab("calendar")}
-          style={{
-            flex: 1,
-            padding: "12px 16px",
-            border: "none",
-            background: "transparent",
-            color: activeTab === "calendar" ? "#2d3748" : "#718096",
-            fontWeight: activeTab === "calendar" ? 600 : 400,
-            fontSize: "1rem",
-            cursor: "pointer",
-            borderBottom: activeTab === "calendar" ? "3px solid #4299e1" : "3px solid transparent",
-            transition: "all 0.2s ease",
-          }}
-          aria-label="Kalender"
-          aria-pressed={activeTab === "calendar"}
-        >
-          Kalender
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("todos")}
-          style={{
-            flex: 1,
-            padding: "12px 16px",
-            border: "none",
-            background: "transparent",
-            color: activeTab === "todos" ? "#2d3748" : "#718096",
-            fontWeight: activeTab === "todos" ? 600 : 400,
-            fontSize: "1rem",
-            cursor: "pointer",
-            borderBottom: activeTab === "todos" ? "3px solid #4299e1" : "3px solid transparent",
-            transition: "all 0.2s ease",
-          }}
-          aria-label="Att Göra"
-          aria-pressed={activeTab === "todos"}
-        >
-          Att Göra
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("lists")}
-          style={{
-            flex: 1,
-            padding: "12px 16px",
-            border: "none",
-            background: "transparent",
-            color: activeTab === "lists" ? "#2d3748" : "#718096",
-            fontWeight: activeTab === "lists" ? 600 : 400,
-            fontSize: "1rem",
-            cursor: "pointer",
-            borderBottom: activeTab === "lists" ? "3px solid #4299e1" : "3px solid transparent",
-            transition: "all 0.2s ease",
-          }}
-          aria-label="Listor"
-          aria-pressed={activeTab === "lists"}
-        >
-          Listor
-        </button>
+      {/* Family Summary Card - "Idag i familjen" */}
+      {childrenMembers.length > 0 && (
+        <section className="card" style={{ ...glassCard, marginBottom: "16px", padding: "20px" }}>
+          <h3 style={{ margin: "0 0 8px", fontSize: "1.1rem", fontWeight: 600, color: "#1C1917" }}>
+            Idag i familjen
+          </h3>
+          {loadingChildren ? (
+            <p style={{ margin: 0, color: "#57534E", fontSize: "0.9rem" }}>Laddar...</p>
+          ) : (
+            <>
+              <p style={{ margin: "0 0 4px", fontSize: "0.9rem", color: "#57534E" }}>
+                {totalCompletedToday > 0 || totalTasksToday > 0
+                  ? `Barnen har gjort ${totalCompletedToday} av ${totalTasksToday} uppgifter idag.`
+                  : "Inga uppgifter planerade idag ännu."}
+              </p>
+              {childrenWithPet > 0 && (
+                <p style={{ margin: 0, fontSize: "0.9rem", color: "#57534E" }}>
+                  {childrenWithPet} av {childrenMembers.length} barn har ett aktivt djur just nu.
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Shortcut tiles */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
+        {[
+          { icon: "/lists_icon.png",    label: "Listor",   view: "todos"    },
+          { icon: "/todo_icon.png",     label: "Att göra", view: "chores"   },
+          { icon: "/calender_icon.png", label: "Schema",   view: "schedule" },
+        ].map(({ icon, label, view }) => (
+          <button key={view} type="button" onClick={() => onNavigate?.(view as ViewKey)}
+            style={{
+              flex: 1,
+              padding: "14px 8px",
+              background: "rgba(255,255,255,0.82)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              border: "none",
+              borderRadius: "16px",
+              cursor: "pointer",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", gap: "6px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            }}
+          >
+            <img src={icon} alt={label} style={{ width: "2rem", height: "2rem", objectFit: "contain" }} />
+            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#1e3a5f" }}>{label}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Tab Content */}
-      <div style={{ minHeight: "400px" }}>
-        {activeTab === "calendar" && (
-          <div>
-            <section className="card" style={{
-              background: "white",
-              borderRadius: "20px",
-              padding: "24px",
-              marginBottom: "24px",
-              boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            }}>
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: "1.2rem",
-                  fontWeight: 600,
-                  color: "#2d3748",
-                }}>
-                  Kalender
-                </h3>
-              </div>
+      {/* Suggestion Card - "Förslag idag" */}
+      {suggestionMessage && !loadingChildren && (
+        <section className="card" style={{
+          ...glassCard,
+          background: "rgba(255, 247, 237, 0.9)",
+          marginBottom: "16px",
+          padding: "20px",
+        }}>
+          <h3 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 600, color: "#1C1917" }}>
+            Förslag idag
+          </h3>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#57534E" }}>{suggestionMessage}</p>
+        </section>
+      )}
 
-              {loadingCalendar ? (
-                <p style={{ textAlign: "center", color: "#718096" }}>Laddar...</p>
-              ) : calendarError ? (
-                <div style={{ textAlign: "center" }}>
-                  <p className="error-text" style={{ margin: "0 0 12px" }}>{calendarError}</p>
-                  <button
-                    type="button"
-                    className="button-primary"
-                    onClick={() => {
-                      const now = new Date();
-                      const startDate = new Date(now);
-                      startDate.setHours(0, 0, 0, 0);
-                      const endDate = new Date(now);
-                      endDate.setDate(endDate.getDate() + 30);
-                      endDate.setHours(23, 59, 59, 999);
-                      setLoadingCalendar(true);
-                      setCalendarError(null);
-                      fetchCalendarEvents(startDate, endDate)
-                        .then(data => {
-                          setCalendarEvents(data);
-                          setCalendarEndDate(endDate);
-                        })
-                        .catch(e => {
-                          console.error("Error reloading calendar:", e);
-                          setCalendarError("Kunde inte ladda kalender. Försök igen.");
-                        })
-                        .finally(() => setLoadingCalendar(false));
-                    }}
-                    style={{ fontSize: "0.9rem", padding: "8px 16px" }}
-                  >
-                    Försök igen
-                  </button>
-                </div>
-              ) : sortedDates.length === 0 ? (
-                <p className="placeholder-text" style={{ margin: 0, textAlign: "center" }}>
-                  Inga kommande events. Skapa ditt första event i den fullständiga kalendern!
-                </p>
-              ) : (
-                <div 
-                  ref={calendarScrollRef}
-                  style={{ display: "flex", flexDirection: "column", gap: "20px", maxHeight: "600px", overflowY: "auto" }}
-                >
-                  {sortedDates.map((dateKey) => {
-                    const date = new Date(dateKey + "T00:00:00");
-                    const isToday = dateKey === new Date().toISOString().split("T")[0];
-                    const dateEvents = eventsByDate[dateKey];
-                    
-                    return (
-                      <div key={dateKey}>
-                        <h4 style={{
-                          margin: "0 0 12px",
-                          fontSize: "1rem",
-                          fontWeight: 600,
-                          color: isToday ? "#4299e1" : "#2d3748",
-                        }}>
-                          {isToday ? "Idag" : date.toLocaleDateString("sv-SE", {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}
-                        </h4>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          {dateEvents.map((event) => {
-                            // Find category using Map for O(1) lookup
-                            const category = event.categoryId 
-                              ? categoryMap.get(String(event.categoryId))
-                              : undefined;
-                            const categoryColor = category?.color || FALLBACK_BORDER_COLOR;
-                            
-                            return (
-                              <div
-                                key={`${event.id}-${event.startDateTime}`}
-                                style={{
-                                  padding: "12px",
-                                  background: category?.color
-                                    ? hexToRgba(category.color, CATEGORY_BACKGROUND_OPACITY)
-                                    : FALLBACK_BACKGROUND_COLOR,
-                                  borderRadius: "8px",
-                                  border: `2px solid ${categoryColor}`,
-                                  cursor: "pointer",
-                                  transition: "all 0.2s ease",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.transform = "scale(1.02)";
-                                  e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.transform = "scale(1)";
-                                  e.currentTarget.style.boxShadow = "none";
-                                }}
-                                onClick={() => onNavigate?.("schedule")}
-                              >
-                                <div style={{
-                                  fontWeight: 600,
-                                  color: "#2d3748",
-                                  marginBottom: "4px",
-                                }}>
-                                  {event.title}
-                                </div>
-                                <div style={{
-                                  fontSize: "0.85rem",
-                                  color: "#6b6b6b",
-                                  marginBottom: event.description || event.location || event.participantIds.length > 0 ? "4px" : "0",
-                                }}>
-                                  {event.isAllDay 
-                                    ? formatAllDayEventRange(event.startDateTime, event.endDateTime)
-                                    : formatDateTimeRange(event.startDateTime, event.endDateTime, false)
-                                  }
-                                </div>
-                                {event.description && (
-                                  <div style={{
-                                    fontSize: "0.9rem",
-                                    color: "#6b6b6b",
-                                    marginBottom: event.location || event.participantIds.length > 0 ? "4px" : "0",
-                                  }}>
-                                    {event.description}
-                                  </div>
-                                )}
-                                {event.location && (
-                                  <div style={{
-                                    fontSize: "0.85rem",
-                                    color: "#6b6b6b",
-                                    marginBottom: event.participantIds.length > 0 ? "4px" : "0",
-                                  }}>
-                                    📍 {event.location}
-                                  </div>
-                                )}
-                                {event.participantIds.length > 0 && (() => {
-                                  const participantNames = event.participantIds
-                                    .map(id => membersMap.get(id))
-                                    .filter(Boolean)
-                                    .join(", ");
-                                  
-                                  return participantNames ? (
-                                    <div style={{
-                                      fontSize: "0.85rem",
-                                      color: "#6b6b6b",
-                                    }}>
-                                      👥 {participantNames}
-                                    </div>
-                                  ) : null;
-                                })()}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  
-                  {/* Load more trigger */}
-                  <div ref={loadMoreTriggerRef} style={{ height: "20px", display: "flex", justifyContent: "center", alignItems: "center", padding: "20px 0" }}>
-                    {isLoadingMoreEvents && (
-                      <p style={{ color: "#718096", fontSize: "0.9rem" }}>Laddar fler events...</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </section>
-          </div>
-        )}
-        
-        {activeTab === "todos" && (
-          <div>
-            <section className="card" style={{
-              background: "white",
-              borderRadius: "20px",
-              padding: "24px",
-              marginBottom: "24px",
-              boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+      {/* "Mina barn" heading */}
+      <h3 style={{ margin: "8px 0 12px", fontSize: "1.2rem", fontWeight: 600, color: "#1C1917" }}>
+        Mina barn
+      </h3>
+
+      {/* Child cards */}
+      {loadingChildren && childrenMembers.length === 0 ? (
+        <p style={{ color: "#57534E", textAlign: "center" }}>Laddar...</p>
+      ) : childrenMembers.length === 0 ? (
+        <section className="card" style={{ ...glassCard, textAlign: "center", padding: "24px", marginBottom: "16px" }}>
+          <p style={{ margin: "0 0 4px", color: "#1C1917" }}>Inga barn i familjen ännu</p>
+          <p style={{ margin: 0, fontSize: "0.85rem", color: "#57534E" }}>Lägg till ditt första barn nedan.</p>
+        </section>
+      ) : (
+        childrenMembers.map(child => {
+          const s = childSummaries[child.id];
+          return (
+            <section key={child.id} className="card" style={{
+              ...glassCard,
+              background: "rgba(255, 251, 235, 0.92)",
+              marginBottom: "16px",
+              padding: "20px",
             }}>
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}>
-                <div>
-                  <h3 style={{
-                    margin: 0,
-                    fontSize: "1.2rem",
-                    fontWeight: 600,
-                    color: "#2d3748",
-                  }}>
-                    Dagens Att Göra
-                  </h3>
-                  <p style={{
-                    margin: "4px 0 0",
-                    fontSize: "0.9rem",
-                    color: "#718096",
-                  }}>
-                    {new Date().toLocaleDateString("sv-SE", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+              <p style={{ margin: "0 0 4px", fontSize: "1.1rem", fontWeight: 700, color: "#1C1917" }}>{child.name}</p>
+              {s && (
+                <>
+                  <p style={{ margin: "0 0 2px", fontSize: "0.85rem", color: "#1C1917" }}>
+                    {s.todaysTotal > 0 ? `Idag: ${s.todaysDone} av ${s.todaysTotal} uppgifter gjorda` : "Idag: inga uppgifter planerade"}
                   </p>
-                </div>
-                <button
-                  type="button"
-                  className="button-primary"
-                  onClick={() => setShowQuickAdd(true)}
-                  style={{ fontSize: "0.9rem", padding: "8px 16px" }}
-                >
-                  + Add
+                  <p style={{ margin: "0 0 2px", fontSize: "0.85rem", color: "#1C1917" }}>
+                    {s.hasPet ? "Djur: aktivt den här månaden" : "Djur: inget ägg valt ännu"}
+                  </p>
+                  {s.streakDays > 0 && (
+                    <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "#2563EB", fontWeight: 500 }}>
+                      🔥 Streak: {s.streakDays} dagar i rad
+                    </p>
+                  )}
+                  {!s.streakDays && <div style={{ marginBottom: "12px" }} />}
+                </>
+              )}
+              {/* Djur + Plånbok row */}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "8px" }}>
+                <button type="button" onClick={() => onNavigate?.("childrenxp")}
+                  style={{ flex: 1, padding: "12px", background: "#BAE6FD", color: "#0C4A6E", border: "none", borderRadius: "12px", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem" }}>
+                  🐾 Djur
+                </button>
+                <button type="button" onClick={() => onNavigate?.("childrenwallet")}
+                  style={{ flex: 1, padding: "12px", background: "#BAE6FD", color: "#0C4A6E", border: "none", borderRadius: "12px", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem" }}>
+                  💰 Plånbok
                 </button>
               </div>
-
-              {loadingTasks ? (
-                <p style={{ textAlign: "center", color: "#718096" }}>Laddar...</p>
-              ) : tasksError ? (
-                <div style={{ textAlign: "center" }}>
-                  <p className="error-text" style={{ margin: "0 0 12px" }}>{tasksError}</p>
-                  <button
-                    type="button"
-                    className="button-primary"
-                    onClick={() => {
-                      if (currentMember) {
-                        setLoadingTasks(true);
-                        setTasksError(null);
-                        fetchTasksForToday(currentMember.id)
-                          .then(data => {
-                            const sortedTasks = sortTasksByRequiredAndTitle(data);
-                            setTasks(sortedTasks);
-                          })
-                          .catch(e => {
-                            console.error("Error reloading tasks:", e);
-                            setTasksError("Kunde inte ladda tasks. Försök igen.");
-                          })
-                          .finally(() => setLoadingTasks(false));
-                      }
-                    }}
-                    style={{ fontSize: "0.9rem", padding: "8px 16px" }}
-                  >
-                    Försök igen
-                  </button>
-                </div>
-              ) : tasks.length === 0 ? (
-                <p className="placeholder-text" style={{ margin: 0, textAlign: "center" }}>
-                  Inga dagens att göra. Skapa ditt första task!
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  {tasks.map((task) => {
-                    // Different background colors for required vs extra tasks (only when not completed)
-                    const bgColor = task.completed 
-                      ? "#f0fff4" // Same green for all completed tasks
-                      : (task.event.isRequired ? "#f7fafc" : "#fff7ed");
-                    const borderColor = task.completed 
-                      ? "#48bb78" // Same green border for all completed tasks
-                      : (task.event.isRequired ? "#e2e8f0" : "#fed7aa");
-                    
-                    return (
-                      <div
-                        key={task.event.id}
-                        onClick={() => handleToggleTask(task.event.id)}
-                        style={{
-                          padding: "16px",
-                          background: bgColor,
-                          borderRadius: "12px",
-                          border: `2px solid ${borderColor}`,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "scale(1.02)";
-                          e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "scale(1)";
-                          e.currentTarget.style.boxShadow = "none";
-                        }}
-                      >
-                        <div style={{
-                          fontSize: "1.5rem",
-                          opacity: task.completed ? 1 : 0.5,
-                        }}>
-                          {task.completed ? "✅" : "⭕"}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{
-                            fontWeight: task.completed ? 600 : 500,
-                            color: "#2d3748",
-                            textDecoration: task.completed ? "line-through" : "none",
-                          }}>
-                            {task.event.title}
-                          </div>
-                          {task.event.xpPoints && task.event.xpPoints > 0 && (
-                            <div style={{
-                              fontSize: "0.85rem",
-                              color: "#718096",
-                              marginTop: "4px",
-                            }}>
-                              {task.event.xpPoints} XP
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              {/* Sysslor button */}
+              <button type="button" onClick={() => onNavigate?.("childview", { childId: child.id, childName: child.name })}
+                style={{ width: "100%", padding: "11px", background: "#BAE6FD", color: "#0C4A6E", border: "none", borderRadius: "12px", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem", marginBottom: "8px" }}>
+                {child.name}s Sysslor
+              </button>
+              {/* Bjud in button */}
+              <button type="button" onClick={() => onNavigate?.("familymembers")}
+                style={{ width: "100%", padding: "10px", background: "transparent", color: "#0C4A6E", border: "2px solid #BAE6FD", borderRadius: "12px", fontWeight: 500, cursor: "pointer", fontSize: "0.9rem" }}>
+                Bjud in till appen
+              </button>
             </section>
+          );
+        })
+      )}
 
-            {showQuickAdd && currentMember && (
-              <SimplifiedTaskForm
-                members={members}
-                currentUserId={currentMember.id}
-                onSave={handleQuickAddSave}
-                onCancel={() => setShowQuickAdd(false)}
-              />
-            )}
-          </div>
-        )}
-        
-        {activeTab === "lists" && (
-          <div>
-            <section className="card" style={{
-              background: "white",
-              borderRadius: "20px",
-              padding: "24px",
-              marginBottom: "24px",
-              boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            }}>
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: "1.2rem",
-                  fontWeight: 600,
-                  color: "#2d3748",
-                }}>
-                  Listor
-                </h3>
-                <button
-                  type="button"
-                  className="button-primary"
-                  onClick={() => onNavigate?.("todos")}
-                  style={{ fontSize: "0.9rem", padding: "8px 16px" }}
-                >
-                  Öppna alla listor →
-                </button>
-              </div>
-
-              {loadingLists ? (
-                <p style={{ textAlign: "center", color: "#718096" }}>Laddar...</p>
-              ) : listsError ? (
-                <div style={{ textAlign: "center" }}>
-                  <p className="error-text" style={{ margin: "0 0 12px" }}>{listsError}</p>
-                  <button
-                    type="button"
-                    className="button-primary"
-                    onClick={() => {
-                      setLoadingLists(true);
-                      setListsError(null);
-                      fetchTodoLists()
-                        .then(data => setTodoLists(data))
-                        .catch(e => {
-                          console.error("Error reloading lists:", e);
-                          setListsError("Kunde inte ladda listor. Försök igen.");
-                        })
-                        .finally(() => setLoadingLists(false));
-                    }}
-                    style={{ fontSize: "0.9rem", padding: "8px 16px" }}
-                  >
-                    Försök igen
-                  </button>
-                </div>
-              ) : todoLists.length === 0 ? (
-                <p className="placeholder-text" style={{ margin: 0, textAlign: "center" }}>
-                  Inga listor ännu. Skapa din första lista!
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  {todoLists.map((list) => {
-                    const undoneItems = list.items.filter(item => !item.done);
-                    const undoneCount = undoneItems.length;
-                    const totalCount = list.items.length;
-                    
-                    const colorConfig = TODO_COLORS.find(c => c.value === list.color) || TODO_COLORS[0];
-                    
-                    return (
-                      <div
-                        key={list.id}
-                        onClick={() => onNavigate?.("todos", { listId: list.id })}
-                        style={{
-                          padding: "16px",
-                          background: colorConfig.gradient,
-                          borderRadius: "12px",
-                          border: `2px solid ${colorConfig.border}`,
-                          color: "#2d5a2d",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          boxShadow: `0 1px 3px ${colorConfig.border}30`,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "scale(1.02)";
-                          e.currentTarget.style.boxShadow = `0 2px 8px ${colorConfig.border}40`;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "scale(1)";
-                          e.currentTarget.style.boxShadow = `0 1px 3px ${colorConfig.border}30`;
-                        }}
-                      >
-                        <div style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{
-                              fontWeight: 600,
-                              color: "#2d5a2d",
-                              marginBottom: "4px",
-                            }}>
-                              {list.name}
-                            </div>
-                            <div style={{
-                              fontSize: "0.85rem",
-                              color: "#2d5a2d",
-                              opacity: 0.8,
-                            }}>
-                              {undoneCount === 0 
-                                ? totalCount === 0 
-                                  ? "Inga items" 
-                                  : "Alla klara ✓"
-                                : `${undoneCount} oklara ${undoneCount === 1 ? "item" : "items"}`
-                              }
-                            </div>
-                          </div>
-                          {list.isPrivate && (
-                            <span style={{
-                              fontSize: "0.75rem",
-                              color: "#718096",
-                              marginLeft: "8px",
-                            }}>
-                              🔒
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          </div>
-        )}
-      </div>
+      {/* Lägg till barn button */}
+      <button type="button" onClick={() => onNavigate?.("familymembers")}
+        style={{ width: "100%", padding: "16px", background: "#BAE6FD", color: "#0C4A6E", border: "none", borderRadius: "14px", fontWeight: 600, cursor: "pointer", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "8px", marginBottom: "16px" }}>
+        👤 Lägg till barn
+      </button>
 
       {/* Spotify Charts Link - Only for specific families */}
       {showSpotifyLink && (

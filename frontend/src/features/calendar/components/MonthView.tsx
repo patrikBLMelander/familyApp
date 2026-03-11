@@ -1,20 +1,16 @@
 import { CalendarEventResponse, CalendarEventCategoryResponse } from "../../../shared/api/calendar";
-import { FamilyMemberResponse } from "../../../shared/api/familyMembers";
 import { getEventsForDay } from "../utils/eventFilters";
-import { MAX_TASKS_TO_SHOW_IN_MONTH } from "../constants";
 
 export type MonthViewProps = {
   events: CalendarEventResponse[];
   categories: CalendarEventCategoryResponse[];
-  members: FamilyMemberResponse[];
   currentMonth: Date;
   onMonthChange: (date: Date) => void;
   onEventClick: (event: CalendarEventResponse) => void;
-  onEventDelete: (eventId: string) => void;
   onDayClick?: (date: Date) => void;
 };
 
-export function MonthView({ events, categories, members, currentMonth, onMonthChange, onEventClick, onEventDelete, onDayClick }: MonthViewProps) {
+export function MonthView({ events, categories, currentMonth, onMonthChange, onEventClick, onDayClick }: MonthViewProps) {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
 
@@ -155,139 +151,59 @@ export function MonthView({ events, categories, members, currentMonth, onMonthCh
                 >
                   {day}
                 </div>
-                <div style={{ 
-                  display: "flex", 
-                  flexDirection: "column", 
-                  gap: "1px", 
-                  flex: 1, 
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1px",
+                  flex: 1,
                   overflow: "hidden",
                   minHeight: 0,
                   width: "100%"
                 }}>
-                  {(() => {
-                    // Separate tasks and non-task events
-                    const tasks = dayEvents.filter(e => e.isTask);
-                    const nonTasks = dayEvents.filter(e => !e.isTask);
-                    
-                    // Sort tasks: required first, then by title
-                    const sortedTasks = [...tasks].sort((a, b) => {
-                      if (a.isRequired !== b.isRequired) {
-                        return a.isRequired ? -1 : 1; // Required first
-                      }
-                      return a.title.localeCompare(b.title);
-                    });
-                    
-                    // Group tasks by member
-                    const tasksByMember = new Map<string, typeof sortedTasks>();
-                    sortedTasks.forEach(task => {
-                      task.participantIds.forEach(participantId => {
-                        if (!tasksByMember.has(participantId)) {
-                          tasksByMember.set(participantId, []);
-                        }
-                        tasksByMember.get(participantId)!.push(task);
-                      });
-                    });
-                    
-                    // Filter members to only show those that have tasks
-                    const membersWithTasks = members.filter(member => tasksByMember.has(member.id));
-                    
-                    // Show tasks grouped by member (limited due to space)
-                    const maxTasksToShow = MAX_TASKS_TO_SHOW_IN_MONTH;
-                    let tasksShown = 0;
-                    const taskElements: JSX.Element[] = [];
-                    
-                    membersWithTasks.forEach(member => {
-                      const memberTasks = tasksByMember.get(member.id) || [];
-                      if (memberTasks.length === 0 || tasksShown >= maxTasksToShow) return;
-                      
-                      memberTasks.slice(0, maxTasksToShow - tasksShown).forEach(task => {
-                        const category = categories.find(c => c.id === task.categoryId);
-                        const truncatedTitle = task.title.length > 12 
-                          ? task.title.substring(0, 12) + "..." 
-                          : task.title;
-                        taskElements.push(
-                          <div
-                            key={task.id}
-                            data-event
-                            style={{
-                              padding: "1px 2px",
-                              background: category?.color || "#b8e6b8",
-                              borderRadius: "2px",
-                              fontSize: "0.5rem",
-                              color: "#2d5a2d",
-                              fontWeight: 500,
-                              cursor: "pointer",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              lineHeight: "1.1",
-                              flexShrink: 0,
-                              width: "100%",
-                              maxWidth: "100%"
-                            }}
-                            title={task.title}
-                          >
-                            {truncatedTitle}
-                          </div>
-                        );
-                        tasksShown++;
-                      });
-                    });
-                    
-                    // Show non-task events
-                    const allEvents = [...taskElements, ...nonTasks.slice(0, 3 - tasksShown).map(event => {
-                      const category = categories.find(c => c.id === event.categoryId);
-                      const truncatedTitle = event.title.length > 15 
-                        ? event.title.substring(0, 15) + "..." 
-                        : event.title;
-                      return (
-                        <div
-                          key={event.id}
-                          data-event
-                          style={{
-                            padding: "1px 2px",
-                            background: category?.color || "#b8e6b8",
-                            borderRadius: "2px",
-                            fontSize: "0.5rem",
-                            color: "#2d5a2d",
-                            fontWeight: 500,
-                            cursor: "pointer",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            lineHeight: "1.1",
-                            flexShrink: 0,
-                            width: "100%",
-                            maxWidth: "100%"
-                          }}
-                          title={event.title}
-                        >
-                          {truncatedTitle}
-                        </div>
-                      );
-                    })];
-                    
-                    const totalShown = tasksShown + Math.min(nonTasks.length, 3 - tasksShown);
-                    const totalEvents = dayEvents.length;
-                    
+                  {dayEvents.slice(0, 3).map(event => {
+                    const category = categories.find(c => c.id === event.categoryId);
+                    const truncatedTitle = event.title.length > 15
+                      ? event.title.substring(0, 15) + "..."
+                      : event.title;
                     return (
-                      <>
-                        {allEvents}
-                        {totalEvents > totalShown && (
-                          <div style={{ 
-                            fontSize: "0.5rem", 
-                            color: "#6b6b6b", 
-                            padding: "1px 2px", 
-                            lineHeight: "1.1",
-                            flexShrink: 0,
-                            whiteSpace: "nowrap"
-                          }}>
-                            +{totalEvents - totalShown}
-                          </div>
-                        )}
-                      </>
+                      <div
+                        key={event.id}
+                        data-event
+                        onClick={(e) => { onEventClick(event); e.stopPropagation(); }}
+                        style={{
+                          padding: "1px 2px",
+                          background: category?.color || "#b8e6b8",
+                          borderRadius: "2px",
+                          fontSize: "0.5rem",
+                          color: "#2d5a2d",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          lineHeight: "1.1",
+                          flexShrink: 0,
+                          width: "100%",
+                          maxWidth: "100%"
+                        }}
+                        title={event.title}
+                      >
+                        {truncatedTitle}
+                      </div>
                     );
-                  })()}
+                  })}
+                  {dayEvents.length > 3 && (
+                    <div style={{
+                      fontSize: "0.5rem",
+                      color: "#6b6b6b",
+                      padding: "1px 2px",
+                      lineHeight: "1.1",
+                      flexShrink: 0,
+                      whiteSpace: "nowrap"
+                    }}>
+                      +{dayEvents.length - 3}
+                    </div>
+                  )}
                 </div>
               </div>
             );

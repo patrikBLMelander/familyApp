@@ -17,6 +17,8 @@ import { MenstrualCycleView } from "./features/menstrualcycle/MenstrualCycleView
 import { WalletDetailView } from "./features/wallet/WalletDetailView";
 import { ChildrenWalletView } from "./features/wallet/ChildrenWalletView";
 import { PrivacyPolicyView } from "./features/legal/PrivacyPolicyView";
+import { ParentChildView } from "./features/dashboard/ParentChildView";
+import { AdultChoresView } from "./features/dashboard/AdultChoresView";
 import { useIsChild } from "./shared/hooks/useIsChild";
 import { usePwaInstall } from "./shared/hooks/usePwaInstall";
 import { getFamily } from "./shared/api/family";
@@ -24,7 +26,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet" | "privacy";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet" | "privacy" | "childview";
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -42,6 +44,7 @@ export function App() {
   const { isInstallable, isInstalled, isIOS, handleInstallClick } = usePwaInstall();
   const [hasPet, setHasPet] = useState<boolean | null>(null);
   const [navigationParams, setNavigationParams] = useState<{ listId?: string } | null>(null);
+  const [selectedChild, setSelectedChild] = useState<{ id: string; name: string } | null>(null);
 
   // Check for hash-based routing (for test views) - must run first
   useEffect(() => {
@@ -129,12 +132,14 @@ export function App() {
     }
   }, [isChild, childLoading, isAuthenticated, hasPet]);
 
-  const handleNavigate = (view: ViewKey, params?: { listId?: string }) => {
+  const handleNavigate = (view: ViewKey, params?: { listId?: string; childId?: string; childName?: string }) => {
     setCurrentView(view);
     setMenuOpen(false);
-    // Only set navigation params for todos view, clear otherwise
     if (view === "todos") {
       setNavigationParams(params || null);
+    } else if (view === "childview" && params?.childId && params?.childName) {
+      setSelectedChild({ id: params.childId, name: params.childName });
+      setNavigationParams(null);
     } else {
       setNavigationParams(null);
     }
@@ -278,7 +283,7 @@ export function App() {
       case "schedule":
         return <CalendarView onNavigate={handleNavigate} />;
       case "chores":
-        return <Dashboard placeholder="Sysslor-vy kommer här." onNavigate={handleNavigate} familyId={family?.id} />;
+        return <AdultChoresView onNavigate={handleNavigate} />;
       case "xp":
         return <XpDashboard onNavigate={handleNavigate} />;
       case "childrenxp":
@@ -289,6 +294,17 @@ export function App() {
         return <MenstrualCycleView onNavigate={handleNavigate} />;
       case "eggselection":
         return <EggSelectionView onEggSelected={handleEggSelected} />;
+      case "childview":
+        if (selectedChild) {
+          return (
+            <ParentChildView
+              childId={selectedChild.id}
+              childName={selectedChild.name}
+              onBack={() => handleNavigate("dashboard")}
+            />
+          );
+        }
+        return <AdultDashboard onNavigate={handleNavigate} familyId={family?.id} />;
       case "dashboard":
       default:
         return <AdultDashboard onNavigate={handleNavigate} familyId={family?.id} />;
@@ -296,8 +312,8 @@ export function App() {
   };
 
   return (
-    <div className="app-root">
-      <header className="app-header">
+    <div className="app-root" style={isChild ? { paddingTop: 0 } : undefined}>
+      {!isChild && <header className="app-header">
         <button
           type="button"
           className="hamburger-button"
@@ -312,7 +328,7 @@ export function App() {
           <h1>{family?.name || "FamilyApp"}</h1>
           <p>{isChild ? `${childMember?.name || "Barn"}'s vardag` : "Hela familjens vardag, samlad på ett ställe."}</p>
         </div>
-      </header>
+      </header>}
 
       <nav className={`side-menu ${menuOpen ? "side-menu-open" : ""}`}>
         {isChild ? (

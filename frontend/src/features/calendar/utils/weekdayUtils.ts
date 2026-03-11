@@ -13,13 +13,8 @@ export function getNextWeekday(weekday: number): Date {
   
   const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   
-  // Calculate days until next occurrence
-  let daysUntil = (weekday - currentDay + 7) % 7;
-  
-  // If today is the target day, get next week's occurrence
-  if (daysUntil === 0) {
-    daysUntil = 7;
-  }
+  // Calculate days until next occurrence (0 = today if today matches)
+  const daysUntil = (weekday - currentDay + 7) % 7;
   
   const nextDate = new Date(today);
   nextDate.setDate(today.getDate() + daysUntil);

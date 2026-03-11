@@ -6,6 +6,7 @@ import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
 import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
 import { getPetFoodEmoji, getPetFoodName, getRandomPetMessage } from "../pet/petFoodUtils";
+import { getPetGradient, isDarkPetTheme } from "../pet/petTheme";
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
 import { ConfettiAnimation } from "./components/ConfettiAnimation";
 import { FloatingXpNumber } from "./components/FloatingXpNumber";
@@ -407,12 +408,16 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
   const foodName = pet ? getPetFoodName(pet.petType) : "mat";
   const totalFoodCount = collectedFoodCount;
 
+  const { from: gradFrom, to: gradTo } = getPetGradient(pet?.petType ?? "");
+  const isDark = isDarkPetTheme(pet?.petType ?? "");
+
   return (
     <div className="dashboard child-dashboard" style={{
-      background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+      background: `linear-gradient(160deg, ${gradFrom} 0%, ${gradTo} 100%)`,
       minHeight: "100vh",
       padding: "20px",
       position: "relative",
+      margin: "0 -16px -24px",
     }}>
       {/* Confetti Animation */}
       {showConfetti && (
@@ -448,10 +453,10 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           alignItems: "flex-start" 
         }}>
           <div>
-            <h2 style={{ margin: "0 0 4px", fontSize: "1.5rem", fontWeight: 700, color: "#2d3748" }}>
+            <h2 style={{ margin: "0 0 4px", fontSize: "1.5rem", fontWeight: 700, color: isDark ? "white" : "#2d3748" }}>
               Hej {childName}! 👋
             </h2>
-            <p style={{ margin: 0, fontSize: "1rem", color: "#4a5568" }}>
+            <p style={{ margin: 0, fontSize: "1rem", color: isDark ? "rgba(255,255,255,0.85)" : "#4a5568" }}>
               Ta hand om din {getPetNameSwedishLowercase(pet.petType)}!
             </p>
           </div>
@@ -512,9 +517,9 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
         position: "relative",
       }}>
         {/* Image container with 3:2 aspect ratio (1440×960) */}
-        <div 
+        <div
           style={{
-            backgroundImage: hasIntegratedImage 
+            backgroundImage: hasIntegratedImage
               ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
               : `url(${getPetBackgroundImagePath(pet.petType)})`,
             backgroundSize: "cover",
@@ -524,6 +529,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
             width: "100%",
             aspectRatio: "3 / 2", // 1440×960 aspect ratio
             position: "relative",
+            borderRadius: "24px 24px 0 0",
             animation: showConfetti ? "pulseGradient 2s ease-in-out" : undefined,
             // Add padding-bottom to ensure progress ring always has space (if pet exists)
             paddingBottom: pet ? (windowWidth < 768 ? "40px" : "60px") : "0",
@@ -576,21 +582,18 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           )}
         </div>
         
-        {/* Text below image */}
+        {/* Spacer for progress ring overflow */}
         <div style={{
-          padding: "20px",
-          textAlign: "center",
-          borderTop: "1px solid rgba(0, 0, 0, 0.1)",
-          // Add margin-top to account for progress ring if pet exists
+          paddingBottom: pet ? (windowWidth < 768 ? "20px" : "30px") : "0",
           marginTop: pet ? (windowWidth < 768 ? "20px" : "30px") : "0",
-        }}>
-          {/* Empty space - message moved to overlay */}
-        </div>
+        }} />
       </section>
 
       {/* Food Collection & Feeding Section */}
       <section className="card" style={{
-        background: "white",
+        background: "rgba(255, 255, 255, 0.82)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
         borderRadius: "20px",
         padding: "24px",
         marginBottom: "24px",
@@ -621,7 +624,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
         
         {/* Food bowl visualization */}
         <div style={{
-          background: "linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)",
+          background: "#f7fafc",
           borderRadius: "16px",
           padding: "20px",
           marginBottom: "16px",
@@ -674,7 +677,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
               color: "white",
               background: totalFoodCount < 1 || isFeeding
                 ? "#cbd5e0"
-                : "linear-gradient(135deg, #48bb78 0%, #38a169 100%)",
+                : "#48bb78",
               border: "none",
               borderRadius: "12px",
               cursor: totalFoodCount < 1 || isFeeding ? "not-allowed" : "pointer",
@@ -706,7 +709,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
               color: "white",
               background: totalFoodCount === 0 || isFeeding
                 ? "#cbd5e0"
-                : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                : "#764ba2",
               border: "none",
               borderRadius: "12px",
               cursor: totalFoodCount === 0 || isFeeding ? "not-allowed" : "pointer",
@@ -742,7 +745,9 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
 
       {/* Tasks Section */}
       <section className="card" style={{
-        background: "white",
+        background: "rgba(255, 255, 255, 0.82)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
         borderRadius: "20px",
         padding: "24px",
         marginBottom: "24px",

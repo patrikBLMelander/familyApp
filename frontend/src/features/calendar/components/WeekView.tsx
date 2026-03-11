@@ -1,20 +1,17 @@
 import { CalendarEventResponse, CalendarEventCategoryResponse } from "../../../shared/api/calendar";
-import { FamilyMemberResponse } from "../../../shared/api/familyMembers";
 import { getEventsForDay } from "../utils/eventFilters";
 
 export type WeekViewProps = {
   events: CalendarEventResponse[];
   categories: CalendarEventCategoryResponse[];
-  members: FamilyMemberResponse[];
   currentWeek: Date;
   onWeekChange: (date: Date) => void;
   onEventClick: (event: CalendarEventResponse) => void;
   onEventDelete: (eventId: string) => void;
   onDayClick?: (date: Date, hour?: number) => void;
-  showTasksOnly: boolean;
 };
 
-export function WeekView({ events, categories, members, currentWeek, onWeekChange, onEventClick, onEventDelete, onDayClick, showTasksOnly }: WeekViewProps) {
+export function WeekView({ events, categories, currentWeek, onWeekChange, onEventClick, onEventDelete, onDayClick }: WeekViewProps) {
   // Get start of week (Monday)
   const getWeekStart = (date: Date): Date => {
     const d = new Date(date);
@@ -171,159 +168,7 @@ export function WeekView({ events, categories, members, currentWeek, onWeekChang
         );
       })()}
 
-      {/* Tasks list - show as a list under each day */}
-      {(() => {
-        const hasTasks = weekDays.some(day => getDayEvents(day).filter(e => e.isTask).length > 0);
-        if (!hasTasks) return null;
-        
-        return (
-          <div style={{ 
-            marginBottom: "12px", 
-            border: "1px solid #ddd", 
-            borderRadius: "8px", 
-            overflow: "hidden",
-            background: "white"
-          }}>
-            <div style={{ 
-              display: "flex", 
-              borderBottom: "1px solid #ddd",
-              background: "#f5f5f5"
-            }}>
-              <div style={{ 
-                width: "45px", 
-                flexShrink: 0, 
-                padding: "6px 2px",
-                fontSize: "0.7rem",
-                color: "#6b6b6b",
-                fontWeight: 600,
-                borderRight: "1px solid #ddd"
-              }}>
-                Tasks
-              </div>
-              {weekDays.map((day, dayIndex) => {
-                const isToday = day.toDateString() === new Date().toDateString();
-                const dayTasks = getDayEvents(day).filter(e => e.isTask);
-                // Sort tasks: required first, then by title
-                const sortedTasks = [...dayTasks].sort((a, b) => {
-                  if (a.isRequired !== b.isRequired) {
-                    return a.isRequired ? -1 : 1; // Required first
-                  }
-                  return a.title.localeCompare(b.title);
-                });
-                
-                const handleDayClick = (e: React.MouseEvent) => {
-                  // Only trigger if clicking on the day container itself, not on tasks
-                  if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-event]') === null) {
-                    onDayClick?.(day);
-                    e.stopPropagation();
-                  }
-                };
-                
-                if (sortedTasks.length === 0) {
-                  return (
-                    <div 
-                      key={day.toISOString()} 
-                      onClick={handleDayClick}
-                      style={{ 
-                        flex: 1, 
-                        minWidth: 0, 
-                        borderRight: dayIndex < 6 ? "1px solid #ddd" : "none",
-                        padding: "4px 2px",
-                        background: isToday ? "#b8e6b820" : "transparent",
-                        cursor: onDayClick ? "pointer" : "default",
-                        minHeight: "40px"
-                      }}
-                    />
-                  );
-                }
-                
-                // Group tasks by member (each task can have multiple participants, so we'll show it for each)
-                const tasksByMember = new Map<string, typeof sortedTasks>();
-                sortedTasks.forEach(task => {
-                  task.participantIds.forEach(participantId => {
-                    if (!tasksByMember.has(participantId)) {
-                      tasksByMember.set(participantId, []);
-                    }
-                    tasksByMember.get(participantId)!.push(task);
-                  });
-                });
-                
-                // Filter members to only show those that have tasks
-                const membersWithTasks = members.filter(member => tasksByMember.has(member.id));
-                
-                return (
-                  <div 
-                    key={day.toISOString()} 
-                    onClick={handleDayClick}
-                    style={{ 
-                      flex: 1, 
-                      minWidth: 0, 
-                      borderRight: dayIndex < 6 ? "1px solid #ddd" : "none",
-                      padding: "4px 2px",
-                      background: isToday ? "#b8e6b820" : "transparent",
-                      cursor: onDayClick ? "pointer" : "default",
-                      minHeight: "40px"
-                    }}
-                  >
-                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      {membersWithTasks.map(member => {
-                        const memberTasks = tasksByMember.get(member.id) || [];
-                        
-                        return (
-                          <div key={member.id} style={{ marginBottom: "4px" }}>
-                            <div style={{
-                              fontSize: "0.65rem",
-                              fontWeight: 600,
-                              color: "#6b6b6b",
-                              marginBottom: "2px"
-                            }}>
-                              {member.name}
-                            </div>
-                            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                                {memberTasks.map(task => {
-                                  const category = categories.find(c => c.id === task.categoryId);
-                                  return (
-                                    <li
-                                      key={task.id}
-                                      data-event
-                                      onClick={(e) => {
-                                        onEventClick(task);
-                                        e.stopPropagation();
-                                      }}
-                                      style={{
-                                      padding: "4px 6px",
-                                      marginBottom: "2px",
-                                      background: category?.color || "#b8e6b8",
-                                      borderRadius: "4px",
-                                      fontSize: "0.75rem",
-                                      color: "#2d5a2d",
-                                      fontWeight: 500,
-                                      cursor: "pointer",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap"
-                                    }}
-                                    title={task.title}
-                                  >
-                                    {task.title}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Hourly grid - only show when not in tasks-only mode */}
-      {!showTasksOnly && (
+      {/* Hourly grid */}
       <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: "8px", width: "100%", overflow: "hidden" }}>
         {/* Time column */}
         <div style={{ width: "45px", flexShrink: 0, borderRight: "1px solid #ddd" }}>
@@ -484,7 +329,6 @@ export function WeekView({ events, categories, members, currentWeek, onWeekChang
           );
         })}
       </div>
-      )}
     </div>
   );
 }

@@ -1,16 +1,14 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   CalendarEventResponse,
 } from "../../shared/api/calendar";
 import { EventForm } from "./components/EventForm";
-import { SimplifiedTaskForm } from "./components/SimplifiedTaskForm";
 import { WeekView } from "./components/WeekView";
 import { MonthView } from "./components/MonthView";
 import { CategoryManager } from "./components/CategoryManager";
 import { RollingView } from "./components/RollingView";
 import { CalendarHeader } from "./components/CalendarHeader";
 import { CalendarViewSelector } from "./components/CalendarViewSelector";
-import { CalendarFilters } from "./components/CalendarFilters";
 import { DayActionMenu } from "./components/DayActionMenu";
 import { useCalendarData } from "./hooks/useCalendarData";
 import { useCalendarEvents } from "./hooks/useCalendarEvents";
@@ -26,14 +24,12 @@ type CalendarContainerProps = {
 /**
  * Main container component for the calendar feature.
  * Manages all state, data fetching, and coordinates between different calendar views.
- * 
+ *
  * Handles:
  * - View type switching (rolling, week, month)
  * - Event CRUD operations
- * - Task completion
  * - Category management
- * - Filtering (tasks/events, members)
- * 
+ *
  * @param onNavigate - Optional callback for navigation to other views
  */
 export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
@@ -43,12 +39,8 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showCategoryManager, setShowCategoryManager] = useState(false);
-  const [showTasksOnly, setShowTasksOnly] = useState(false);
-  const [showAllMembers, setShowAllMembers] = useState(false);
   const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [quickAddTitle, setQuickAddTitle] = useState("");
   const [initialStartDate, setInitialStartDate] = useState<string | null>(null);
   const [dayActionMenuDate, setDayActionMenuDate] = useState<Date | null>(null);
   const [scrollToDate, setScrollToDate] = useState<Date | null>(null);
@@ -60,39 +52,23 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
     members,
     loading,
     error,
-    tasksWithCompletion,
-    tasksByMember,
     currentUserRole,
     loadData,
     loadCategories,
-    loadTasks,
-    loadTasksForAllMembers,
     loadCurrentMember,
-    handleToggleTask,
     setError,
     loadMoreEvents,
   } = useCalendarData(
     viewType,
     currentWeek,
     currentMonth,
-    selectedDate,
-    showTasksOnly,
-    showAllMembers,
-    currentMemberId
   );
-
-  // Use ref to maintain stable reference to members array
-  const membersRef = useRef(members);
-  useEffect(() => {
-    membersRef.current = members;
-  }, [members]);
 
   // Use events hook
   const {
     handleCreateEvent,
     handleUpdateEvent,
     handleDeleteEvent,
-    handleQuickAdd,
   } = useCalendarEvents(
     loadData,
     setError,
@@ -100,11 +76,11 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
     setEditingEvent,
     currentMemberId,
     selectedDate,
-    showAllMembers,
-    () => loadTasks(currentMemberId, selectedDate),
-    () => loadTasksForAllMembers(members, selectedDate),
-    setQuickAddTitle,
-    setShowQuickAdd
+    false,
+    async () => {},
+    async () => {},
+    () => {},
+    () => {}
   );
 
   // Load current member on mount
@@ -123,44 +99,10 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
     void loadData();
   }, [viewType, currentWeek, currentMonth, loadData]);
 
-  // Load tasks when needed
-  useEffect(() => {
-    if (showTasksOnly && viewType === CALENDAR_VIEW_TYPES.ROLLING) {
-      if (showAllMembers) {
-        // Use ref to avoid unnecessary re-runs when members array reference changes
-        void loadTasksForAllMembers(membersRef.current, selectedDate);
-      } else if (currentMemberId) {
-        void loadTasks(currentMemberId, selectedDate);
-      }
-    }
-  }, [showTasksOnly, viewType, currentMemberId, selectedDate, showAllMembers, loadTasks, loadTasksForAllMembers]);
-
-  // Filter events for week/month views (rolling view handles its own filtering)
-  // IMPORTANT: For regular events (not tasks), we show ALL events regardless of participantIds
-  // This ensures all family members' events are visible in the calendar view
+  // Filter out task events — calendar only shows pure calendar events
   const filteredEvents = useMemo(() => {
-    return events.filter(event => {
-      if (showTasksOnly) {
-        if (!event.isTask) return false;
-        // If showTasksOnly is true and showAllMembers is false, filter by current member
-        if (!showAllMembers && currentMemberId) {
-          return event.participantIds.includes(currentMemberId);
-        }
-        return true;
-      } else {
-        // IMPORTANT: For regular events (not tasks), show ALL events regardless of participantIds
-        // Do NOT filter by participantIds - show ALL family events
-        return !event.isTask; // Show only non-task events
-      }
-    });
-  }, [events, showTasksOnly, showAllMembers, currentMemberId]);
-
-  // Wrapper for handleToggleTask to match expected signature
-  const handleToggleTaskWrapper = useMemo(() => {
-    return (eventId: string, memberId?: string) => {
-      void handleToggleTask(eventId, memberId || currentMemberId, selectedDate, showAllMembers);
-    };
-  }, [handleToggleTask, currentMemberId, selectedDate, showAllMembers]);
+    return events.filter(event => !event.isTask);
+  }, [events]);
 
   const handleBackClick = () => {
     if (showCreateForm || editingEvent) {
@@ -183,23 +125,12 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
         editingEvent={!!editingEvent}
       />
 
-      {/* View type toggle and filters - only show when not in form */}
+      {/* View type selector — only show when not in form */}
       {!showCreateForm && !editingEvent && (
-        <div style={{ 
-          display: "flex", 
-          flexDirection: "column",
-          gap: "8px",
-          marginBottom: "16px"
-        }}>
+        <div style={{ marginBottom: "16px" }}>
           <CalendarViewSelector
             viewType={viewType}
             setViewType={setViewType}
-          />
-          <CalendarFilters
-            showTasksOnly={showTasksOnly}
-            setShowTasksOnly={setShowTasksOnly}
-            showAllMembers={showAllMembers}
-            setShowAllMembers={setShowAllMembers}
           />
         </div>
       )}
@@ -216,22 +147,9 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
         <>
           {viewType === CALENDAR_VIEW_TYPES.ROLLING && (
             <RollingView
-              showTasksOnly={showTasksOnly}
-              showAllMembers={showAllMembers}
-              selectedDate={selectedDate}
-              setSelectedDate={setSelectedDate}
-              showQuickAdd={showQuickAdd}
-              setShowQuickAdd={setShowQuickAdd}
-              quickAddTitle={quickAddTitle}
-              setQuickAddTitle={setQuickAddTitle}
-              handleQuickAdd={handleQuickAdd}
-              tasksWithCompletion={tasksWithCompletion}
-              tasksByMember={tasksByMember}
-              members={members}
-              currentMemberId={currentMemberId}
-              events={events}
+              events={filteredEvents}
               categories={categories}
-              handleToggleTask={handleToggleTaskWrapper}
+              members={members}
               handleDeleteEvent={handleDeleteEvent}
               setEditingEvent={setEditingEvent}
               onLoadMoreEvents={loadMoreEvents}
@@ -244,7 +162,6 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
             <WeekView
               events={filteredEvents}
               categories={categories}
-              members={members}
               currentWeek={currentWeek}
               onWeekChange={setCurrentWeek}
               onEventClick={(event) => setEditingEvent(event)}
@@ -255,7 +172,6 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
                 setEditingEvent(null);
                 setShowCreateForm(true);
               }}
-              showTasksOnly={showTasksOnly}
             />
           )}
 
@@ -263,11 +179,9 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
             <MonthView
               events={filteredEvents}
               categories={categories}
-              members={members}
               currentMonth={currentMonth}
               onMonthChange={setCurrentMonth}
               onEventClick={(event) => setEditingEvent(event)}
-              onEventDelete={handleDeleteEvent}
               onDayClick={(date) => {
                 setDayActionMenuDate(date);
               }}
@@ -276,24 +190,7 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
         </>
       )}
 
-      {/* Show simplified form when creating new tasks from "att göra" tab */}
-      {showCreateForm && !editingEvent && showTasksOnly && (
-        <SimplifiedTaskForm
-          members={members}
-          currentUserId={currentMemberId}
-          onSave={async () => {
-            await loadData();
-            setShowCreateForm(false);
-          }}
-          onCancel={() => {
-            setShowCreateForm(false);
-            setInitialStartDate(null);
-          }}
-        />
-      )}
-
-      {/* Show regular EventForm for calendar events or when editing tasks */}
-      {((showCreateForm && !showTasksOnly) || editingEvent) && (
+      {(showCreateForm || editingEvent) && (
         <EventForm
           event={editingEvent}
           initialStartDate={initialStartDate}
@@ -325,7 +222,6 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
           categories={categories}
           onClose={() => setShowCategoryManager(false)}
           onUpdate={async () => {
-            // Reload categories only (without affecting loading state)
             await loadCategories();
           }}
         />
@@ -349,10 +245,8 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
           onGoToRollingView={(date) => {
             setSelectedDate(date);
             setViewType(CALENDAR_VIEW_TYPES.ROLLING);
-            // Set scrollToDate after a small delay to ensure view has switched
             setTimeout(() => {
               setScrollToDate(date);
-              // Clear scrollToDate after scrolling is complete
               setTimeout(() => {
                 setScrollToDate(null);
               }, 2000);
