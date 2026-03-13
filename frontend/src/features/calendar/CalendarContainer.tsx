@@ -19,6 +19,8 @@ type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
 
 type CalendarContainerProps = {
   onNavigate?: (view: ViewKey) => void;
+  showMenstrualCycle?: boolean;
+  onNavigateMenstrualCycle?: () => void;
 };
 
 /**
@@ -32,7 +34,7 @@ type CalendarContainerProps = {
  *
  * @param onNavigate - Optional callback for navigation to other views
  */
-export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
+export function CalendarContainer({ onNavigate, showMenstrualCycle, onNavigateMenstrualCycle }: CalendarContainerProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEventResponse | null>(null);
   const [viewType, setViewType] = useState<CalendarViewType>(CALENDAR_VIEW_TYPES.ROLLING);
@@ -123,6 +125,8 @@ export function CalendarContainer({ onNavigate }: CalendarContainerProps) {
         currentUserRole={currentUserRole}
         showCreateForm={showCreateForm}
         editingEvent={!!editingEvent}
+        showMenstrualCycle={showMenstrualCycle}
+        onNavigateMenstrualCycle={onNavigateMenstrualCycle}
       />
 
       {/* View type selector — only show when not in form */}

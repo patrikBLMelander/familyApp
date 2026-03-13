@@ -37,7 +37,10 @@ const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
 export function App() {
   console.log("=== FamilyApp Frontend Starting - XP System: 24 XP per level (5 levels) ===");
   const [currentView, setCurrentView] = useState<ViewKey>("login");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [menstrualCycleEnabled, setMenstrualCycleEnabled] = useState(
+    () => localStorage.getItem("menstrualCycleEnabled") === "true"
+  );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [family, setFamily] = useState<FamilyResponse | null>(null);
   const { isChild, childMember, loading: childLoading } = useIsChild();
@@ -134,7 +137,7 @@ export function App() {
 
   const handleNavigate = (view: ViewKey, params?: { listId?: string; childId?: string; childName?: string }) => {
     setCurrentView(view);
-    setMenuOpen(false);
+    setSettingsOpen(false);
     if (view === "todos") {
       setNavigationParams(params || null);
     } else if (view === "childview" && params?.childId && params?.childName) {
@@ -233,7 +236,7 @@ export function App() {
       
       // ASSISTANT can see calendar and todos, CHILD cannot
       if (isAssistant && currentView === "schedule") {
-        return <CalendarView onNavigate={handleNavigate} />;
+        return <CalendarView onNavigate={handleNavigate} showMenstrualCycle={false} onNavigateMenstrualCycle={() => handleNavigate("menstrualcycle")} />;
       }
       if (isAssistant && currentView === "todos") {
         return <TodoListsView onNavigate={handleNavigate} />;
@@ -281,7 +284,7 @@ export function App() {
       case "familymembers":
         return <FamilyMembersView onNavigate={handleNavigate} />;
       case "schedule":
-        return <CalendarView onNavigate={handleNavigate} />;
+        return <CalendarView onNavigate={handleNavigate} showMenstrualCycle={menstrualCycleEnabled} onNavigateMenstrualCycle={() => handleNavigate("menstrualcycle")} />;
       case "chores":
         return <AdultChoresView onNavigate={handleNavigate} />;
       case "xp":
@@ -313,175 +316,62 @@ export function App() {
 
   return (
     <div className="app-root" style={isChild ? { paddingTop: 0 } : undefined}>
-      {!isChild && <header className="app-header">
-        <button
-          type="button"
-          className="hamburger-button"
-          aria-label="Öppna huvudmeny"
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <span />
-          <span />
-          <span />
-        </button>
-        <div className="app-title">
-          <h1>{family?.name || "FamilyApp"}</h1>
-          <p>{isChild ? `${childMember?.name || "Barn"}'s vardag` : "Hela familjens vardag, samlad på ett ställe."}</p>
-        </div>
-      </header>}
-
-      <nav className={`side-menu ${menuOpen ? "side-menu-open" : ""}`}>
-        {isChild ? (
-          // Child/Assistant menu
-          <>
+      {!isChild && (
+        <header className="app-header">
+          <div className="app-title">
+            <h1>{family?.name || "FamilyApp"}</h1>
+            <p>Hela familjens vardag, samlad på ett ställe.</p>
+          </div>
+          <div style={{ position: "relative" }}>
             <button
               type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("dashboard")}
+              className="settings-button"
+              aria-label="Inställningar"
+              onClick={() => setSettingsOpen((open) => !open)}
             >
-              Dashboard
+              ⚙️
             </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("pethistory")}
-            >
-              🐾 Mina tidigare djur
-            </button>
-            {/* Spotify Charts Link - Only for specific families */}
-            {family && SPOTIFY_CHARTS_ALLOWED_FAMILIES.includes(family.id) && (
-              <a
-                href="https://spotify-charts-production.up.railway.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="side-menu-item"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  background: "#1DB954",
-                  color: "white",
-                  textDecoration: "none",
-                }}
-              >
-                <span style={{ fontSize: "1.2rem" }}>🎵</span>
-                <span>Spotify Charts</span>
-              </a>
-            )}
-            {childMember?.role === "ASSISTANT" && (
+            {settingsOpen && (
               <>
-                <button
-                  type="button"
-                  className="side-menu-item"
-                  onClick={() => handleNavigate("todos")}
-                >
-                  Listor
-                </button>
-                <button
-                  type="button"
-                  className="side-menu-item"
-                  onClick={() => handleNavigate("schedule")}
-                >
-                  Kalender
-                </button>
+                <div className="settings-backdrop" onClick={() => setSettingsOpen(false)} />
+                <div className="settings-dropdown">
+                  <button
+                    type="button"
+                    className="settings-item"
+                    onClick={() => handleNavigate("familymembers")}
+                  >
+                    <span>👥</span> Familjemedlemmar
+                  </button>
+                  <div className="settings-divider" />
+                  <label className="settings-toggle-row" style={{ cursor: "pointer" }}>
+                    <span style={{ flex: 1, fontSize: "0.95rem", color: "#3a3a3a" }}>🩸 Menscykel</span>
+                    <input
+                      type="checkbox"
+                      checked={menstrualCycleEnabled}
+                      onChange={(e) => {
+                        setMenstrualCycleEnabled(e.target.checked);
+                        localStorage.setItem("menstrualCycleEnabled", String(e.target.checked));
+                      }}
+                    />
+                  </label>
+                  {(isInstallable || isIOS) && !isInstalled && (
+                    <>
+                      <div className="settings-divider" />
+                      <button
+                        type="button"
+                        className="settings-item"
+                        onClick={() => { handleInstallClick(); setSettingsOpen(false); }}
+                      >
+                        <span>📱</span> Installera app
+                      </button>
+                    </>
+                  )}
+                </div>
               </>
             )}
-            {/* PWA Install button - show if not installed */}
-            {!isInstalled && (
-              <button
-                type="button"
-                className="side-menu-item"
-                onClick={handleInstallClick}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  marginTop: "8px",
-                  paddingTop: "12px",
-                  borderTop: "1px solid rgba(220, 210, 200, 0.4)"
-                }}
-              >
-                <span style={{ fontSize: "1.2rem" }}>📱</span>
-                <span>Installera app</span>
-              </button>
-            )}
-          </>
-        ) : (
-          // Parent menu - show all options
-          <>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("dashboard")}
-            >
-              Dashboard
-            </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("todos")}
-            >
-              Listor
-            </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("schedule")}
-            >
-              Kalender
-            </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("familymembers")}
-            >
-              Familjemedlemmar
-            </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("menstrualcycle")}
-            >
-              Menscykel
-            </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("childrenxp")}
-            >
-              🐾 Mina Barns Djur
-            </button>
-            <button
-              type="button"
-              className="side-menu-item"
-              onClick={() => handleNavigate("childrenwallet")}
-            >
-              💰 Barnens Ekonomi
-            </button>
-            {/* PWA Install button - show if not installed */}
-            {!isInstalled && (
-              <button
-                type="button"
-                className="side-menu-item"
-                onClick={handleInstallClick}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  marginTop: "8px",
-                  paddingTop: "12px",
-                  borderTop: "1px solid rgba(220, 210, 200, 0.4)"
-                }}
-              >
-                <span style={{ fontSize: "1.2rem" }}>📱</span>
-                <span>Installera app</span>
-              </button>
-            )}
-          </>
-        )}
-      </nav>
-
-      {menuOpen && <div className="backdrop" onClick={() => setMenuOpen(false)} />}
+          </div>
+        </header>
+      )}
 
       <main className="app-main">{renderView()}</main>
     </div>
