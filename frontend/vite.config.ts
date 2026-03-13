@@ -39,9 +39,11 @@ export default defineConfig({
       },
       icon: "public/icon.svg",
       workbox: {
+        skipWaiting: true, // New service worker activates immediately on deploy
+        clientsClaim: true, // Take control of all open tabs immediately
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         globIgnores: ["**/pets/**/*.png"], // Exclude large pet images from precaching
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB limit (for other large files if needed)
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.railway\.app\/api\/v1\/.*/i,
@@ -58,14 +60,15 @@ export default defineConfig({
             }
           },
           {
-            // Cache pet images at runtime (not precached)
+            // Cache pet images at runtime — StaleWhileRevalidate so new images
+            // are always fetched in the background (fixes stale/missing images after deploy)
             urlPattern: /\/pets\/.*\.png$/i,
-            handler: "CacheFirst",
+            handler: "StaleWhileRevalidate",
             options: {
-              cacheName: "pet-images-cache",
+              cacheName: "pet-images-cache-v2", // bumped to clear old 30-day CacheFirst entries
               expiration: {
-                maxEntries: 100, // Cache up to 100 pet images
-                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+                maxEntries: 100,
+                maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
               },
               cacheableResponse: {
                 statuses: [0, 200]

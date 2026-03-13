@@ -37,9 +37,15 @@ export function HalfCircleProgress({
   
   return (
     <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "6px",
+    }}>
+    <div style={{
       position: "relative",
       width: size,
-      height: size, // Show full circle
+      height: size,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -83,7 +89,7 @@ export function HalfCircleProgress({
           }}
         />
       </svg>
-      {/* Content in center: mood icon, name, and level */}
+      {/* Content in center: mood icon and level */}
       <div style={{
         position: "absolute",
         top: "50%",
@@ -99,42 +105,41 @@ export function HalfCircleProgress({
         alignItems: "center",
         justifyContent: "center",
         boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-        padding: "8px",
       }}>
         {/* Mood icon */}
-        <div style={{
-          fontSize: "1.5rem",
-          marginBottom: "4px",
-        }}>
+        <div style={{ fontSize: "1.6rem" }}>
           {mood === "happy" ? "😊" : "🥺"}
         </div>
-        {/* Pet name */}
-        {petName && (
-          <div style={{
-            fontSize: "0.75rem",
-            fontWeight: 700,
-            color: "#2d3748",
-            textAlign: "center",
-            lineHeight: "1.2",
-            marginBottom: "2px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            maxWidth: "100%",
-          }}>
-            {petName}
-          </div>
-        )}
         {/* Level */}
         <div style={{
-          fontSize: "0.7rem",
+          fontSize: "0.75rem",
           fontWeight: 700,
           color: "#2d3748",
           textAlign: "center",
         }}>
-          {currentLevel}
+          Lv {currentLevel}
         </div>
       </div>
+    </div>
+    {/* Pet name below the circle */}
+    {petName && (
+      <div style={{
+        fontSize: "0.85rem",
+        fontWeight: 700,
+        color: "#2d3748",
+        textAlign: "center",
+        background: "rgba(255, 255, 255, 0.92)",
+        borderRadius: "12px",
+        padding: "3px 10px",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.10)",
+        maxWidth: size * 1.6,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}>
+        {petName}
+      </div>
+    )}
     </div>
   );
 }
