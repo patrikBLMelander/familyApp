@@ -68,60 +68,6 @@ body {
   flex-shrink: 0;
 }
 
-.settings-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  min-width: 220px;
-  background: rgba(255, 252, 248, 0.98);
-  border: 1px solid rgba(220, 210, 200, 0.4);
-  border-radius: 16px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  z-index: 200;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-
-.settings-item {
-  border-radius: 10px;
-  border: none;
-  padding: 11px 14px;
-  background: transparent;
-  color: #3a3a3a;
-  text-align: left;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
-
-.settings-item:hover {
-  background: rgba(220, 210, 200, 0.25);
-}
-
-.settings-toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 14px;
-  border-radius: 10px;
-}
-
-.settings-toggle-row:hover {
-  background: rgba(220, 210, 200, 0.25);
-}
-
-.settings-divider {
-  height: 1px;
-  background: rgba(220, 210, 200, 0.4);
-  margin: 4px 6px;
-}
-
 .backdrop {
   position: fixed;
   inset: 0;
@@ -129,11 +75,6 @@ body {
   z-index: 10;
 }
 
-.settings-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 199;
-}
 
 .app-main {
   flex: 1;
@@ -1427,6 +1368,12 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
+.button-secondary--active {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.06);
+  color: #2563eb;
+}
+
 .button-secondary:hover {
   background: rgba(255, 255, 255, 1);
   border-color: rgba(184, 230, 184, 0.6);
@@ -1536,9 +1483,65 @@ body {
   color: #2d5a2d;
 }
 
+.role-badge-assistant {
+  background: rgba(200, 200, 255, 0.3);
+  color: #3a3a8b;
+}
+
 .role-badge-child {
   background: rgba(255, 200, 180, 0.3);
   color: #8b4a3a;
+}
+
+/* Toggle switch */
+.toggle-switch-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: #3a3a3a;
+  user-select: none;
+}
+
+.toggle-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.toggle-switch-track {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  background: #d0d0d0;
+  border-radius: 10px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+
+.toggle-switch-input:checked + .toggle-switch-track {
+  background: #4a90d9;
+}
+
+.toggle-switch-input:checked + .toggle-switch-track::after {
+  transform: translateX(16px);
 }
 
 .role-selector {

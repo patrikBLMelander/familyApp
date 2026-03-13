@@ -37,7 +37,6 @@ const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
 export function App() {
   console.log("=== FamilyApp Frontend Starting - XP System: 24 XP per level (5 levels) ===");
   const [currentView, setCurrentView] = useState<ViewKey>("login");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [menstrualCycleEnabled, setMenstrualCycleEnabled] = useState(
     () => localStorage.getItem("menstrualCycleEnabled") === "true"
   );
@@ -121,6 +120,12 @@ export function App() {
     };
     void checkPet();
   }, [isChild, childLoading, isAuthenticated]);
+
+  // Re-read menstrualCycleEnabled from localStorage whenever view changes
+  // (settings are saved in FamilyMembersView)
+  useEffect(() => {
+    setMenstrualCycleEnabled(localStorage.getItem("menstrualCycleEnabled") === "true");
+  }, [currentView]);
 
   // Navigate to correct view based on pet status when child logs in
   useEffect(() => {
@@ -322,54 +327,14 @@ export function App() {
             <h1>{family?.name || "FamilyApp"}</h1>
             <p>Hela familjens vardag, samlad på ett ställe.</p>
           </div>
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              className="settings-button"
-              aria-label="Inställningar"
-              onClick={() => setSettingsOpen((open) => !open)}
-            >
-              ⚙️
-            </button>
-            {settingsOpen && (
-              <>
-                <div className="settings-backdrop" onClick={() => setSettingsOpen(false)} />
-                <div className="settings-dropdown">
-                  <button
-                    type="button"
-                    className="settings-item"
-                    onClick={() => handleNavigate("familymembers")}
-                  >
-                    <span>👥</span> Familjemedlemmar
-                  </button>
-                  <div className="settings-divider" />
-                  <label className="settings-toggle-row" style={{ cursor: "pointer" }}>
-                    <span style={{ flex: 1, fontSize: "0.95rem", color: "#3a3a3a" }}>🩸 Menscykel</span>
-                    <input
-                      type="checkbox"
-                      checked={menstrualCycleEnabled}
-                      onChange={(e) => {
-                        setMenstrualCycleEnabled(e.target.checked);
-                        localStorage.setItem("menstrualCycleEnabled", String(e.target.checked));
-                      }}
-                    />
-                  </label>
-                  {(isInstallable || isIOS) && !isInstalled && (
-                    <>
-                      <div className="settings-divider" />
-                      <button
-                        type="button"
-                        className="settings-item"
-                        onClick={() => { handleInstallClick(); setSettingsOpen(false); }}
-                      >
-                        <span>📱</span> Installera app
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+          <button
+            type="button"
+            className="settings-button"
+            aria-label="Inställningar"
+            onClick={() => handleNavigate("familymembers")}
+          >
+            ⚙️
+          </button>
         </header>
       )}
 
