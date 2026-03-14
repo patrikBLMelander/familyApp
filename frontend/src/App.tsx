@@ -143,7 +143,6 @@ export function App() {
 
   const handleNavigate = (view: ViewKey, params?: { listId?: string; childId?: string; childName?: string }) => {
     setCurrentView(view);
-    setSettingsOpen(false);
     if (view === "todos") {
       setNavigationParams(params || null);
     } else if (view === "childview" && params?.childId && params?.childName) {
