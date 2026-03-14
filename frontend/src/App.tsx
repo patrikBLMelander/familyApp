@@ -19,6 +19,7 @@ import { ChildrenWalletView } from "./features/wallet/ChildrenWalletView";
 import { PrivacyPolicyView } from "./features/legal/PrivacyPolicyView";
 import { ParentChildView } from "./features/dashboard/ParentChildView";
 import { AdultChoresView } from "./features/dashboard/AdultChoresView";
+import { FamilyTasksView } from "./features/dashboard/FamilyTasksView";
 import { useIsChild } from "./shared/hooks/useIsChild";
 import { usePwaInstall } from "./shared/hooks/usePwaInstall";
 import { getFamily } from "./shared/api/family";
@@ -26,7 +27,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet" | "privacy" | "childview";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet" | "privacy" | "childview" | "familytasks";
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -292,6 +293,8 @@ export function App() {
         return <CalendarView onNavigate={handleNavigate} showMenstrualCycle={menstrualCycleEnabled} onNavigateMenstrualCycle={() => handleNavigate("menstrualcycle")} />;
       case "chores":
         return <AdultChoresView onNavigate={handleNavigate} />;
+      case "familytasks":
+        return <FamilyTasksView onNavigate={handleNavigate} />;
       case "xp":
         return <XpDashboard onNavigate={handleNavigate} />;
       case "childrenxp":

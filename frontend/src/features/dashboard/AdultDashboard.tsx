@@ -11,7 +11,7 @@ import { HalfCircleProgress } from "./components/HalfCircleProgress";
 import { ConfettiAnimation } from "./components/ConfettiAnimation";
 import { FloatingXpNumber } from "./components/FloatingXpNumber";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "childrenxp" | "childrenwallet" | "childview";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "childrenxp" | "childrenwallet" | "childview" | "familytasks";
 
 type AdultDashboardProps = {
   onNavigate?: (view: ViewKey, params?: { listId?: string; childId?: string; childName?: string }) => void;
@@ -803,9 +803,17 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
 
       {/* Lägg till barn button */}
       <button type="button" onClick={() => onNavigate?.("familymembers")}
-        style={{ width: "100%", padding: "16px", background: "#BAE6FD", color: "#0C4A6E", border: "none", borderRadius: "14px", fontWeight: 600, cursor: "pointer", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "8px", marginBottom: "16px" }}>
+        style={{ width: "100%", padding: "16px", background: "#BAE6FD", color: "#0C4A6E", border: "none", borderRadius: "14px", fontWeight: 600, cursor: "pointer", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "8px", marginBottom: "10px" }}>
         👤 Lägg till barn
       </button>
+
+      {/* All tasks overview button */}
+      {childrenMembers.length > 0 && (
+        <button type="button" onClick={() => onNavigate?.("familytasks")}
+          style={{ width: "100%", padding: "16px", background: "rgba(255,255,255,0.82)", color: "#0C4A6E", border: "2px solid #BAE6FD", borderRadius: "14px", fontWeight: 600, cursor: "pointer", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "16px" }}>
+          📋 Alla uppgifter idag
+        </button>
+      )}
 
       {/* Spotify Charts Link - Only for specific families */}
       {showSpotifyLink && (
