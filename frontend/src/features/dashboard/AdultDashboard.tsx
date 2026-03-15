@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { fetchTasksForToday, CalendarTaskWithCompletionResponse, getTaskCompletionsForMember, CalendarEventTaskCompletionResponse } from "../../shared/api/calendar";
-import { getMemberByDeviceToken, fetchAllFamilyMembers } from "../../shared/api/familyMembers";
+import { fetchTasksForToday, CalendarTaskWithCompletionResponse, getTaskCompletionsForMember, CalendarEventTaskCompletionResponse, createCalendarEvent } from "../../shared/api/calendar";
+import { getMemberByDeviceToken, fetchAllFamilyMembers, createFamilyMember } from "../../shared/api/familyMembers";
 import { FamilyMemberResponse } from "../../shared/api/familyMembers";
+import { AGE_GROUPS, TASK_SUGGESTIONS, AgeGroup } from "../familymembers/taskSuggestions";
 import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, getLastFedDate, fetchMemberPet } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
 import { PetVisualization } from "../pet/PetVisualization";
@@ -55,6 +56,15 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   // Child summary state
   const [childSummaries, setChildSummaries] = useState<Record<string, ChildSummary>>({});
   const [loadingChildren, setLoadingChildren] = useState(false);
+
+  // Add child inline form state
+  const [showAddChild, setShowAddChild] = useState(false);
+  const [addChildName, setAddChildName] = useState("");
+  const [addChildAgeGroup, setAddChildAgeGroup] = useState<AgeGroup | "">("");
+  const [addChildError, setAddChildError] = useState<string | null>(null);
+  const [savingChild, setSavingChild] = useState(false);
+  const [addChildSuggestions, setAddChildSuggestions] = useState<{ memberId: string; memberName: string; ageGroup: AgeGroup; checked: Set<string> } | null>(null);
+  const [creatingChildTasks, setCreatingChildTasks] = useState(false);
 
   // Track window width for responsive design
   useEffect(() => {
@@ -257,6 +267,54 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
     };
     void fetchSummaries();
   }, [members]);
+
+  const handleAddChild = async () => {
+    if (!addChildName.trim()) { setAddChildError("Namn krävs."); return; }
+    setSavingChild(true);
+    setAddChildError(null);
+    try {
+      const created = await createFamilyMember(addChildName.trim(), "CHILD");
+      const name = addChildName.trim();
+      const ageGroup = addChildAgeGroup;
+      setAddChildName("");
+      setAddChildAgeGroup("");
+      setShowAddChild(false);
+      // Reload members list
+      const allMembers = await fetchAllFamilyMembers();
+      setMembers(allMembers);
+      if (ageGroup) {
+        setAddChildSuggestions({
+          memberId: created.id,
+          memberName: name,
+          ageGroup,
+          checked: new Set(TASK_SUGGESTIONS[ageGroup]),
+        });
+      }
+    } catch (e) {
+      setAddChildError(e instanceof Error ? e.message : "Kunde inte skapa barn.");
+    } finally {
+      setSavingChild(false);
+    }
+  };
+
+  const handleAddSuggestedTasks = async () => {
+    if (!addChildSuggestions) return;
+    setCreatingChildTasks(true);
+    try {
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      await Promise.all(
+        [...addChildSuggestions.checked].map((title) =>
+          createCalendarEvent(title, `${dateStr}T08:00`, null, false, undefined, undefined, undefined, [addChildSuggestions.memberId], "DAILY", 1, null, null, true, 1, true)
+        )
+      );
+      setAddChildSuggestions(null);
+    } catch {
+      setAddChildError("Kunde inte skapa uppgifter.");
+    } finally {
+      setCreatingChildTasks(false);
+    }
+  };
 
   const handleFeed = async (amount: number | null = null) => {
     if (!pet || !currentMember || currentMember.petEnabled !== true) return;
@@ -801,11 +859,92 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
         })
       )}
 
-      {/* Lägg till barn button */}
-      <button type="button" onClick={() => onNavigate?.("familymembers")}
-        style={{ width: "100%", padding: "16px", background: "#BAE6FD", color: "#0C4A6E", border: "none", borderRadius: "14px", fontWeight: 600, cursor: "pointer", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "8px", marginBottom: "10px" }}>
-        👤 Lägg till barn
-      </button>
+      {/* Add child suggestion screen */}
+      {addChildSuggestions && (
+        <section className="card" style={{ ...glassCard, padding: "20px", marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+            <button type="button" className="back-button" onClick={() => setAddChildSuggestions(null)} aria-label="Hoppa över">←</button>
+            <h3 style={{ margin: 0, fontSize: "1rem" }}>Föreslagna uppgifter för {addChildSuggestions.memberName}</h3>
+          </div>
+          <p style={{ fontSize: "0.85rem", color: "#57534E", margin: "0 0 12px" }}>
+            Avbocka de uppgifter du inte vill lägga till.
+          </p>
+          <ul style={{ margin: "0 0 12px", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "2px" }}>
+            {TASK_SUGGESTIONS[addChildSuggestions.ageGroup].map((task) => {
+              const isChecked = addChildSuggestions.checked.has(task);
+              return (
+                <li key={task}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "7px 2px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={isChecked}
+                      onChange={() => setAddChildSuggestions(prev => {
+                        if (!prev) return prev;
+                        const next = new Set(prev.checked);
+                        if (isChecked) next.delete(task); else next.add(task);
+                        return { ...prev, checked: next };
+                      })}
+                      style={{ width: "18px", height: "18px", flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: "0.92rem", color: "#1C1917" }}>{task}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          {addChildError && <p style={{ color: "#c53030", fontSize: "0.85rem", margin: "0 0 8px" }}>{addChildError}</p>}
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button type="button" className="button-primary"
+              onClick={() => void handleAddSuggestedTasks()}
+              disabled={creatingChildTasks || addChildSuggestions.checked.size === 0}
+              style={{ flex: 1 }}
+            >
+              {creatingChildTasks ? "Skapar..." : `Lägg till ${addChildSuggestions.checked.size} uppgifter`}
+            </button>
+            <button type="button" className="button-secondary" onClick={() => setAddChildSuggestions(null)} style={{ flex: 1 }}>
+              Hoppa över
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Lägg till barn — inline form or button */}
+      {showAddChild ? (
+        <section className="card" style={{ ...glassCard, padding: "20px", marginBottom: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+            <button type="button" className="back-button" onClick={() => { setShowAddChild(false); setAddChildName(""); setAddChildAgeGroup(""); setAddChildError(null); }} aria-label="Avbryt">←</button>
+            <h3 style={{ margin: 0, fontSize: "1rem" }}>Lägg till barn</h3>
+          </div>
+          <input
+            type="text"
+            placeholder="Namn"
+            value={addChildName}
+            onChange={(e) => setAddChildName(e.target.value)}
+            className="daily-task-form-input"
+            style={{ marginBottom: "12px" }}
+          />
+          <p style={{ fontSize: "0.85rem", color: "#57534E", margin: "0 0 8px" }}>Ålder (valfritt — föreslår dagliga uppgifter)</p>
+          <div className="role-selector" style={{ marginBottom: "14px" }}>
+            <label className="role-option">
+              <input type="radio" name="addChildAge" value="" checked={addChildAgeGroup === ""} onChange={() => setAddChildAgeGroup("")} />
+              <span>Ingen</span>
+            </label>
+            {AGE_GROUPS.map((g) => (
+              <label key={g.value} className="role-option">
+                <input type="radio" name="addChildAge" value={g.value} checked={addChildAgeGroup === g.value} onChange={() => setAddChildAgeGroup(g.value)} />
+                <span>{g.label}</span>
+              </label>
+            ))}
+          </div>
+          {addChildError && <p style={{ color: "#c53030", fontSize: "0.85rem", margin: "0 0 8px" }}>{addChildError}</p>}
+          <button type="button" className="button-primary" onClick={() => void handleAddChild()} disabled={savingChild} style={{ width: "100%" }}>
+            {savingChild ? "Sparar..." : "Spara"}
+          </button>
+        </section>
+      ) : (
+        <button type="button" onClick={() => setShowAddChild(true)}
+          style={{ width: "100%", padding: "16px", background: "#BAE6FD", color: "#0C4A6E", border: "none", borderRadius: "14px", fontWeight: 600, cursor: "pointer", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "8px", marginBottom: "10px" }}>
+          👤 Lägg till barn
+        </button>
+      )}
 
       {/* All tasks overview button */}
       {childrenMembers.length > 0 && (

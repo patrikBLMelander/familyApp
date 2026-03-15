@@ -314,6 +314,45 @@ public class WalletController {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Record expense for a specific member (for parents to register purchases on behalf of children)
+     */
+    @PostMapping("/members/{memberId}/expense")
+    public ResponseEntity<Void> recordExpenseForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody RecordExpenseRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        // Verify requester is in the same family as the target member
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            try {
+                var requester = memberService.getMemberByDeviceToken(deviceToken);
+                var member = memberService.getMemberById(memberId);
+                if (!requester.familyId().equals(member.familyId())) {
+                    throw new IllegalArgumentException("Access denied");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid device token or access denied");
+            }
+        }
+
+        List<WalletService.SavingsGoalAllocation> allocations = null;
+        if (request.savingsGoalAllocations() != null && !request.savingsGoalAllocations().isEmpty()) {
+            allocations = request.savingsGoalAllocations().stream()
+                    .map(a -> new WalletService.SavingsGoalAllocation(a.savingsGoalId(), a.amount()))
+                    .collect(Collectors.toList());
+        }
+
+        walletService.recordExpense(
+                memberId,
+                request.amount(),
+                request.description(),
+                request.categoryId(),
+                allocations
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
     // Helper methods
     private UUID getMemberIdFromToken(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {

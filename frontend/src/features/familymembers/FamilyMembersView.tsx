@@ -13,7 +13,9 @@ import {
   updatePetSettings,
 } from "../../shared/api/familyMembers";
 import { updateMenstrualCycleSettings } from "../../shared/api/menstrualCycle";
+import { createCalendarEvent } from "../../shared/api/calendar";
 import { GiveAllowanceDialog } from "../wallet/GiveAllowanceDialog";
+import { AGE_GROUPS, TASK_SUGGESTIONS, AgeGroup } from "./taskSuggestions";
 
 type FamilyMembersViewProps = {
   onNavigate?: (view: string) => void;
@@ -37,6 +39,9 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
   const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [allowanceDialogMember, setAllowanceDialogMember] = useState<{ id: string; name: string } | null>(null);
+  const [memberAgeGroup, setMemberAgeGroup] = useState<AgeGroup | "">("");
+  const [suggestions, setSuggestions] = useState<{ memberId: string; memberName: string; ageGroup: AgeGroup; checked: Set<string> } | null>(null);
+  const [creatingTasks, setCreatingTasks] = useState(false);
   const qrCodeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -79,12 +84,25 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       return;
     }
     try {
-      await createFamilyMember(memberName.trim(), memberRole);
+      const created = await createFamilyMember(memberName.trim(), memberRole);
       await loadMembers();
+      const nameForSuggestions = memberName.trim();
+      const ageGroup = memberAgeGroup;
       setMemberName("");
       setMemberRole("CHILD");
+      setMemberAgeGroup("");
       setShowCreateForm(false);
       setError(null);
+      // Show task suggestions if age was selected and role can have tasks
+      if (ageGroup && (memberRole === "CHILD" || memberRole === "ASSISTANT")) {
+        const tasks = TASK_SUGGESTIONS[ageGroup];
+        setSuggestions({
+          memberId: created.id,
+          memberName: nameForSuggestions,
+          ageGroup,
+          checked: new Set(tasks),
+        });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Kunde inte skapa familjemedlem.";
       if (msg.includes("already exists") || msg.includes("finns redan")) {
@@ -94,6 +112,43 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
       } else {
         setError(msg);
       }
+    }
+  };
+
+  const handleAddSuggestedTasks = async () => {
+    if (!suggestions) return;
+    setCreatingTasks(true);
+    try {
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const startDateTime = `${dateStr}T08:00`;
+      const tasksToCreate = [...suggestions.checked];
+      await Promise.all(
+        tasksToCreate.map((title) =>
+          createCalendarEvent(
+            title,
+            startDateTime,
+            null,
+            false,
+            undefined,
+            undefined,
+            undefined,
+            [suggestions.memberId],
+            "DAILY",
+            1,
+            null,
+            null,
+            true,
+            1,
+            true
+          )
+        )
+      );
+      setSuggestions(null);
+    } catch {
+      setError("Kunde inte skapa uppgifter. Försök igen.");
+    } finally {
+      setCreatingTasks(false);
     }
   };
 
@@ -336,19 +391,94 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                 <span>Barn</span>
               </label>
               <label className="role-option">
-                <input type="radio" name="role" value="ASSISTANT" checked={memberRole === "ASSISTANT"} onChange={() => setMemberRole("ASSISTANT")} />
-                <span>Äldre barn (kan skapa events, få djur)</span>
-              </label>
-              <label className="role-option">
                 <input type="radio" name="role" value="PARENT" checked={memberRole === "PARENT"} onChange={() => setMemberRole("PARENT")} />
                 <span>Förälder</span>
               </label>
             </div>
+            {(memberRole === "CHILD" || memberRole === "ASSISTANT") && (
+              <div>
+                <p style={{ fontSize: "0.85rem", color: "#555", margin: "0 0 6px" }}>
+                  Ålder (valfritt — föreslår dagliga uppgifter)
+                </p>
+                <div className="role-selector">
+                  <label className="role-option">
+                    <input type="radio" name="ageGroup" value="" checked={memberAgeGroup === ""} onChange={() => setMemberAgeGroup("")} />
+                    <span>Ingen</span>
+                  </label>
+                  {AGE_GROUPS.map((g) => (
+                    <label key={g.value} className="role-option">
+                      <input type="radio" name="ageGroup" value={g.value} checked={memberAgeGroup === g.value} onChange={() => setMemberAgeGroup(g.value)} />
+                      <span>{g.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="form-actions">
               <button type="button" onClick={() => void handleCreate()} className="button-primary">
                 Skapa
               </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {suggestions && (
+        <section className="card">
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+            <button
+              type="button"
+              className="back-button"
+              onClick={() => setSuggestions(null)}
+              aria-label="Hoppa över"
+            >
+              ←
+            </button>
+            <h3 style={{ margin: 0, flex: 1 }}>Föreslagna uppgifter för {suggestions.memberName}</h3>
+          </div>
+          <p style={{ fontSize: "0.85rem", color: "#666", marginTop: 0, marginBottom: "14px" }}>
+            Välj vilka dagliga uppgifter du vill lägga till. Alla är förbockade — avbocka de du inte vill ha.
+          </p>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "4px" }}>
+            {TASK_SUGGESTIONS[suggestions.ageGroup].map((task) => {
+              const isChecked = suggestions.checked.has(task);
+              return (
+                <li key={task}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 4px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {
+                        setSuggestions(prev => {
+                          if (!prev) return prev;
+                          const next = new Set(prev.checked);
+                          if (isChecked) next.delete(task); else next.add(task);
+                          return { ...prev, checked: next };
+                        });
+                      }}
+                      style={{ width: "18px", height: "18px", flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: "0.92rem" }}>{task}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <p style={{ fontSize: "0.78rem", color: "#888", margin: "12px 0 16px" }}>
+            Uppgifterna skapas som dagliga återkommande uppgifter (mån–sön).
+          </p>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="button-primary"
+              onClick={() => void handleAddSuggestedTasks()}
+              disabled={creatingTasks || suggestions.checked.size === 0}
+            >
+              {creatingTasks ? "Skapar..." : `Lägg till ${suggestions.checked.size} uppgift${suggestions.checked.size !== 1 ? "er" : ""}`}
+            </button>
+            <button type="button" className="button-secondary" onClick={() => setSuggestions(null)}>
+              Hoppa över
+            </button>
           </div>
         </section>
       )}

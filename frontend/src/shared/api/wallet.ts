@@ -298,6 +298,32 @@ export async function getMemberActiveSavingsGoals(memberId: string): Promise<Sav
 }
 
 /**
+ * Record expense for a specific member (for parents registering purchases on behalf of children)
+ */
+export async function recordExpenseForMember(
+  memberId: string,
+  amount: number,
+  description: string | null,
+  categoryId: string | null,
+  savingsGoalAllocations: SavingsGoalAllocationRequest[] | null
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/wallet/members/${memberId}/expense`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({
+      amount,
+      description,
+      categoryId,
+      savingsGoalAllocations: savingsGoalAllocations || [],
+    }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to record expense: ${errorText}`);
+  }
+}
+
+/**
  * Get transaction history for a specific member (for parents)
  */
 export async function getMemberTransactionHistory(memberId: string, limit: number = 20): Promise<WalletTransactionResponse[]> {

@@ -4,11 +4,14 @@ import {
   getMemberWalletBalance,
   getMemberActiveSavingsGoals,
   getMemberTransactionHistory,
+  getExpenseCategories,
   WalletBalanceResponse,
   SavingsGoalResponse,
   WalletTransactionResponse,
+  ExpenseCategoryResponse,
 } from "../../shared/api/wallet";
 import { GiveAllowanceDialog } from "./GiveAllowanceDialog";
+import { RecordChildExpenseDialog } from "./RecordChildExpenseDialog";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
 
@@ -31,6 +34,8 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allowanceDialogMember, setAllowanceDialogMember] = useState<{ id: string; name: string } | null>(null);
+  const [expenseDialogMember, setExpenseDialogMember] = useState<{ id: string; name: string } | null>(null);
+  const [categories, setCategories] = useState<ExpenseCategoryResponse[]>([]);
 
   useEffect(() => {
     void load();
@@ -39,7 +44,11 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
   const load = async () => {
     try {
       setLoading(true);
-      const members = await fetchAllFamilyMembers();
+      const [members, categoriesData] = await Promise.all([
+        fetchAllFamilyMembers(),
+        getExpenseCategories().catch(() => []),
+      ]);
+      setCategories(categoriesData);
       const childrenMembers = members.filter((m) => m.role === "CHILD" || m.role === "ASSISTANT");
       setChildren(childrenMembers);
 
@@ -150,22 +159,22 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
                   <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
                     👤 {child.name}
                   </h3>
-                  <button
-                    type="button"
-                    onClick={() => setAllowanceDialogMember({ id: child.id, name: child.name })}
-                    style={{
-                      padding: "8px 16px",
-                      background: "linear-gradient(135deg, #48bb78 0%, #38a169 100%)",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Ge pengar
-                  </button>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setExpenseDialogMember({ id: child.id, name: child.name })}
+                      style={{ padding: "8px 14px", background: "linear-gradient(135deg, #f87171 0%, #ef4444 100%)", color: "white", border: "none", borderRadius: "8px", fontSize: "0.875rem", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      🛒 Köp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAllowanceDialogMember({ id: child.id, name: child.name })}
+                      style={{ padding: "8px 14px", background: "linear-gradient(135deg, #48bb78 0%, #38a169 100%)", color: "white", border: "none", borderRadius: "8px", fontSize: "0.875rem", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Ge pengar
+                    </button>
+                  </div>
                 </div>
 
                 {walletData.error ? (
@@ -273,13 +282,27 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
                                   fontSize: "0.875rem",
                                   display: "flex",
                                   justifyContent: "space-between",
+                                  alignItems: "center",
+                                  gap: "8px",
                                 }}
                               >
-                                <span style={{ color: isExpense ? "#c53030" : "#48bb78" }}>
-                                  {isExpense ? "-" : "+"}
-                                  {Math.abs(transaction.amount)} kr
-                                </span>
-                                <span style={{ color: "#6b6b6b" }}>{date}</span>
+                                <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                                  <span style={{ color: isExpense ? "#c53030" : "#48bb78", fontWeight: 600 }}>
+                                    {isExpense ? "-" : "+"}{Math.abs(transaction.amount)} kr
+                                  </span>
+                                  {(transaction.description || transaction.categoryId) && (
+                                    <span style={{ color: "#6b6b6b", fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {(() => {
+                                        const cat = transaction.categoryId ? categories.find(c => c.id === transaction.categoryId) : null;
+                                        const parts = [];
+                                        if (cat) parts.push(`${cat.emoji ? cat.emoji + " " : ""}${cat.name}`);
+                                        if (transaction.description) parts.push(transaction.description);
+                                        return parts.join(" · ");
+                                      })()}
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ color: "#6b6b6b", flexShrink: 0 }}>{date}</span>
                               </div>
                             );
                           })}
@@ -292,6 +315,16 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
             );
           })}
         </div>
+      )}
+
+      {/* Record Expense Dialog */}
+      {expenseDialogMember && (
+        <RecordChildExpenseDialog
+          childMemberId={expenseDialogMember.id}
+          childName={expenseDialogMember.name}
+          onClose={() => setExpenseDialogMember(null)}
+          onSuccess={() => { setExpenseDialogMember(null); void load(); }}
+        />
       )}
 
       {/* Give Allowance Dialog */}
