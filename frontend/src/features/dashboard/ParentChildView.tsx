@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   fetchTasksForToday,
+  fetchTasksForDate,
   CalendarTaskWithCompletionResponse,
   markTaskCompleted,
   unmarkTaskCompleted,
@@ -8,6 +9,12 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
 } from "../../shared/api/calendar";
+import {
+  getDailyChoresForDate,
+  createDailyChore,
+  deleteDailyChore,
+  DailyChoreWithCompletionResponse,
+} from "../../shared/api/dailyChores";
 import {
   getNextWeekday,
   getDateTwoYearsLater,
@@ -25,6 +32,10 @@ import {
 import { getPetFoodName } from "../pet/petFoodUtils";
 import { getPetGradient, isDarkPetTheme } from "../pet/petTheme";
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
+
+type WeekTask =
+  | { source: "calendar"; data: CalendarTaskWithCompletionResponse }
+  | { source: "chore"; data: DailyChoreWithCompletionResponse };
 
 type ParentChildViewProps = {
   childId: string;
@@ -68,6 +79,21 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletingTask, setDeletingTask] = useState(false);
 
+  // Week view state
+  const [activeTab, setActiveTab] = useState<"today" | "week">("today");
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = current week
+  const [weekTasks, setWeekTasks] = useState<Map<string, WeekTask[]>>(new Map());
+  const [loadingWeek, setLoadingWeek] = useState(false);
+  const [weekRefreshKey, setWeekRefreshKey] = useState(0);
+
+  // Week chore form state
+  const [showWeekChoreForm, setShowWeekChoreForm] = useState(false);
+  const [weekChoreTitle, setWeekChoreTitle] = useState("");
+  const [weekChoreWeekdays, setWeekChoreWeekdays] = useState<Set<string>>(new Set());
+  const [weekChoreXp, setWeekChoreXp] = useState(1);
+  const [weekChoreError, setWeekChoreError] = useState<string | null>(null);
+  const [addingWeekChore, setAddingWeekChore] = useState(false);
+
   // Recurring form state
   const [showAddRecurring, setShowAddRecurring] = useState(false);
   const [recurringTitle, setRecurringTitle] = useState("");
@@ -104,6 +130,49 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
     };
     void load();
   }, [childId]);
+
+  // Get Monday of the week at the given offset from today
+  const getWeekDays = useCallback((offset: number): Date[] => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon...
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) + offset * 7);
+    monday.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "week") return;
+    let ignore = false;
+    const loadWeek = async () => {
+      setLoadingWeek(true);
+      const days = getWeekDays(weekOffset);
+      const entries = await Promise.all(
+        days.map(async (day) => {
+          const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+          const [calendarTasks, choreTasks] = await Promise.all([
+            fetchTasksForDate(childId, day).catch(() => [] as CalendarTaskWithCompletionResponse[]),
+            getDailyChoresForDate(childId, key).catch(() => [] as DailyChoreWithCompletionResponse[]),
+          ]);
+          const merged: WeekTask[] = [
+            ...calendarTasks.map(d => ({ source: "calendar" as const, data: d })),
+            ...choreTasks.map(d => ({ source: "chore" as const, data: d })),
+          ];
+          return [key, merged] as const;
+        })
+      );
+      if (!ignore) {
+        setWeekTasks(new Map(entries));
+        setLoadingWeek(false);
+      }
+    };
+    void loadWeek();
+    return () => { ignore = true; };
+  }, [activeTab, weekOffset, childId, getWeekDays, weekRefreshKey]);
 
   const handleToggleTask = async (taskId: string) => {
     const task = tasks.find((t) => t.event.id === taskId);
@@ -263,6 +332,43 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
     }
   };
 
+  const handleAddWeekChore = async () => {
+    if (!weekChoreTitle.trim()) { setWeekChoreError("Titel krävs"); return; }
+    if (weekChoreWeekdays.size === 0) { setWeekChoreError("Välj minst en veckodag"); return; }
+    setAddingWeekChore(true);
+    setWeekChoreError(null);
+    try {
+      await createDailyChore(childId, weekChoreTitle.trim(), Array.from(weekChoreWeekdays), weekChoreXp);
+      setWeekChoreTitle("");
+      setWeekChoreWeekdays(new Set());
+      setWeekChoreXp(1);
+      setShowWeekChoreForm(false);
+      setWeekRefreshKey(k => k + 1);
+    } catch (e) {
+      setWeekChoreError(e instanceof Error ? e.message : "Kunde inte skapa sysslan");
+    } finally {
+      setAddingWeekChore(false);
+    }
+  };
+
+  const handleDeleteWeekTask = async (task: WeekTask) => {
+    try {
+      if (task.source === "calendar") {
+        const isRecurring = !!task.data.event.recurringType;
+        await deleteCalendarEvent(
+          task.data.event.id,
+          isRecurring ? "ALL" : undefined,
+          isRecurring ? getTodayString() : undefined,
+        );
+      } else {
+        await deleteDailyChore(task.data.chore.id);
+      }
+      setWeekRefreshKey(k => k + 1);
+    } catch {
+      // silently ignore
+    }
+  };
+
   const { from: gradFrom, to: gradTo } = getPetGradient(pet?.petType ?? "");
   const isDark = isDarkPetTheme(pet?.petType ?? "");
 
@@ -410,6 +516,183 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
               boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
             }}
           >
+            {/* Tab switcher */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              <button
+                type="button"
+                onClick={() => setActiveTab("today")}
+                style={{ flex: 1, padding: "9px", borderRadius: "10px", border: "none", fontWeight: 600, fontSize: "0.9rem", cursor: "pointer", background: activeTab === "today" ? "#0C4A6E" : "#BAE6FD", color: activeTab === "today" ? "white" : "#0C4A6E" }}
+              >
+                📝 Idag
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("week")}
+                style={{ flex: 1, padding: "9px", borderRadius: "10px", border: "none", fontWeight: 600, fontSize: "0.9rem", cursor: "pointer", background: activeTab === "week" ? "#0C4A6E" : "#BAE6FD", color: activeTab === "week" ? "white" : "#0C4A6E" }}
+              >
+                📅 Vecka
+              </button>
+            </div>
+
+            {/* Week view */}
+            {activeTab === "week" && (() => {
+              const days = getWeekDays(weekOffset);
+              const dayNames = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
+              const weekdayKeys = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+              const todayStr = getTodayString();
+              const first = days[0];
+              const last = days[6];
+              const weekLabel = `${first.getDate()}/${first.getMonth() + 1} – ${last.getDate()}/${last.getMonth() + 1}`;
+              return (
+                <div>
+                  {/* Week navigation */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                    <button type="button" onClick={() => setWeekOffset(w => w - 1)}
+                      style={{ background: "#BAE6FD", border: "none", borderRadius: "8px", padding: "6px 14px", fontWeight: 700, fontSize: "1rem", cursor: "pointer", color: "#0C4A6E" }}>
+                      ←
+                    </button>
+                    <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "#2d3748" }}>
+                      {weekOffset === 0 ? "Denna vecka" : weekOffset === 1 ? "Nästa vecka" : weekOffset === -1 ? "Förra veckan" : weekLabel}
+                      {" · "}{weekLabel}
+                    </span>
+                    <button type="button" onClick={() => setWeekOffset(w => w + 1)}
+                      style={{ background: "#BAE6FD", border: "none", borderRadius: "8px", padding: "6px 14px", fontWeight: 700, fontSize: "1rem", cursor: "pointer", color: "#0C4A6E" }}>
+                      →
+                    </button>
+                  </div>
+
+                  {/* Add chore button / form */}
+                  <button
+                    type="button"
+                    onClick={() => { setShowWeekChoreForm(v => !v); setWeekChoreError(null); }}
+                    style={{
+                      width: "100%", padding: "8px", marginBottom: "12px",
+                      background: showWeekChoreForm ? "#4C1D95" : "#DDD6FE",
+                      color: showWeekChoreForm ? "white" : "#4C1D95",
+                      border: "none", borderRadius: "10px", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
+                    }}
+                  >
+                    {showWeekChoreForm ? "Avbryt" : "+ Lägg till återkommande syssla"}
+                  </button>
+
+                  {showWeekChoreForm && (
+                    <div style={{ background: "#F5F3FF", borderRadius: "12px", padding: "14px", marginBottom: "12px", border: "2px solid #DDD6FE" }}>
+                      <input
+                        type="text"
+                        placeholder="Titel"
+                        value={weekChoreTitle}
+                        onChange={e => { setWeekChoreTitle(e.target.value); setWeekChoreError(null); }}
+                        style={{ width: "100%", padding: "9px 12px", border: "2px solid #DDD6FE", borderRadius: "9px", fontSize: "0.95rem", marginBottom: "10px", boxSizing: "border-box", outline: "none" }}
+                      />
+                      <p style={{ margin: "0 0 6px", fontSize: "0.82rem", color: "#3B0764", fontWeight: 600 }}>Veckodagar</p>
+                      <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "10px" }}>
+                        {weekdayKeys.map((wk, i) => (
+                          <button
+                            key={wk}
+                            type="button"
+                            onClick={() => setWeekChoreWeekdays(prev => {
+                              const next = new Set(prev);
+                              if (next.has(wk)) next.delete(wk); else next.add(wk);
+                              return next;
+                            })}
+                            style={{
+                              padding: "5px 10px", borderRadius: "7px", border: "none", fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
+                              background: weekChoreWeekdays.has(wk) ? "#4C1D95" : "#DDD6FE",
+                              color: weekChoreWeekdays.has(wk) ? "white" : "#4C1D95",
+                            }}
+                          >
+                            {dayNames[i]}
+                          </button>
+                        ))}
+                      </div>
+                      <p style={{ margin: "0 0 6px", fontSize: "0.82rem", color: "#3B0764", fontWeight: 600 }}>XP (mat)</p>
+                      <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+                        {[1, 2, 3].map(n => (
+                          <button key={n} type="button" onClick={() => setWeekChoreXp(n)}
+                            style={{ padding: "5px 14px", borderRadius: "7px", border: "none", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer", background: weekChoreXp === n ? "#4C1D95" : "#DDD6FE", color: weekChoreXp === n ? "white" : "#4C1D95" }}>
+                            x{n}
+                          </button>
+                        ))}
+                      </div>
+                      {weekChoreError && <p style={{ margin: "0 0 8px", color: "#c53030", fontSize: "0.82rem" }}>{weekChoreError}</p>}
+                      <button
+                        type="button"
+                        onClick={() => void handleAddWeekChore()}
+                        disabled={addingWeekChore}
+                        style={{ width: "100%", padding: "10px", background: addingWeekChore ? "#cbd5e0" : "#4C1D95", color: "white", border: "none", borderRadius: "9px", fontWeight: 600, fontSize: "0.9rem", cursor: addingWeekChore ? "not-allowed" : "pointer" }}
+                      >
+                        {addingWeekChore ? "Sparar…" : "Skapa syssla"}
+                      </button>
+                    </div>
+                  )}
+
+                  {loadingWeek ? (
+                    <p style={{ textAlign: "center", color: "#718096", padding: "20px 0" }}>Laddar...</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {days.map((day, i) => {
+                        const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+                        const dayTaskList = weekTasks.get(key) ?? [];
+                        const done = dayTaskList.filter(t => t.source === "calendar" ? t.data.completed : t.data.completed).length;
+                        const isToday = key === todayStr;
+                        return (
+                          <div key={key} style={{
+                            borderRadius: "12px",
+                            border: isToday ? "2px solid #0C4A6E" : "1px solid #e2e8f0",
+                            overflow: "hidden",
+                            background: isToday ? "#EFF6FF" : "white",
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: isToday ? "#DBEAFE" : "#f7fafc" }}>
+                              <span style={{ fontWeight: 700, fontSize: "0.9rem", color: isToday ? "#0C4A6E" : "#2d3748" }}>
+                                {dayNames[i]} {day.getDate()}/{day.getMonth() + 1}
+                                {isToday && <span style={{ marginLeft: "6px", fontSize: "0.75rem", fontWeight: 600, color: "#0C4A6E" }}>idag</span>}
+                              </span>
+                              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: dayTaskList.length === 0 ? "#a0aec0" : done === dayTaskList.length ? "#48bb78" : "#718096" }}>
+                                {dayTaskList.length === 0 ? "–" : `${done}/${dayTaskList.length}`}
+                              </span>
+                            </div>
+                            {dayTaskList.length > 0 && (
+                              <ul style={{ margin: 0, padding: "6px 8px 8px", listStyle: "none", display: "flex", flexDirection: "column", gap: "3px" }}>
+                                {dayTaskList.map(t => {
+                                  const isCompleted = t.source === "calendar" ? t.data.completed : t.data.completed;
+                                  const title = t.source === "calendar" ? t.data.event.title : t.data.chore.title;
+                                  const xp = t.source === "calendar" ? t.data.event.xpPoints : t.data.chore.xpPoints;
+                                  const taskKey = t.source === "calendar" ? `cal-${t.data.event.id}` : `chore-${t.data.chore.id}`;
+                                  const isChore = t.source === "chore";
+                                  return (
+                                    <li key={taskKey} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", padding: "2px 4px", borderRadius: "6px" }}>
+                                      <span style={{ fontSize: "0.9rem", opacity: isCompleted ? 1 : 0.4, flexShrink: 0 }}>{isCompleted ? "✅" : "⭕"}</span>
+                                      <span style={{ flex: 1, color: isCompleted ? "#718096" : "#2d3748", textDecoration: isCompleted ? "line-through" : "none" }}>{title}</span>
+                                      {xp != null && xp > 0 && (
+                                        <span style={{ fontSize: "0.75rem", color: "#a0aec0", flexShrink: 0 }}>{xp} {foodName}</span>
+                                      )}
+                                      {isChore && (
+                                        <span style={{ fontSize: "0.65rem", color: "#7C3AED", background: "#EDE9FE", borderRadius: "4px", padding: "1px 5px", flexShrink: 0 }}>ny</span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleDeleteWeekTask(t)}
+                                        title="Ta bort"
+                                        style={{ background: "none", border: "none", cursor: "pointer", color: "#FCA5A5", fontSize: "0.9rem", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
+                                      >
+                                        ✕
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Today view */}
+            {activeTab === "today" && (<>
             <div style={{ marginBottom: "16px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                 <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600, color: "#2d3748" }}>
@@ -674,11 +957,11 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
               </div>
             )}
 
-            {tasks.length === 0 ? (
+            {activeTab === "today" && tasks.length === 0 ? (
               <p style={{ margin: 0, color: "#718096", textAlign: "center", padding: "20px 0" }}>
                 Inga sysslor för idag! 🎉
               </p>
-            ) : (
+            ) : activeTab === "today" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {tasks.map((task) => {
                   const isEditing = editTaskId === task.event.id;
@@ -890,7 +1173,8 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                   );
                 })}
               </div>
-            )}
+            ) : null}
+            </>)}
           </section>
         </>
       )}
