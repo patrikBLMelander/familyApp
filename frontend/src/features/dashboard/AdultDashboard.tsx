@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchTasksForToday, CalendarTaskWithCompletionResponse, getTaskCompletionsForMember, CalendarEventTaskCompletionResponse, createCalendarEvent } from "../../shared/api/calendar";
-import { getMemberByDeviceToken, fetchAllFamilyMembers, createFamilyMember } from "../../shared/api/familyMembers";
+import { getDailyChoresForDate } from "../../shared/api/dailyChores";
+import { getMemberByDeviceToken, fetchAllFamilyMembers, createFamilyMember, generateInviteToken } from "../../shared/api/familyMembers";
+import { QRCodeSVG } from "qrcode.react";
 import { FamilyMemberResponse } from "../../shared/api/familyMembers";
 import { AGE_GROUPS, TASK_SUGGESTIONS, AgeGroup } from "../familymembers/taskSuggestions";
 import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, getLastFedDate, fetchMemberPet } from "../../shared/api/pets";
@@ -56,6 +58,11 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   // Child summary state
   const [childSummaries, setChildSummaries] = useState<Record<string, ChildSummary>>({});
   const [loadingChildren, setLoadingChildren] = useState(false);
+
+  // Invite state
+  const [inviteChildId, setInviteChildId] = useState<string | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   // Add child inline form state
   const [showAddChild, setShowAddChild] = useState(false);
@@ -242,13 +249,15 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
       const entries = await Promise.all(
         childMembers.map(async (child) => {
           try {
-            const [tasks, childPet, completions] = await Promise.all([
+            const today = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
+            const [tasks, chores, childPet, completions] = await Promise.all([
               fetchTasksForToday(child.id).catch(() => [] as CalendarTaskWithCompletionResponse[]),
+              getDailyChoresForDate(child.id, today).catch(() => []),
               fetchMemberPet(child.id).catch(() => null),
               getTaskCompletionsForMember(child.id).catch(() => [] as CalendarEventTaskCompletionResponse[]),
             ]);
-            const todaysDone = tasks.filter(t => t.completed).length;
-            const todaysTotal = tasks.length;
+            const todaysDone = tasks.filter(t => t.completed).length + chores.filter(c => c.completed).length;
+            const todaysTotal = tasks.length + chores.length;
             const nextTaskTitle = tasks.find(t => !t.completed)?.event.title ?? null;
             let streakDays = 0;
             const d = new Date();
@@ -850,10 +859,48 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                 {child.name}s Sysslor
               </button>
               {/* Bjud in button */}
-              <button type="button" onClick={() => onNavigate?.("familymembers")}
-                style={{ width: "100%", padding: "10px", background: "transparent", color: "#0C4A6E", border: "2px solid #BAE6FD", borderRadius: "12px", fontWeight: 500, cursor: "pointer", fontSize: "0.9rem" }}>
-                Bjud in till appen
-              </button>
+              {inviteChildId === child.id && inviteToken ? (
+                <div style={{ background: "#EFF6FF", borderRadius: "12px", padding: "16px", border: "2px solid #BAE6FD", textAlign: "center" }}>
+                  <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "#0C4A6E", fontWeight: 600 }}>
+                    Skanna QR-koden för att koppla {child.name}s enhet
+                  </p>
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px" }}>
+                    <QRCodeSVG value={`${window.location.origin}/invite/${inviteToken}`} size={200} />
+                  </div>
+                  <p style={{ margin: "0 0 12px", fontSize: "0.75rem", color: "#4a5568", wordBreak: "break-all" }}>
+                    {`${window.location.origin}/invite/${inviteToken}`}
+                  </p>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button type="button"
+                      onClick={() => { window.open(`${window.location.origin}/invite/${inviteToken}`, "_blank"); }}
+                      style={{ flex: 1, padding: "9px", background: "#0C4A6E", color: "white", border: "none", borderRadius: "9px", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer" }}>
+                      Öppna länk
+                    </button>
+                    <button type="button"
+                      onClick={() => { setInviteChildId(null); setInviteToken(null); }}
+                      style={{ padding: "9px 14px", background: "transparent", color: "#0C4A6E", border: "2px solid #BAE6FD", borderRadius: "9px", fontWeight: 500, fontSize: "0.85rem", cursor: "pointer" }}>
+                      Stäng
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button"
+                  disabled={inviteLoading && inviteChildId === child.id}
+                  onClick={async () => {
+                    setInviteChildId(child.id);
+                    setInviteToken(null);
+                    setInviteLoading(true);
+                    try {
+                      const token = await generateInviteToken(child.id);
+                      setInviteToken(token);
+                    } finally {
+                      setInviteLoading(false);
+                    }
+                  }}
+                  style={{ width: "100%", padding: "10px", background: "transparent", color: "#0C4A6E", border: "2px solid #BAE6FD", borderRadius: "12px", fontWeight: 500, cursor: "pointer", fontSize: "0.9rem" }}>
+                  {inviteLoading && inviteChildId === child.id ? "Genererar…" : "Bjud in till appen"}
+                </button>
+              )}
             </section>
           );
         })

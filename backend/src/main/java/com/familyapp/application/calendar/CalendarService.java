@@ -1143,32 +1143,20 @@ public class CalendarService {
         
         var completion = completionRepository.findByEventIdAndMemberIdAndOccurrenceDate(eventId, memberId, occurrenceDate);
         if (completion.isPresent()) {
-            
-            // Remove food from collection when task is uncompleted
-            // Only removes unfed food - if food has been fed, it cannot be removed
+
+            // Remove food from collection when task is uncompleted (best-effort)
+            // If food was already fed to the pet, skip removal and allow uncompletion anyway
             Integer xpPoints = eventEntity.getXpPoints();
             if (xpPoints != null && xpPoints > 0) {
                 try {
                     foodService.removeFoodFromTask(memberId, eventId, xpPoints);
-                } catch (IllegalArgumentException e) {
-                    // Not enough unfed food - throw error to prevent uncompletion
-                    // The error message from removeFoodFromTask already contains detailed information
-                    throw e;
                 } catch (Exception e) {
-                    // Log other errors but don't fail the uncompletion
-                    // Note: Using System.err for now as this service doesn't have a logger yet
-                    // TODO: Add SLF4J logger to CalendarService for proper logging
-                    System.err.println("Failed to remove food for task uncompletion: eventId=" + eventId + 
+                    // Food was already fed or other error - allow uncompletion anyway
+                    System.err.println("Could not remove food for task uncompletion (already fed?): eventId=" + eventId +
                         ", memberId=" + memberId + ", xpPoints=" + xpPoints + ", error=" + e.getMessage());
-                    e.printStackTrace();
-                    // Re-throw as IllegalArgumentException to provide user-friendly message
-                    throw new IllegalArgumentException(
-                            "Kan inte avmarkera syssla: Ett fel uppstod när mat skulle tas bort. " +
-                            "Kontrollera att du har tillräckligt med omatad mat."
-                    );
                 }
             }
-            
+
             completionRepository.delete(completion.get());
         }
     }

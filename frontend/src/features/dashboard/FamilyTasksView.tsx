@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/familyMembers";
 import { fetchTasksForToday, CalendarTaskWithCompletionResponse, markTaskCompleted, unmarkTaskCompleted } from "../../shared/api/calendar";
+import { getDailyChoresForDate, markDailyChoreCompleted, unmarkDailyChoreCompleted, DailyChoreWithCompletionResponse } from "../../shared/api/dailyChores";
 import { fetchMemberPet, PetResponse } from "../../shared/api/pets";
 import { getPetGradient, isDarkPetTheme } from "../pet/petTheme";
 
@@ -13,6 +14,7 @@ type FamilyTasksViewProps = {
 type MemberWithTasks = {
   member: FamilyMemberResponse;
   tasks: CalendarTaskWithCompletionResponse[];
+  chores: DailyChoreWithCompletionResponse[];
   pet: PetResponse | null;
 };
 
@@ -35,11 +37,13 @@ export function FamilyTasksView({ onNavigate }: FamilyTasksViewProps) {
         const members = await fetchAllFamilyMembers();
         const results = await Promise.all(
           members.map(async (member) => {
-            const [tasks, pet] = await Promise.all([
+            const today = getTodayString();
+            const [tasks, chores, pet] = await Promise.all([
               fetchTasksForToday(member.id).catch(() => [] as CalendarTaskWithCompletionResponse[]),
+              getDailyChoresForDate(member.id, today).catch(() => [] as DailyChoreWithCompletionResponse[]),
               fetchMemberPet(member.id).catch(() => null),
             ]);
-            return { member, tasks, pet };
+            return { member, tasks, chores, pet };
           })
         );
         if (!ignore) setData(results);
@@ -71,6 +75,35 @@ export function FamilyTasksView({ onNavigate }: FamilyTasksViewProps) {
                 ...row,
                 tasks: row.tasks.map(t =>
                   t.event.id === taskId ? { ...t, completed: !completed } : t
+                ),
+              }
+        )
+      );
+    } catch {
+      // silently ignore — state stays as-is
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleChoreToggle = async (memberId: string, choreId: string, completed: boolean) => {
+    const key = `chore-${memberId}-${choreId}`;
+    setTogglingId(key);
+    const today = getTodayString();
+    try {
+      if (completed) {
+        await unmarkDailyChoreCompleted(choreId, today);
+      } else {
+        await markDailyChoreCompleted(choreId, today);
+      }
+      setData(prev =>
+        prev.map(row =>
+          row.member.id !== memberId
+            ? row
+            : {
+                ...row,
+                chores: row.chores.map(c =>
+                  c.chore.id === choreId ? { ...c, completed: !completed } : c
                 ),
               }
         )
@@ -120,9 +153,9 @@ export function FamilyTasksView({ onNavigate }: FamilyTasksViewProps) {
         </section>
       )}
 
-      {!loading && data.map(({ member, tasks, pet }) => {
-        const done = tasks.filter(t => t.completed).length;
-        const total = tasks.length;
+      {!loading && data.map(({ member, tasks, chores, pet }) => {
+        const done = tasks.filter(t => t.completed).length + chores.filter(c => c.completed).length;
+        const total = tasks.length + chores.length;
         const petType = pet?.petType ?? null;
         const gradient = petType ? getPetGradient(petType) : null;
         const dark = petType ? isDarkPetTheme(petType) : false;
@@ -179,7 +212,7 @@ export function FamilyTasksView({ onNavigate }: FamilyTasksViewProps) {
             </div>
 
             {/* Task list */}
-            {tasks.length > 0 && (
+            {(tasks.length > 0 || chores.length > 0) && (
               <div style={{
                 background: dark ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.55)",
                 borderTop: dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.06)",
@@ -237,6 +270,63 @@ export function FamilyTasksView({ onNavigate }: FamilyTasksViewProps) {
                           {event.xpPoints != null && event.xpPoints > 0 && (
                             <span style={{ fontSize: "0.75rem", color: subTextColor, flexShrink: 0 }}>
                               {event.xpPoints} XP
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {chores.map(({ chore, completed }) => {
+                    const key = `chore-${member.id}-${chore.id}`;
+                    const isToggling = togglingId === key;
+                    return (
+                      <li key={`chore-${chore.id}`}>
+                        <button
+                          type="button"
+                          onClick={() => void handleChoreToggle(member.id, chore.id, completed)}
+                          disabled={isToggling}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            background: "none",
+                            border: "none",
+                            padding: "7px 2px",
+                            cursor: isToggling ? "default" : "pointer",
+                            textAlign: "left",
+                            opacity: isToggling ? 0.5 : 1,
+                          }}
+                          aria-label={`${completed ? "Markera som ej gjord" : "Markera som gjord"}: ${chore.title}`}
+                        >
+                          <span style={{
+                            width: "22px",
+                            height: "22px",
+                            borderRadius: "50%",
+                            border: completed ? "none" : `2px solid ${circleBorder}`,
+                            background: completed ? circleDone : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            fontSize: "0.75rem",
+                            color: checkColor,
+                            fontWeight: 700,
+                            transition: "background 0.15s",
+                          }}>
+                            {completed ? "✓" : ""}
+                          </span>
+                          <span style={{
+                            fontSize: "0.92rem",
+                            color: completed ? subTextColor : textColor,
+                            textDecoration: completed ? "line-through" : "none",
+                            flex: 1,
+                          }}>
+                            {chore.title}
+                          </span>
+                          {chore.xpPoints > 0 && (
+                            <span style={{ fontSize: "0.75rem", color: subTextColor, flexShrink: 0 }}>
+                              {chore.xpPoints} XP
                             </span>
                           )}
                         </button>

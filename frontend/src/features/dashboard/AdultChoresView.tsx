@@ -8,13 +8,14 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
 } from "../../shared/api/calendar";
-import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import {
-  getNextWeekday,
-  getDateTwoYearsLater,
-  formatDateForAPI,
-  WEEKDAY_SHORT_NAMES,
-} from "../calendar/utils/weekdayUtils";
+  getDailyChoresForDate,
+  createDailyChore,
+  markDailyChoreCompleted,
+  unmarkDailyChoreCompleted,
+  DailyChoreWithCompletionResponse,
+} from "../../shared/api/dailyChores";
+import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { fetchCurrentPet, feedPet, getLastFedDate, PetResponse } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
 import { getRandomPetMessage } from "../pet/petFoodUtils";
@@ -43,6 +44,7 @@ const XP_THRESHOLDS = [0, 10, 35, 70, 125];
 export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
   const [memberId, setMemberId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
+  const [chores, setChores] = useState<DailyChoreWithCompletionResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Pet display state
@@ -69,7 +71,7 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
   // Recurring form state
   const [showAddRecurring, setShowAddRecurring] = useState(false);
   const [recurringTitle, setRecurringTitle] = useState("");
-  const [recurringWeekdays, setRecurringWeekdays] = useState<Set<number>>(new Set());
+  const [recurringWeekdays, setRecurringWeekdays] = useState<Set<string>>(new Set());
   const [recurringXp, setRecurringXp] = useState(1);
   const [addingRecurring, setAddingRecurring] = useState(false);
   const [recurringError, setRecurringError] = useState<string | null>(null);
@@ -99,8 +101,13 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
         if (!deviceToken) return;
         const member = await getMemberByDeviceToken(deviceToken);
         setMemberId(member.id);
-        const fetchedTasks = await fetchTasksForToday(member.id).catch(() => [] as CalendarTaskWithCompletionResponse[]);
+        const today = getTodayString();
+        const [fetchedTasks, fetchedChores] = await Promise.all([
+          fetchTasksForToday(member.id).catch(() => [] as CalendarTaskWithCompletionResponse[]),
+          getDailyChoresForDate(member.id, today).catch(() => [] as DailyChoreWithCompletionResponse[]),
+        ]);
         setTasks(fetchedTasks);
+        setChores(fetchedChores);
       } finally {
         setLoading(false);
       }
@@ -201,6 +208,42 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
     }
   };
 
+  const handleToggleChore = async (choreId: string) => {
+    if (!memberId) return;
+    const chore = chores.find(c => c.chore.id === choreId);
+    if (!chore) return;
+    const today = getTodayString();
+    setChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: !c.completed } : c));
+    try {
+      if (chore.completed) {
+        await unmarkDailyChoreCompleted(choreId, today);
+      } else {
+        await markDailyChoreCompleted(choreId, today);
+        if (showPet && petLoaded && pet && chore.chore.xpPoints > 0) {
+          const xpAmount = chore.chore.xpPoints;
+          await feedPet(xpAmount).catch(() => {});
+          setXpGainAmount(xpAmount);
+          setShowXpGain(true);
+          setTimeout(() => setShowXpGain(false), 1500);
+          const prevLevel = xpProgress?.currentLevel ?? 0;
+          const newXp = await fetchCurrentXpProgress().catch(() => null);
+          setXpProgress(newXp);
+          if (newXp && newXp.currentLevel > prevLevel) {
+            const updatedPet = await fetchCurrentPet().catch(() => null);
+            setPet(updatedPet);
+            if (updatedPet) {
+              setHasIntegratedImage(await checkIntegratedImageExists(updatedPet.petType, updatedPet.growthStage));
+            }
+          }
+          setPetMood("happy");
+          setPetMoodMessage(getRandomPetMessage("happy"));
+        }
+      }
+    } catch {
+      setChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: chore.completed } : c));
+    }
+  };
+
   const handleAddRecurring = async () => {
     if (!memberId) return;
     if (!recurringTitle.trim()) { setRecurringError("Titel krävs"); return; }
@@ -208,23 +251,10 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
     setAddingRecurring(true);
     setRecurringError(null);
     try {
-      await Promise.all(
-        Array.from(recurringWeekdays).map((weekday) => {
-          const nextDate = getNextWeekday(weekday);
-          const endDate = getDateTwoYearsLater(nextDate);
-          return createCalendarEvent(
-            recurringTitle.trim(),
-            `${formatDateForAPI(nextDate)}T00:00`,
-            null, true,
-            undefined, undefined, undefined,
-            [memberId],
-            "WEEKLY", 1, formatDateForAPI(endDate), null,
-            true, recurringXp, true,
-          ).then(() => {});
-        })
-      );
-      const updated = await fetchTasksForToday(memberId).catch(() => [] as CalendarTaskWithCompletionResponse[]);
-      setTasks(updated);
+      await createDailyChore(memberId, recurringTitle.trim(), Array.from(recurringWeekdays), recurringXp);
+      const today = getTodayString();
+      const updatedChores = await getDailyChoresForDate(memberId, today).catch(() => [] as DailyChoreWithCompletionResponse[]);
+      setChores(updatedChores);
       setRecurringTitle("");
       setRecurringWeekdays(new Set());
       setRecurringXp(1);
@@ -307,7 +337,8 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
     }
   };
 
-  const completedCount = tasks.filter((t) => t.completed).length;
+  const completedCount = tasks.filter((t) => t.completed).length + chores.filter(c => c.completed).length;
+  const totalCount = tasks.length + chores.length;
 
   const progressPercentage = xpProgress
     ? xpProgress.currentLevel >= MAX_LEVEL
@@ -487,8 +518,8 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
               <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600, color: "#2d3748" }}>
                 📝 Dagens sysslor
               </h3>
-              <span style={{ fontSize: "1rem", fontWeight: 600, color: tasks.length > 0 && completedCount === tasks.length ? "#48bb78" : "#4a5568" }}>
-                {completedCount} / {tasks.length}
+              <span style={{ fontSize: "1rem", fontWeight: 600, color: totalCount > 0 && completedCount === totalCount ? "#48bb78" : "#4a5568" }}>
+                {completedCount} / {totalCount}
               </span>
             </div>
             <div style={{ display: "flex", gap: "8px" }}>
@@ -656,13 +687,15 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
                 Veckodagar
               </p>
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "14px" }}>
-                {[1, 2, 3, 4, 5, 6, 0].map(day => (
+                {(["MON","TUE","WED","THU","FRI","SAT","SUN"] as const).map((wk, i) => {
+                  const label = ["Mån","Tis","Ons","Tor","Fre","Lör","Sön"][i];
+                  return (
                   <button
-                    key={day}
+                    key={wk}
                     type="button"
                     onClick={() => setRecurringWeekdays(prev => {
                       const next = new Set(prev);
-                      if (next.has(day)) next.delete(day); else next.add(day);
+                      if (next.has(wk)) next.delete(wk); else next.add(wk);
                       return next;
                     })}
                     style={{
@@ -672,13 +705,14 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
                       fontWeight: 600,
                       fontSize: "0.85rem",
                       cursor: "pointer",
-                      background: recurringWeekdays.has(day) ? "#4C1D95" : "#DDD6FE",
-                      color: recurringWeekdays.has(day) ? "white" : "#4C1D95",
+                      background: recurringWeekdays.has(wk) ? "#4C1D95" : "#DDD6FE",
+                      color: recurringWeekdays.has(wk) ? "white" : "#4C1D95",
                     }}
                   >
-                    {WEEKDAY_SHORT_NAMES[day]}
+                    {label}
                   </button>
-                ))}
+                  );
+                })}
               </div>
               <p style={{ margin: "0 0 8px", fontSize: "0.85rem", color: "#3B0764", fontWeight: 500 }}>
                 XP
@@ -746,7 +780,7 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
             </div>
           )}
 
-          {tasks.length === 0 ? (
+          {tasks.length === 0 && chores.length === 0 ? (
             <p style={{ margin: 0, color: "#718096", textAlign: "center", padding: "20px 0" }}>
               Inga sysslor för idag! 🎉
             </p>
@@ -958,6 +992,32 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
                         </div>
                       </div>
                     )}
+                  </div>
+                );
+              })}
+              {chores.map((choreItem) => {
+                const bgColor = choreItem.completed ? "#f0fff4" : "#f7fafc";
+                const borderColor = choreItem.completed ? "#48bb78" : "#e2e8f0";
+                return (
+                  <div key={`chore-${choreItem.chore.id}`} style={{ borderRadius: "12px", border: `2px solid ${borderColor}`, overflow: "hidden" }}>
+                    <div
+                      style={{ padding: "14px 12px 14px 16px", background: bgColor, display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
+                      onClick={() => void handleToggleChore(choreItem.chore.id)}
+                    >
+                      <div style={{ fontSize: "1.5rem", opacity: choreItem.completed ? 1 : 0.5, flexShrink: 0 }}>
+                        {choreItem.completed ? "✅" : "⭕"}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: choreItem.completed ? 600 : 500, color: "#2d3748", textDecoration: choreItem.completed ? "line-through" : "none" }}>
+                          {choreItem.chore.title}
+                        </div>
+                        {choreItem.chore.xpPoints > 0 && (
+                          <div style={{ fontSize: "0.85rem", color: "#718096", marginTop: "2px" }}>
+                            {choreItem.chore.xpPoints} XP · 🔁
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}

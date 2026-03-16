@@ -1,5 +1,6 @@
 package com.familyapp.application.chore;
 
+import com.familyapp.application.pet.CollectedFoodService;
 import com.familyapp.domain.chore.DailyChore;
 import com.familyapp.domain.chore.DailyChoreCompletion;
 import com.familyapp.infrastructure.chore.DailyChoreCompletionEntity;
@@ -25,15 +26,18 @@ public class DailyChoreService {
     private final DailyChoreJpaRepository choreRepository;
     private final DailyChoreCompletionJpaRepository completionRepository;
     private final FamilyMemberJpaRepository memberRepository;
+    private final CollectedFoodService foodService;
 
     public DailyChoreService(
             DailyChoreJpaRepository choreRepository,
             DailyChoreCompletionJpaRepository completionRepository,
-            FamilyMemberJpaRepository memberRepository
+            FamilyMemberJpaRepository memberRepository,
+            CollectedFoodService foodService
     ) {
         this.choreRepository = choreRepository;
         this.completionRepository = completionRepository;
         this.memberRepository = memberRepository;
+        this.foodService = foodService;
     }
 
     public record DailyChoreWithCompletion(DailyChore chore, boolean completed, String completionId) {}
@@ -128,7 +132,18 @@ public class DailyChoreService {
         entity.setOccurrenceDate(date);
         entity.setCompletedAt(OffsetDateTime.now());
 
-        return toCompletionDomain(completionRepository.save(entity));
+        var saved = completionRepository.save(entity);
+
+        // Add food when chore is completed
+        if (chore.getXpPoints() > 0) {
+            try {
+                foodService.addBonusFood(chore.getMember().getId(), chore.getXpPoints());
+            } catch (Exception e) {
+                System.err.println("Failed to add food for chore completion: choreId=" + choreId + ", error=" + e.getMessage());
+            }
+        }
+
+        return toCompletionDomain(saved);
     }
 
     public void unmarkCompleted(UUID requesterId, UUID choreId, LocalDate date) {
@@ -137,9 +152,18 @@ public class DailyChoreService {
 
         validateSameFamilyByIds(requesterId, chore.getFamily().getId());
 
-        completionRepository
-                .findByChore_IdAndMember_IdAndOccurrenceDate(choreId, chore.getMember().getId(), date)
-                .ifPresent(completionRepository::delete);
+        var completion = completionRepository.findByChore_IdAndMember_IdAndOccurrenceDate(choreId, chore.getMember().getId(), date);
+        if (completion.isPresent()) {
+            // Remove food best-effort (if already fed, skip)
+            if (chore.getXpPoints() > 0) {
+                try {
+                    foodService.removeFood(chore.getMember().getId(), chore.getXpPoints());
+                } catch (Exception e) {
+                    System.err.println("Could not remove food for chore uncompletion (already fed?): choreId=" + choreId + ", error=" + e.getMessage());
+                }
+            }
+            completionRepository.delete(completion.get());
+        }
     }
 
     private void validateSameFamily(UUID requesterId, UUID memberId) {

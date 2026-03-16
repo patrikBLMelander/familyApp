@@ -143,6 +143,35 @@ public class CollectedFoodService {
     }
 
     /**
+     * Remove unfed food for a member (not tied to a specific event).
+     * Used for daily chore uncompletion. Best-effort: removes up to xpPoints worth of unfed food.
+     * Returns the number of food items actually removed.
+     */
+    public int removeFood(UUID memberId, int xpPoints) {
+        if (xpPoints <= 0) {
+            return 0;
+        }
+
+        var allUnfedFood = foodRepository.findUnfedFoodByMemberId(memberId);
+        int remainingToRemove = xpPoints;
+        int removed = 0;
+        var toDelete = new ArrayList<CollectedFoodEntity>();
+
+        for (var food : allUnfedFood) {
+            if (remainingToRemove <= 0) break;
+            toDelete.add(food);
+            remainingToRemove -= food.getXpAmount();
+            removed += food.getXpAmount();
+        }
+
+        if (!toDelete.isEmpty()) {
+            foodRepository.deleteAll(toDelete);
+        }
+
+        return removed;
+    }
+
+    /**
      * Get all unfed food for a member
      */
     @Transactional(readOnly = true)

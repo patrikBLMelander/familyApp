@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, CollectedFoodResponse, getLastFedDate } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
 import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse } from "../../shared/api/calendar";
+import { getDailyChoresForDate, markDailyChoreCompleted, unmarkDailyChoreCompleted, DailyChoreWithCompletionResponse } from "../../shared/api/dailyChores";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
 import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
@@ -37,6 +38,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
   const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
+  const [chores, setChores] = useState<DailyChoreWithCompletionResponse[]>([]);
+  const [memberId, setMemberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasIntegratedImage, setHasIntegratedImage] = useState<boolean>(false);
@@ -102,9 +105,11 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
 
         const member = await getMemberByDeviceToken(deviceToken);
         const memberId = member.id;
+        setMemberId(memberId);
+        const todayStr = getTodayLocalDateString();
 
-        // Load pet, XP, tasks, collected food, last fed date, and wallet notifications in parallel
-        const [petData, xpData, tasksData, foodData, lastFedData, notifications] = await Promise.all([
+        // Load pet, XP, tasks, chores, collected food, last fed date, and wallet notifications in parallel
+        const [petData, xpData, tasksData, choresData, foodData, lastFedData, notifications] = await Promise.all([
           fetchCurrentPet().catch((e) => {
             console.error("Error fetching pet:", e);
             return null;
@@ -116,6 +121,10 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           fetchTasksForToday(memberId).catch((e) => {
             console.error("Error fetching tasks:", e);
             return [];
+          }),
+          getDailyChoresForDate(memberId, todayStr).catch((e) => {
+            console.error("Error fetching daily chores:", e);
+            return [] as DailyChoreWithCompletionResponse[];
           }),
           getCollectedFood().catch((e) => {
             console.error("Error fetching collected food:", e);
@@ -139,18 +148,18 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
 
         setPet(petData);
         setXpProgress(xpData);
-        
+
         // Initialize previous level
         if (xpData) {
           previousLevelRef.current = xpData.currentLevel;
         }
-        
+
         // Check if integrated image exists for this pet
         if (petData) {
           const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
           setHasIntegratedImage(integratedExists);
         }
-        
+
         // Sort tasks: required first, then by title
         const sortedTasks = [...tasksData].sort((a, b) => {
           if (a.event.isRequired !== b.event.isRequired) {
@@ -159,6 +168,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           return a.event.title.localeCompare(b.event.title);
         });
         setTasks(sortedTasks);
+        setChores(choresData);
         
         // Set collected food count from backend
         setCollectedFoodCount(foodData.totalCount);
@@ -253,6 +263,36 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
     }
   };
   
+  const handleToggleChore = async (choreId: string) => {
+    const chore = chores.find(c => c.chore.id === choreId);
+    if (!chore) return;
+    const today = getTodayLocalDateString();
+    setChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: !c.completed } : c));
+    try {
+      if (chore.completed) {
+        await unmarkDailyChoreCompleted(choreId, today);
+        if (chore.chore.xpPoints > 0) {
+          const foodData = await getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 }));
+          setCollectedFoodCount(foodData.totalCount);
+        }
+      } else {
+        await markDailyChoreCompleted(choreId, today);
+        if (chore.chore.xpPoints > 0 && memberId) {
+          // Reload XP/food after completing a chore
+          const [xpData, foodData] = await Promise.all([
+            fetchCurrentXpProgress().catch(() => null),
+            getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
+          ]);
+          setXpProgress(xpData);
+          setCollectedFoodCount(foodData.totalCount);
+        }
+      }
+    } catch (e) {
+      console.error("Error toggling chore:", e);
+      setChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: chore.completed } : c));
+    }
+  };
+
   const handleFeed = async (amount: number | null = null) => {
     // amount = null means feed all, otherwise feed specific amount
     const feedAmount = amount ?? collectedFoodCount;
@@ -402,8 +442,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
         })()
     : 0;
   const totalEnergy = xpProgress?.currentXp || 0;
-  const completedTasksCount = tasks.filter(t => t.completed).length;
-  const totalTasksCount = tasks.length;
+  const completedTasksCount = tasks.filter(t => t.completed).length + chores.filter(c => c.completed).length;
+  const totalTasksCount = tasks.length + chores.length;
   const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
   const foodName = pet ? getPetFoodName(pet.petType) : "mat";
   const totalFoodCount = collectedFoodCount;
@@ -776,7 +816,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           </span>
         </div>
 
-        {tasks.length === 0 ? (
+        {tasks.length === 0 && chores.length === 0 ? (
           <p style={{
             margin: 0,
             color: "#718096",
@@ -857,6 +897,62 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
                           <span>
                             Ger {task.event.xpPoints} {foodName} när klar
                           </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {chores.map((choreItem) => {
+              const bgColor = choreItem.completed ? "#f0fff4" : "#f7fafc";
+              const borderColor = choreItem.completed ? "#48bb78" : "#e2e8f0";
+              return (
+                <div
+                  key={choreItem.chore.id}
+                  onClick={() => void handleToggleChore(choreItem.chore.id)}
+                  style={{
+                    padding: "16px",
+                    background: bgColor,
+                    borderRadius: "12px",
+                    border: `2px solid ${borderColor}`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "scale(1.02)";
+                    e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                >
+                  <div style={{ fontSize: "1.5rem", opacity: choreItem.completed ? 1 : 0.5 }}>
+                    {choreItem.completed ? "✅" : "⭕"}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{
+                      fontWeight: choreItem.completed ? 600 : 500,
+                      color: "#2d3748",
+                      textDecoration: choreItem.completed ? "line-through" : "none",
+                    }}>
+                      {choreItem.chore.title}
+                    </div>
+                    {choreItem.chore.xpPoints > 0 && (
+                      <div style={{ fontSize: "0.85rem", color: "#718096", marginTop: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+                        {choreItem.completed ? (
+                          <>
+                            {Array.from({ length: choreItem.chore.xpPoints }).map((_, i) => (
+                              <span key={i} style={{ fontSize: "1rem" }}>{foodEmoji}</span>
+                            ))}
+                            <span style={{ marginLeft: "4px" }}>+{choreItem.chore.xpPoints} {foodName}</span>
+                          </>
+                        ) : (
+                          <span>Ger {choreItem.chore.xpPoints} {foodName} när klar</span>
                         )}
                       </div>
                     )}

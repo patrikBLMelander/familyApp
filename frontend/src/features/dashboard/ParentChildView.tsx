@@ -13,14 +13,10 @@ import {
   getDailyChoresForDate,
   createDailyChore,
   deleteDailyChore,
+  markDailyChoreCompleted,
+  unmarkDailyChoreCompleted,
   DailyChoreWithCompletionResponse,
 } from "../../shared/api/dailyChores";
-import {
-  getNextWeekday,
-  getDateTwoYearsLater,
-  formatDateForAPI,
-  WEEKDAY_SHORT_NAMES,
-} from "../calendar/utils/weekdayUtils";
 import { fetchMemberPet, PetResponse } from "../../shared/api/pets";
 import { fetchMemberXpProgress, XpProgressResponse } from "../../shared/api/xp";
 import {
@@ -53,6 +49,7 @@ function getTodayString(): string {
 
 export function ParentChildView({ childId, childName, onBack }: ParentChildViewProps) {
   const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
+  const [todayChores, setTodayChores] = useState<DailyChoreWithCompletionResponse[]>([]);
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,13 +91,14 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
   const [weekChoreError, setWeekChoreError] = useState<string | null>(null);
   const [addingWeekChore, setAddingWeekChore] = useState(false);
 
-  // Recurring form state
-  const [showAddRecurring, setShowAddRecurring] = useState(false);
-  const [recurringTitle, setRecurringTitle] = useState("");
-  const [recurringWeekdays, setRecurringWeekdays] = useState<Set<number>>(new Set());
-  const [recurringXp, setRecurringXp] = useState(1);
-  const [addingRecurring, setAddingRecurring] = useState(false);
-  const [recurringError, setRecurringError] = useState<string | null>(null);
+  // Today recurring chore form state
+  const [showAddTodayChore, setShowAddTodayChore] = useState(false);
+  const [todayChoreTitle, setTodayChoreTitle] = useState("");
+  const [todayChoreWeekdays, setTodayChoreWeekdays] = useState<Set<string>>(new Set());
+  const [todayChoreXp, setTodayChoreXp] = useState(1);
+  const [todayChoreError, setTodayChoreError] = useState<string | null>(null);
+  const [addingTodayChore, setAddingTodayChore] = useState(false);
+
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -112,12 +110,15 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
     const load = async () => {
       setLoading(true);
       try {
-        const [fetchedTasks, fetchedPet, fetchedXp] = await Promise.all([
+        const today = getTodayString();
+        const [fetchedTasks, fetchedChores, fetchedPet, fetchedXp] = await Promise.all([
           fetchTasksForToday(childId).catch(() => [] as CalendarTaskWithCompletionResponse[]),
+          getDailyChoresForDate(childId, today).catch(() => [] as DailyChoreWithCompletionResponse[]),
           fetchMemberPet(childId).catch(() => null),
           fetchMemberXpProgress(childId).catch(() => null),
         ]);
         setTasks(fetchedTasks);
+        setTodayChores(fetchedChores);
         setPet(fetchedPet);
         setXpProgress(fetchedXp);
         if (fetchedPet) {
@@ -298,37 +299,19 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
     }
   };
 
-  const handleAddRecurring = async () => {
-    if (!recurringTitle.trim()) { setRecurringError("Titel krävs"); return; }
-    if (recurringWeekdays.size === 0) { setRecurringError("Välj minst en veckodag"); return; }
-    setAddingRecurring(true);
-    setRecurringError(null);
+  const handleToggleTodayChore = async (choreId: string) => {
+    const chore = todayChores.find(c => c.chore.id === choreId);
+    if (!chore) return;
+    const today = getTodayString();
+    setTodayChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: !c.completed } : c));
     try {
-      await Promise.all(
-        Array.from(recurringWeekdays).map((weekday) => {
-          const nextDate = getNextWeekday(weekday);
-          const endDate = getDateTwoYearsLater(nextDate);
-          return createCalendarEvent(
-            recurringTitle.trim(),
-            `${formatDateForAPI(nextDate)}T00:00`,
-            null, true,
-            undefined, undefined, undefined,
-            [childId],
-            "WEEKLY", 1, formatDateForAPI(endDate), null,
-            true, recurringXp, true,
-          ).then(() => {});
-        })
-      );
-      const updated = await fetchTasksForToday(childId).catch(() => [] as CalendarTaskWithCompletionResponse[]);
-      setTasks(updated);
-      setRecurringTitle("");
-      setRecurringWeekdays(new Set());
-      setRecurringXp(1);
-      setShowAddRecurring(false);
-    } catch (e) {
-      setRecurringError(e instanceof Error ? e.message : "Kunde inte skapa uppgifterna");
-    } finally {
-      setAddingRecurring(false);
+      if (chore.completed) {
+        await unmarkDailyChoreCompleted(choreId, today);
+      } else {
+        await markDailyChoreCompleted(choreId, today);
+      }
+    } catch {
+      setTodayChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: chore.completed } : c));
     }
   };
 
@@ -344,10 +327,35 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
       setWeekChoreXp(1);
       setShowWeekChoreForm(false);
       setWeekRefreshKey(k => k + 1);
+      // Also refresh today's chores in case the new chore applies to today
+      const today = getTodayString();
+      const updatedTodayChores = await getDailyChoresForDate(childId, today).catch(() => [] as DailyChoreWithCompletionResponse[]);
+      setTodayChores(updatedTodayChores);
     } catch (e) {
       setWeekChoreError(e instanceof Error ? e.message : "Kunde inte skapa sysslan");
     } finally {
       setAddingWeekChore(false);
+    }
+  };
+
+  const handleAddTodayChore = async () => {
+    if (!todayChoreTitle.trim()) { setTodayChoreError("Titel krävs"); return; }
+    if (todayChoreWeekdays.size === 0) { setTodayChoreError("Välj minst en veckodag"); return; }
+    setAddingTodayChore(true);
+    setTodayChoreError(null);
+    try {
+      await createDailyChore(childId, todayChoreTitle.trim(), Array.from(todayChoreWeekdays), todayChoreXp);
+      const today = getTodayString();
+      const updatedChores = await getDailyChoresForDate(childId, today).catch(() => [] as DailyChoreWithCompletionResponse[]);
+      setTodayChores(updatedChores);
+      setTodayChoreTitle("");
+      setTodayChoreWeekdays(new Set());
+      setTodayChoreXp(1);
+      setShowAddTodayChore(false);
+    } catch (e) {
+      setTodayChoreError(e instanceof Error ? e.message : "Kunde inte skapa sysslan");
+    } finally {
+      setAddingTodayChore(false);
     }
   };
 
@@ -385,7 +393,8 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
 
   const foodName = pet ? getPetFoodName(pet.petType) : "mat";
   const petDisplayName = pet ? (pet.name || getPetNameSwedish(pet.petType)) : null;
-  const completedCount = tasks.filter((t) => t.completed).length;
+  const completedCount = tasks.filter((t) => t.completed).length + todayChores.filter(c => c.completed).length;
+  const totalCount = tasks.length + todayChores.length;
 
   return (
     <div
@@ -698,14 +707,14 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                 <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600, color: "#2d3748" }}>
                   📝 Dagens sysslor
                 </h3>
-                <span style={{ fontSize: "1rem", fontWeight: 600, color: tasks.length > 0 && completedCount === tasks.length ? "#48bb78" : "#4a5568" }}>
-                  {completedCount} / {tasks.length}
+                <span style={{ fontSize: "1rem", fontWeight: 600, color: totalCount > 0 && completedCount === totalCount ? "#48bb78" : "#4a5568" }}>
+                  {completedCount} / {totalCount}
                 </span>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button
                   type="button"
-                  onClick={() => { setShowAddTask(v => !v); if (showAddRecurring) setShowAddRecurring(false); setAddError(null); }}
+                  onClick={() => { setShowAddTask(v => !v); setShowAddTodayChore(false); setAddError(null); }}
                   style={{
                     flex: 1,
                     padding: "8px 10px",
@@ -722,12 +731,12 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowAddRecurring(v => !v); if (showAddTask) setShowAddTask(false); setRecurringError(null); }}
+                  onClick={() => { setShowAddTodayChore(v => !v); setShowAddTask(false); setTodayChoreError(null); }}
                   style={{
                     flex: 1,
                     padding: "8px 10px",
-                    background: showAddRecurring ? "#4C1D95" : "#DDD6FE",
-                    color: showAddRecurring ? "white" : "#4C1D95",
+                    background: showAddTodayChore ? "#4C1D95" : "#DDD6FE",
+                    color: showAddTodayChore ? "white" : "#4C1D95",
                     border: "none",
                     borderRadius: "10px",
                     fontWeight: 600,
@@ -735,7 +744,7 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                     cursor: "pointer",
                   }}
                 >
-                  + Lägg till återkommande
+                  🔁 Återkommande
                 </button>
               </div>
             </div>
@@ -835,121 +844,57 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
               </div>
             )}
 
-            {/* Inline recurring form */}
-            {showAddRecurring && (
-              <div style={{
-                background: "#F5F3FF",
-                borderRadius: "14px",
-                padding: "16px",
-                marginBottom: "16px",
-                border: "2px solid #DDD6FE",
-              }}>
+            {showAddTodayChore && (
+              <div style={{ background: "#F5F3FF", borderRadius: "14px", padding: "16px", marginBottom: "16px", border: "2px solid #DDD6FE" }}>
                 <p style={{ margin: "0 0 10px", fontWeight: 600, fontSize: "0.95rem", color: "#3B0764" }}>
-                  Återkommande uppgift – {childName}
+                  Ny återkommande syssla – {childName}
                 </p>
                 <input
                   type="text"
                   placeholder="Titel"
-                  value={recurringTitle}
-                  onChange={e => { setRecurringTitle(e.target.value); setRecurringError(null); }}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "2px solid #DDD6FE",
-                    borderRadius: "10px",
-                    fontSize: "1rem",
-                    marginBottom: "12px",
-                    boxSizing: "border-box",
-                    outline: "none",
-                  }}
+                  value={todayChoreTitle}
+                  onChange={e => { setTodayChoreTitle(e.target.value); setTodayChoreError(null); }}
+                  style={{ width: "100%", padding: "10px 12px", border: "2px solid #DDD6FE", borderRadius: "10px", fontSize: "1rem", marginBottom: "12px", boxSizing: "border-box", outline: "none" }}
                 />
-                <p style={{ margin: "0 0 8px", fontSize: "0.85rem", color: "#3B0764", fontWeight: 500 }}>
-                  Veckodagar
-                </p>
-                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "14px" }}>
-                  {[1, 2, 3, 4, 5, 6, 0].map(day => (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => setRecurringWeekdays(prev => {
-                        const next = new Set(prev);
-                        if (next.has(day)) next.delete(day); else next.add(day);
-                        return next;
-                      })}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "8px",
-                        border: "none",
-                        fontWeight: 600,
-                        fontSize: "0.85rem",
-                        cursor: "pointer",
-                        background: recurringWeekdays.has(day) ? "#4C1D95" : "#DDD6FE",
-                        color: recurringWeekdays.has(day) ? "white" : "#4C1D95",
-                      }}
-                    >
-                      {WEEKDAY_SHORT_NAMES[day]}
-                    </button>
-                  ))}
+                <p style={{ margin: "0 0 6px", fontSize: "0.85rem", color: "#3B0764", fontWeight: 600 }}>Veckodagar</p>
+                <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "12px" }}>
+                  {(["MON","TUE","WED","THU","FRI","SAT","SUN"] as const).map((wk, i) => {
+                    const dayNames = ["Mån","Tis","Ons","Tor","Fre","Lör","Sön"];
+                    return (
+                      <button
+                        key={wk}
+                        type="button"
+                        onClick={() => setTodayChoreWeekdays(prev => { const next = new Set(prev); if (next.has(wk)) next.delete(wk); else next.add(wk); return next; })}
+                        style={{ padding: "6px 12px", borderRadius: "8px", border: "none", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer", background: todayChoreWeekdays.has(wk) ? "#4C1D95" : "#DDD6FE", color: todayChoreWeekdays.has(wk) ? "white" : "#4C1D95" }}
+                      >
+                        {dayNames[i]}
+                      </button>
+                    );
+                  })}
                 </div>
-                <p style={{ margin: "0 0 8px", fontSize: "0.85rem", color: "#3B0764", fontWeight: 500 }}>
-                  XP (mat)
-                </p>
+                <p style={{ margin: "0 0 6px", fontSize: "0.85rem", color: "#3B0764", fontWeight: 600 }}>XP (mat)</p>
                 <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
                   {[1, 2, 3].map(n => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setRecurringXp(n)}
-                      style={{
-                        padding: "7px 18px",
-                        borderRadius: "8px",
-                        border: "none",
-                        fontWeight: 600,
-                        fontSize: "0.9rem",
-                        cursor: "pointer",
-                        background: recurringXp === n ? "#4C1D95" : "#DDD6FE",
-                        color: recurringXp === n ? "white" : "#4C1D95",
-                      }}
-                    >
+                    <button key={n} type="button" onClick={() => setTodayChoreXp(n)}
+                      style={{ padding: "7px 18px", borderRadius: "8px", border: "none", fontWeight: 600, fontSize: "0.9rem", cursor: "pointer", background: todayChoreXp === n ? "#4C1D95" : "#DDD6FE", color: todayChoreXp === n ? "white" : "#4C1D95" }}>
                       x{n}
                     </button>
                   ))}
                 </div>
-                {recurringError && (
-                  <p style={{ margin: "0 0 8px", color: "#c53030", fontSize: "0.85rem" }}>{recurringError}</p>
-                )}
+                {todayChoreError && <p style={{ margin: "0 0 8px", color: "#c53030", fontSize: "0.85rem" }}>{todayChoreError}</p>}
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button
                     type="button"
-                    onClick={handleAddRecurring}
-                    disabled={addingRecurring}
-                    style={{
-                      flex: 1,
-                      padding: "11px",
-                      background: addingRecurring ? "#cbd5e0" : "#4C1D95",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "10px",
-                      fontWeight: 600,
-                      fontSize: "0.95rem",
-                      cursor: addingRecurring ? "not-allowed" : "pointer",
-                    }}
+                    onClick={() => void handleAddTodayChore()}
+                    disabled={addingTodayChore}
+                    style={{ flex: 1, padding: "11px", background: addingTodayChore ? "#cbd5e0" : "#4C1D95", color: "white", border: "none", borderRadius: "10px", fontWeight: 600, fontSize: "0.95rem", cursor: addingTodayChore ? "not-allowed" : "pointer" }}
                   >
-                    {addingRecurring ? "Sparar…" : "Skapa uppgifter"}
+                    {addingTodayChore ? "Sparar…" : "Skapa syssla"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setShowAddRecurring(false); setRecurringTitle(""); setRecurringWeekdays(new Set()); setRecurringXp(1); setRecurringError(null); }}
-                    style={{
-                      padding: "11px 18px",
-                      background: "transparent",
-                      color: "#4C1D95",
-                      border: "2px solid #DDD6FE",
-                      borderRadius: "10px",
-                      fontWeight: 500,
-                      fontSize: "0.95rem",
-                      cursor: "pointer",
-                    }}
+                    onClick={() => { setShowAddTodayChore(false); setTodayChoreTitle(""); setTodayChoreWeekdays(new Set()); setTodayChoreXp(1); setTodayChoreError(null); }}
+                    style={{ padding: "11px 18px", background: "transparent", color: "#4C1D95", border: "2px solid #DDD6FE", borderRadius: "10px", fontWeight: 500, fontSize: "0.95rem", cursor: "pointer" }}
                   >
                     Avbryt
                   </button>
@@ -957,7 +902,7 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
               </div>
             )}
 
-            {activeTab === "today" && tasks.length === 0 ? (
+            {activeTab === "today" && tasks.length === 0 && todayChores.length === 0 ? (
               <p style={{ margin: 0, color: "#718096", textAlign: "center", padding: "20px 0" }}>
                 Inga sysslor för idag! 🎉
               </p>
@@ -1169,6 +1114,32 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                           </div>
                         </div>
                       )}
+                    </div>
+                  );
+                })}
+                {todayChores.map((choreItem) => {
+                  const bgColor = choreItem.completed ? "#f0fff4" : "#f7fafc";
+                  const borderColor = choreItem.completed ? "#48bb78" : "#e2e8f0";
+                  return (
+                    <div key={`chore-${choreItem.chore.id}`} style={{ borderRadius: "12px", border: `2px solid ${borderColor}`, overflow: "hidden" }}>
+                      <div
+                        style={{ padding: "14px 12px 14px 16px", background: bgColor, display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
+                        onClick={() => void handleToggleTodayChore(choreItem.chore.id)}
+                      >
+                        <div style={{ fontSize: "1.5rem", opacity: choreItem.completed ? 1 : 0.5, flexShrink: 0 }}>
+                          {choreItem.completed ? "✅" : "⭕"}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: choreItem.completed ? 600 : 500, color: "#2d3748", textDecoration: choreItem.completed ? "line-through" : "none" }}>
+                            {choreItem.chore.title}
+                          </div>
+                          {choreItem.chore.xpPoints > 0 && (
+                            <div style={{ fontSize: "0.85rem", color: "#718096", marginTop: "2px" }}>
+                              {choreItem.chore.xpPoints} {foodName} · 🔁
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
