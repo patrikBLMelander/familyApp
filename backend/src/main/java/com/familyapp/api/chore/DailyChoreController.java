@@ -26,7 +26,7 @@ public class DailyChoreController {
 
     @GetMapping("/members/{memberId}")
     public List<DailyChoreResponse> getChoresForMember(
-            @PathVariable UUID memberId,
+            @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         UUID requesterId = getMemberIdFromToken(deviceToken);
@@ -38,7 +38,7 @@ public class DailyChoreController {
 
     @GetMapping("/members/{memberId}/for-date")
     public List<DailyChoreWithCompletionResponse> getChoresForDate(
-            @PathVariable UUID memberId,
+            @PathVariable("memberId") UUID memberId,
             @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
@@ -65,7 +65,7 @@ public class DailyChoreController {
     @DeleteMapping("/{choreId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteChore(
-            @PathVariable UUID choreId,
+            @PathVariable("choreId") UUID choreId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         UUID requesterId = getMemberIdFromToken(deviceToken);
@@ -75,7 +75,7 @@ public class DailyChoreController {
     @PostMapping("/{choreId}/completion")
     @ResponseStatus(HttpStatus.CREATED)
     public DailyChoreCompletionResponse markCompleted(
-            @PathVariable UUID choreId,
+            @PathVariable("choreId") UUID choreId,
             @RequestBody MarkChoreCompletedRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
@@ -87,7 +87,7 @@ public class DailyChoreController {
     @DeleteMapping("/{choreId}/completion")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void unmarkCompleted(
-            @PathVariable UUID choreId,
+            @PathVariable("choreId") UUID choreId,
             @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
