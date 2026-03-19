@@ -98,7 +98,23 @@ export function CategoryManager({ categories, onClose, onUpdate }: CategoryManag
   };
 
   return (
-    <section className="card">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: "fixed",
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+      }}
+    >
+    <section
+      className="card"
+      onClick={(e) => e.stopPropagation()}
+      style={{ maxWidth: "400px", width: "90%", maxHeight: "80vh", overflowY: "auto" }}
+    >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
         <h3 style={{ margin: 0 }}>Hantera kategorier</h3>
         <button
@@ -289,5 +305,6 @@ export function CategoryManager({ categories, onClose, onUpdate }: CategoryManag
         </div>
       )}
     </section>
+    </div>
   );
 }
