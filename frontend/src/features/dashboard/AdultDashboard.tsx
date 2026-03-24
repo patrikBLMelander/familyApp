@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { fetchTasksForToday, CalendarTaskWithCompletionResponse, getTaskCompletionsForMember, CalendarEventTaskCompletionResponse, createCalendarEvent } from "../../shared/api/calendar";
-import { getDailyChoresForDate } from "../../shared/api/dailyChores";
+import { getDailyChoresForDate, createDailyChore } from "../../shared/api/dailyChores";
 import { getMemberByDeviceToken, fetchAllFamilyMembers, createFamilyMember, generateInviteToken } from "../../shared/api/familyMembers";
 import { QRCodeSVG } from "qrcode.react";
 import { FamilyMemberResponse } from "../../shared/api/familyMembers";
@@ -250,22 +249,14 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
         childMembers.map(async (child) => {
           try {
             const today = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
-            const [tasks, chores, childPet, completions] = await Promise.all([
-              fetchTasksForToday(child.id).catch(() => [] as CalendarTaskWithCompletionResponse[]),
+            const [chores, childPet] = await Promise.all([
               getDailyChoresForDate(child.id, today).catch(() => []),
               fetchMemberPet(child.id).catch(() => null),
-              getTaskCompletionsForMember(child.id).catch(() => [] as CalendarEventTaskCompletionResponse[]),
             ]);
-            const todaysDone = tasks.filter(t => t.completed).length + chores.filter(c => c.completed).length;
-            const todaysTotal = tasks.length + chores.length;
-            const nextTaskTitle = tasks.find(t => !t.completed)?.event.title ?? null;
-            let streakDays = 0;
-            const d = new Date();
-            while (streakDays < 365) {
-              const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-              if (completions.some(c => c.occurrenceDate === ds)) { streakDays++; d.setDate(d.getDate()-1); } else break;
-            }
-            return [child.id, { todaysDone, todaysTotal, hasPet: childPet !== null, streakDays, nextTaskTitle }] as const;
+            const todaysDone = chores.filter(c => c.completed).length;
+            const todaysTotal = chores.length;
+            const nextTaskTitle = chores.find(c => !c.completed)?.chore.title ?? null;
+            return [child.id, { todaysDone, todaysTotal, hasPet: childPet !== null, streakDays: 0, nextTaskTitle }] as const;
           } catch {
             return [child.id, { todaysDone: 0, todaysTotal: 0, hasPet: false, streakDays: 0, nextTaskTitle: null }] as const;
           }
@@ -309,12 +300,11 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   const handleAddSuggestedTasks = async () => {
     if (!addChildSuggestions) return;
     setCreatingChildTasks(true);
+    const allWeekdays = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
     try {
-      const today = new Date();
-      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
       await Promise.all(
         [...addChildSuggestions.checked].map((title) =>
-          createCalendarEvent(title, `${dateStr}T08:00`, null, false, undefined, undefined, undefined, [addChildSuggestions.memberId], "DAILY", 1, null, null, true, 1, true)
+          createDailyChore(addChildSuggestions.memberId, title, allWeekdays, 1)
         )
       );
       setAddChildSuggestions(null);

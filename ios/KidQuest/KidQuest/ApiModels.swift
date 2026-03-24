@@ -103,6 +103,34 @@ struct MarkTaskCompletedRequestDTO: Encodable {
     let occurrenceDate: String
 }
 
+// MARK: - Daily Chores
+
+struct DailyChoreResponseDTO: Decodable {
+    let id: String
+    let memberId: String
+    let title: String
+    let weekdays: [String]
+    let xpPoints: Int
+    let isActive: Bool
+}
+
+struct DailyChoreWithCompletionResponseDTO: Decodable {
+    let chore: DailyChoreResponseDTO
+    let completed: Bool
+    let completionId: String?
+}
+
+struct MarkChoreCompletedRequestDTO: Encodable {
+    let date: String
+}
+
+struct CreateDailyChoreRequestDTO: Encodable {
+    let memberId: String
+    let title: String
+    let weekdays: [String]
+    let xpPoints: Int
+}
+
 // MARK: - Pets / XP / Wallet
 
 struct PetResponseDTO: Decodable {

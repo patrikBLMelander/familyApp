@@ -13,7 +13,7 @@ import {
   updatePetSettings,
 } from "../../shared/api/familyMembers";
 import { updateMenstrualCycleSettings } from "../../shared/api/menstrualCycle";
-import { createCalendarEvent } from "../../shared/api/calendar";
+import { createDailyChore } from "../../shared/api/dailyChores";
 import { GiveAllowanceDialog } from "../wallet/GiveAllowanceDialog";
 import { AGE_GROUPS, TASK_SUGGESTIONS, AgeGroup } from "./taskSuggestions";
 
@@ -118,30 +118,11 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
   const handleAddSuggestedTasks = async () => {
     if (!suggestions) return;
     setCreatingTasks(true);
+    const allWeekdays = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
     try {
-      const today = new Date();
-      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-      const startDateTime = `${dateStr}T08:00`;
-      const tasksToCreate = [...suggestions.checked];
       await Promise.all(
-        tasksToCreate.map((title) =>
-          createCalendarEvent(
-            title,
-            startDateTime,
-            null,
-            false,
-            undefined,
-            undefined,
-            undefined,
-            [suggestions.memberId],
-            "DAILY",
-            1,
-            null,
-            null,
-            true,
-            1,
-            true
-          )
+        [...suggestions.checked].map((title) =>
+          createDailyChore(suggestions.memberId, title, allWeekdays, 1)
         )
       );
       setSuggestions(null);

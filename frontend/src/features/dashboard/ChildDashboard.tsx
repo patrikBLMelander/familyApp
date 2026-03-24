@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, CollectedFoodResponse, getLastFedDate } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
-import { fetchTasksForToday, toggleTaskCompletion, CalendarTaskWithCompletionResponse } from "../../shared/api/calendar";
 import { getDailyChoresForDate, markDailyChoreCompleted, unmarkDailyChoreCompleted, DailyChoreWithCompletionResponse } from "../../shared/api/dailyChores";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
@@ -37,7 +36,6 @@ const MAX_LEVEL = 5;
 export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: ChildDashboardProps) {
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
-  const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
   const [chores, setChores] = useState<DailyChoreWithCompletionResponse[]>([]);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,8 +106,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
         setMemberId(memberId);
         const todayStr = getTodayLocalDateString();
 
-        // Load pet, XP, tasks, chores, collected food, last fed date, and wallet notifications in parallel
-        const [petData, xpData, tasksData, choresData, foodData, lastFedData, notifications] = await Promise.all([
+        // Load pet, XP, chores, collected food, last fed date, and wallet notifications in parallel
+        const [petData, xpData, choresData, foodData, lastFedData, notifications] = await Promise.all([
           fetchCurrentPet().catch((e) => {
             console.error("Error fetching pet:", e);
             return null;
@@ -117,10 +115,6 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           fetchCurrentXpProgress().catch((e) => {
             console.error("Error fetching XP progress:", e);
             return null;
-          }),
-          fetchTasksForToday(memberId).catch((e) => {
-            console.error("Error fetching tasks:", e);
-            return [];
           }),
           getDailyChoresForDate(memberId, todayStr).catch((e) => {
             console.error("Error fetching daily chores:", e);
@@ -160,14 +154,6 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           setHasIntegratedImage(integratedExists);
         }
 
-        // Sort tasks: required first, then by title
-        const sortedTasks = [...tasksData].sort((a, b) => {
-          if (a.event.isRequired !== b.event.isRequired) {
-            return a.event.isRequired ? -1 : 1; // Required first
-          }
-          return a.event.title.localeCompare(b.event.title);
-        });
-        setTasks(sortedTasks);
         setChores(choresData);
         
         // Set collected food count from backend
@@ -196,73 +182,6 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
     void load();
   }, []);
 
-  const handleToggleTask = async (eventId: string) => {
-    const task = tasks.find(t => t.event.id === eventId);
-    if (!task) return;
-    
-    const wasCompleted = task.completed;
-    const xpPoints = task.event.xpPoints || 0;
-    
-    // If uncompleting, check if we have enough unfed food
-    if (wasCompleted && xpPoints > 0) {
-      if (collectedFoodCount < xpPoints) {
-        alert(`Du kan inte avmarkera denna syssla. Du behöver ${xpPoints} omatad mat, men du har bara ${collectedFoodCount}.`);
-        return;
-      }
-    }
-    
-    // Optimistic update
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.event.id === eventId
-          ? { ...t, completed: !t.completed }
-          : t
-      )
-    );
-
-    try {
-      const deviceToken = localStorage.getItem("deviceToken");
-      if (!deviceToken) {
-        throw new Error("No device token");
-      }
-      const member = await getMemberByDeviceToken(deviceToken);
-      await toggleTaskCompletion(eventId, member.id);
-      
-      // Reload data to get updated state (including food from backend)
-      const [xpData, tasksData, petData, foodData] = await Promise.all([
-        fetchCurrentXpProgress().catch(() => null),
-        fetchTasksForToday(member.id).catch(() => []),
-        fetchCurrentPet().catch(() => null),
-        getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
-      ]);
-      setXpProgress(xpData);
-      setTasks(tasksData);
-      setCollectedFoodCount(foodData.totalCount);
-      if (petData) {
-        setPet(petData);
-        // Check if integrated image exists for updated pet
-        const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
-        setHasIntegratedImage(integratedExists);
-      }
-      
-      // Don't change pet mood when toggling tasks - mood is only based on whether pet has been fed today
-      // Pet mood will only change when actually feeding the pet
-    } catch (e) {
-      console.error("Error toggling task:", e);
-      // Show user-friendly error message
-      if (e instanceof Error && e.message.includes("inte tillräckligt")) {
-        alert(e.message);
-      }
-      // Revert on error by reloading
-      const deviceToken = localStorage.getItem("deviceToken");
-      if (deviceToken) {
-        const member = await getMemberByDeviceToken(deviceToken);
-        const tasksData = await fetchTasksForToday(member.id).catch(() => []);
-        setTasks(tasksData);
-      }
-    }
-  };
-  
   const handleToggleChore = async (choreId: string) => {
     const chore = chores.find(c => c.chore.id === choreId);
     if (!chore) return;
@@ -442,8 +361,8 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
         })()
     : 0;
   const totalEnergy = xpProgress?.currentXp || 0;
-  const completedTasksCount = tasks.filter(t => t.completed).length + chores.filter(c => c.completed).length;
-  const totalTasksCount = tasks.length + chores.length;
+  const completedTasksCount = chores.filter(c => c.completed).length;
+  const totalTasksCount = chores.length;
   const foodEmoji = pet ? getPetFoodEmoji(pet.petType) : "🍎";
   const foodName = pet ? getPetFoodName(pet.petType) : "mat";
   const totalFoodCount = collectedFoodCount;
@@ -816,7 +735,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           </span>
         </div>
 
-        {tasks.length === 0 && chores.length === 0 ? (
+        {chores.length === 0 ? (
           <p style={{
             margin: 0,
             color: "#718096",
@@ -827,83 +746,6 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {tasks.map((task) => {
-              // Different background colors for required vs extra tasks (only when not completed)
-              const bgColor = task.completed 
-                ? "#f0fff4" // Same green for all completed tasks
-                : (task.event.isRequired ? "#f7fafc" : "#fff7ed");
-              const borderColor = task.completed 
-                ? "#48bb78" // Same green border for all completed tasks
-                : (task.event.isRequired ? "#e2e8f0" : "#fed7aa");
-              
-              return (
-                <div
-                  key={task.event.id}
-                  onClick={() => handleToggleTask(task.event.id)}
-                  style={{
-                    padding: "16px",
-                    background: bgColor,
-                    borderRadius: "12px",
-                    border: `2px solid ${borderColor}`,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "scale(1.02)";
-                    e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "scale(1)";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                >
-                  <div style={{
-                    fontSize: "1.5rem",
-                    opacity: task.completed ? 1 : 0.5,
-                  }}>
-                    {task.completed ? "✅" : "⭕"}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                      fontWeight: task.completed ? 600 : 500,
-                      color: "#2d3748", // Same color for all text, readable
-                      textDecoration: task.completed ? "line-through" : "none",
-                    }}>
-                      {task.event.title}
-                    </div>
-                    {task.event.xpPoints && task.event.xpPoints > 0 && (
-                      <div style={{
-                        fontSize: "0.85rem",
-                        color: "#718096",
-                        marginTop: "4px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}>
-                        {task.completed && (
-                          <>
-                            {Array.from({ length: task.event.xpPoints }).map((_, i) => (
-                              <span key={i} style={{ fontSize: "1rem" }}>{foodEmoji}</span>
-                            ))}
-                            <span style={{ marginLeft: "4px" }}>
-                              +{task.event.xpPoints} {foodName}
-                            </span>
-                          </>
-                        )}
-                        {!task.completed && (
-                          <span>
-                            Ger {task.event.xpPoints} {foodName} när klar
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
             {chores.map((choreItem) => {
               const bgColor = choreItem.completed ? "#f0fff4" : "#f7fafc";
               const borderColor = choreItem.completed ? "#48bb78" : "#e2e8f0";

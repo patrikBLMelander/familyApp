@@ -13,6 +13,7 @@ struct ChildDashboardView: View {
     @State private var isFeeding: Bool = false
     @State private var showSelectEgg: Bool = false
     @State private var hasFedToday: Bool = false
+    @State private var showAddChore: Bool = false
 
     private let cardTextPrimary = Color(red: 28 / 255, green: 25 / 255, blue: 23 / 255)
     private let cardTextSecondary = Color(red: 87 / 255, green: 83 / 255, blue: 78 / 255)
@@ -66,6 +67,12 @@ struct ChildDashboardView: View {
                     }
                 }
             )
+        }
+        .sheet(isPresented: $showAddChore) {
+            AddChoreSheet(childId: childId, onDismiss: { showAddChore = false }, onSuccess: {
+                showAddChore = false
+                Task { await load() }
+            })
         }
     }
 
@@ -328,9 +335,10 @@ struct ChildDashboardView: View {
                     .font(.headline)
                     .foregroundColor(cardTextPrimary)
                 Spacer()
-                Button("Visa alla") {
-                    onOpenTasks()
+                Button("+ Lägg till") {
+                    showAddChore = true
                 }
+                .font(.subheadline)
             }
 
             if summary.todaysTasks.isEmpty {
@@ -338,7 +346,7 @@ struct ChildDashboardView: View {
                     .font(.subheadline)
                     .foregroundColor(cardTextSecondary)
             } else {
-                ForEach(summary.todaysTasks, id: \.event.id) { task in
+                ForEach(summary.todaysTasks, id: \.chore.id) { task in
                     Button {
                         Task { await toggleTask(task) }
                     } label: {
@@ -346,11 +354,11 @@ struct ChildDashboardView: View {
                             Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
                                 .foregroundColor(task.completed ? .green : .gray)
                             VStack(alignment: .leading) {
-                                Text(task.event.title)
+                                Text(task.chore.title)
                                     .foregroundColor(task.completed ? cardTextSecondary : cardTextPrimary)
                                     .strikethrough(task.completed)
-                                if let xp = task.event.xpPoints, xp > 0 {
-                                    Text("\(xp) mat")
+                                if task.chore.xpPoints > 0 {
+                                    Text("\(task.chore.xpPoints) mat")
                                         .font(.caption)
                                         .foregroundColor(cardTextSecondary)
                                 }
@@ -399,22 +407,26 @@ struct ChildDashboardView: View {
         )
     }
 
-    private func toggleTask(_ task: CalendarTaskWithCompletionDTO) async {
+    private func toggleTask(_ task: DailyChoreWithCompletionResponseDTO) async {
         guard let s = summary else { return }
         // Optimistic update – flip the checkbox immediately
         let updatedTasks = s.todaysTasks.map { t in
-            t.event.id == task.event.id
-                ? CalendarTaskWithCompletionDTO(event: t.event, completed: !t.completed)
+            t.chore.id == task.chore.id
+                ? DailyChoreWithCompletionResponseDTO(chore: t.chore, completed: !t.completed, completionId: t.completionId)
                 : t
         }
         summary = ChildDashboardRepository.Summary(
             pet: s.pet, xp: s.xp, wallet: s.wallet,
             collectedFood: s.collectedFood, todaysTasks: updatedTasks
         )
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = formatter.string(from: Date())
         do {
-            try await CalendarRepositoryIOS.toggleTaskCompletion(
-                eventId: task.event.id,
-                memberId: childId,
+            try await DailyChoreRepositoryIOS.toggleChoreCompletion(
+                choreId: task.chore.id,
+                date: dateStr,
                 isCompleted: task.completed
             )
             // Reload so collectedFood (and XP) reflect the change, without showing spinner
@@ -462,6 +474,104 @@ struct ChildDashboardView: View {
             hasFedToday = false
         }
         isFeeding = false
+    }
+}
+
+// MARK: - Add Chore Sheet
+
+private struct AddChoreSheet: View {
+    let childId: String
+    var onDismiss: () -> Void
+    var onSuccess: () -> Void
+
+    @State private var title: String = ""
+    @State private var selectedWeekdays: Set<String> = []
+    @State private var xpPoints: Int = 1
+    @State private var isLoading: Bool = false
+    @State private var error: String?
+
+    private let allWeekdays: [(String, String)] = [
+        ("MON", "M"), ("TUE", "T"), ("WED", "O"), ("THU", "T"), ("FRI", "F"), ("SAT", "L"), ("SUN", "S")
+    ]
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Titel") {
+                    TextField("Titel", text: $title)
+                }
+                Section("Veckodagar") {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
+                        ForEach(allWeekdays, id: \.0) { day, label in
+                            Button(action: {
+                                if selectedWeekdays.contains(day) {
+                                    selectedWeekdays.remove(day)
+                                } else {
+                                    selectedWeekdays.insert(day)
+                                }
+                            }) {
+                                Text(label)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                                    .background(selectedWeekdays.contains(day) ? Color.accentColor : Color(.systemGray5))
+                                    .foregroundColor(selectedWeekdays.contains(day) ? .white : .primary)
+                                    .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                Section("XP (mat)") {
+                    Picker("XP", selection: $xpPoints) {
+                        Text("x1").tag(1)
+                        Text("x2").tag(2)
+                        Text("x3").tag(3)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                if let error {
+                    Section {
+                        Text(error).foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("Ny återkommande syssla")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Avbryt") { onDismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isLoading ? "Sparar…" : "Spara") {
+                        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
+                            error = "Titel krävs"; return
+                        }
+                        guard !selectedWeekdays.isEmpty else {
+                            error = "Välj minst en veckodag"; return
+                        }
+                        isLoading = true
+                        error = nil
+                        Task {
+                            do {
+                                let ordered = allWeekdays.map(\.0).filter { selectedWeekdays.contains($0) }
+                                try await DailyChoreRepositoryIOS.createChore(
+                                    memberId: childId,
+                                    title: title.trimmingCharacters(in: .whitespaces),
+                                    weekdays: ordered,
+                                    xpPoints: xpPoints
+                                )
+                                onSuccess()
+                            } catch {
+                                self.error = error.localizedDescription
+                            }
+                            isLoading = false
+                        }
+                    }
+                    .disabled(isLoading)
+                }
+            }
+        }
     }
 }
 

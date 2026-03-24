@@ -21,7 +21,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.calendar.CalendarRepository
+import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.CreateFamilyMemberRequest
 import kotlinx.coroutines.Dispatchers
@@ -160,131 +160,131 @@ private suspend fun createDefaultTasksForAgeRange(
     val allWeekdays = setOf(1, 2, 3, 4, 5, 6, 7)
     when (ageRange) {
         AgeRange.FOUR_TO_SIX -> {
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Klä på mig",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Borsta tänder",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Plocka leksaker i mitt rum",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Ställ undan min disk",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Hänga upp jacka & skor",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
         }
         AgeRange.SEVEN_TO_NINE -> {
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Packa skolväskan",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Bädda sängen",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Plocka undan efter mellis",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Kvällsrutin utan tjat",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Hjälpa till med disk/dukning",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
         }
         AgeRange.TEN_TO_TWELVE -> {
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Läx-/pluggstund",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Skräpkoll hemma",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Ordning på rummet",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Hjälpa till med maten",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Skärm efter uppgifter",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
         }
         AgeRange.THIRTEEN_PLUS -> {
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Hålla rummet i ordning",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Ta hand om min tvätt",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Min dagliga hemmasyssla",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Kolla dagens schema & tider",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
-            CalendarRepository.createRecurringWeeklyTasks(
+            DailyChoreRepository.createChore(
                 memberId = memberId,
                 title = "Kolla ekonomi & sparmål",
                 weekdays = allWeekdays,
-                xpMultiplier = 1,
+                xpPoints = 1,
             )
         }
     }

@@ -1,6 +1,5 @@
 package se.kidquest.app.dashboard
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,8 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.calendar.CalendarRepository
-import se.kidquest.app.network.CalendarTaskWithCompletion
+import se.kidquest.app.chore.DailyChoreRepository
+import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,20 +49,18 @@ fun ChildTasksScreen(
     childId: String,
     onBack: () -> Unit,
 ) {
-    var tasks by remember { mutableStateOf<List<CalendarTaskWithCompletion>>(emptyList()) }
+    var tasks by remember { mutableStateOf<List<DailyChoreWithCompletionResponse>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var refreshKey by remember { mutableStateOf(0) }
-    var showAddTodayDialog by remember { mutableStateOf(false) }
-    var showAddRecurringDialog by remember { mutableStateOf(false) }
-    var editingTask by remember { mutableStateOf<CalendarTaskWithCompletion?>(null) }
+    var showAddChoreDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(childId, refreshKey) {
         loading = true
         error = null
         try {
-            tasks = CalendarRepository.fetchTasksForToday(childId)
+            tasks = DailyChoreRepository.fetchChoresForToday(childId)
         } catch (e: Exception) {
             error = e.message ?: "Kunde inte ladda uppgifter"
         } finally {
@@ -124,31 +121,30 @@ fun ChildTasksScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(tasks, key = { it.event.id }) { task ->
+                    items(tasks, key = { it.chore.id }) { task ->
                         TaskRow(
                             task = task,
                             onToggle = {
                                 scope.launch {
                                     // Optimistisk uppdatering: vänd completed direkt i UI
                                     val currentCompleted = task.completed
-                                    val eventId = task.event.id
+                                    val choreId = task.chore.id
                                     tasks = tasks.map {
-                                        if (it.event.id == eventId) it.copy(completed = !currentCompleted) else it
+                                        if (it.chore.id == choreId) it.copy(completed = !currentCompleted) else it
                                     }
                                     try {
-                                        CalendarRepository.toggleTaskCompletion(
-                                            eventId = eventId,
-                                            memberId = childId,
+                                        DailyChoreRepository.toggleChoreCompletion(
+                                            choreId = choreId,
+                                            isCurrentlyCompleted = currentCompleted,
                                         )
                                     } catch (e: Exception) {
                                         // Revertera om något går fel
                                         tasks = tasks.map {
-                                            if (it.event.id == eventId) it.copy(completed = currentCompleted) else it
+                                            if (it.chore.id == choreId) it.copy(completed = currentCompleted) else it
                                         }
                                     }
                                 }
                             },
-                            onEdit = { editingTask = task },
                         )
                     }
                 }
@@ -157,64 +153,24 @@ fun ChildTasksScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = { showAddTodayDialog = true },
+                onClick = { showAddChoreDialog = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
             ) {
-                Text("Lägg till uppgift idag")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = { showAddRecurringDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            ) {
-                Text("Lägg till återkommande uppgift")
+                Text("Lägg till återkommande syssla")
             }
         }
     }
 
-    if (showAddTodayDialog) {
-        AddSingleTaskDialog(
-            childName = childName,
-            childId = childId,
-            onDismiss = { showAddTodayDialog = false },
-            onSuccess = {
-                showAddTodayDialog = false
-                refreshKey++
-            },
-        )
-    }
-
-    if (showAddRecurringDialog) {
+    if (showAddChoreDialog) {
         AddRecurringTaskDialog(
             childName = childName,
             childId = childId,
-            onDismiss = { showAddRecurringDialog = false },
+            onDismiss = { showAddChoreDialog = false },
             onSuccess = {
-                showAddRecurringDialog = false
+                showAddChoreDialog = false
                 refreshKey++
-            },
-        )
-    }
-
-    editingTask?.let { taskToEdit ->
-        EditTaskDialog(
-            task = taskToEdit,
-            onDismiss = { editingTask = null },
-            onUpdated = { newTitle, newXp ->
-                tasks = tasks.map {
-                    if (it.event.id == taskToEdit.event.id) {
-                        it.copy(event = it.event.copy(title = newTitle, xpPoints = newXp))
-                    } else {
-                        it
-                    }
-                }
-                editingTask = null
             },
         )
     }
@@ -222,9 +178,8 @@ fun ChildTasksScreen(
 
 @Composable
 private fun TaskRow(
-    task: CalendarTaskWithCompletion,
+    task: DailyChoreWithCompletionResponse,
     onToggle: () -> Unit,
-    onEdit: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -235,30 +190,23 @@ private fun TaskRow(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    checked = task.completed,
-                    onCheckedChange = { onToggle() },
+            Checkbox(
+                checked = task.completed,
+                onCheckedChange = { onToggle() },
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = task.chore.title,
+                    style = MaterialTheme.typography.bodyLarge,
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(
-                    modifier = Modifier.clickable { onEdit() },
-                ) {
+                if (task.chore.xpPoints > 0) {
                     Text(
-                        text = task.event.title,
-                        style = MaterialTheme.typography.bodyLarge,
+                        text = "${task.chore.xpPoints} mat",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
                     )
-                    if (task.event.xpPoints != null && task.event.xpPoints > 0) {
-                        Text(
-                            text = "${task.event.xpPoints} mat",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
                 }
             }
         }

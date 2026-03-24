@@ -150,6 +150,41 @@ enum CalendarRepositoryIOS {
     }
 }
 
+// MARK: - Daily Chores
+
+enum DailyChoreRepositoryIOS {
+    static func fetchChoresForDate(memberId: String, date: String) async throws -> [DailyChoreWithCompletionResponseDTO] {
+        try await ApiClient.shared.send(
+            [DailyChoreWithCompletionResponseDTO].self,
+            path: "daily-chores/members/\(memberId)/for-date",
+            method: "GET",
+            queryItems: [URLQueryItem(name: "date", value: date)]
+        )
+    }
+
+    static func createChore(memberId: String, title: String, weekdays: [String], xpPoints: Int) async throws {
+        let body = CreateDailyChoreRequestDTO(memberId: memberId, title: title, weekdays: weekdays, xpPoints: xpPoints)
+        try await ApiClient.shared.sendWithoutResponse(path: "daily-chores", method: "POST", body: body)
+    }
+
+    static func toggleChoreCompletion(choreId: String, date: String, isCompleted: Bool) async throws {
+        if isCompleted {
+            try await ApiClient.shared.sendWithoutResponse(
+                path: "daily-chores/\(choreId)/completion",
+                method: "DELETE",
+                queryItems: [URLQueryItem(name: "date", value: date)]
+            )
+        } else {
+            let body = MarkChoreCompletedRequestDTO(date: date)
+            try await ApiClient.shared.sendWithoutResponse(
+                path: "daily-chores/\(choreId)/completion",
+                method: "POST",
+                body: body
+            )
+        }
+    }
+}
+
 // MARK: - Pets / XP / Wallet (för barn-dashboard)
 
 enum ChildDashboardRepository {
@@ -158,10 +193,15 @@ enum ChildDashboardRepository {
         let xp: XpProgressResponseDTO?
         let wallet: WalletBalanceResponseDTO?
         let collectedFood: CollectedFoodResponseDTO?
-        let todaysTasks: [CalendarTaskWithCompletionDTO]
+        let todaysTasks: [DailyChoreWithCompletionResponseDTO]
     }
 
     static func fetchSummaryForCurrentMember(childId: String) async throws -> Summary {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = formatter.string(from: Date())
+
         async let petResp: PetResponseDTO? = try? ApiClient.shared
             .send(PetResponseDTO.self, path: "pets/current", method: "GET")
         async let xpResp: XpProgressResponseDTO? = try? ApiClient.shared
@@ -170,7 +210,7 @@ enum ChildDashboardRepository {
             .send(WalletBalanceResponseDTO.self, path: "wallet/balance", method: "GET")
         async let foodResp: CollectedFoodResponseDTO? = try? ApiClient.shared
             .send(CollectedFoodResponseDTO.self, path: "pets/collected-food", method: "GET")
-        async let todaysTasks = try CalendarRepositoryIOS.fetchTasksForToday(memberId: childId)
+        async let todaysTasks = try DailyChoreRepositoryIOS.fetchChoresForDate(memberId: childId, date: dateStr)
 
         return try await Summary(
             pet: petResp,

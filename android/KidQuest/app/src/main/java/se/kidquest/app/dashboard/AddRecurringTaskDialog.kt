@@ -23,7 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.calendar.CalendarRepository
+import se.kidquest.app.chore.DailyChoreRepository
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -107,11 +107,11 @@ fun AddRecurringTaskDialog(
                     error = null
                     scope.launch {
                         try {
-                            CalendarRepository.createRecurringWeeklyTasks(
+                            DailyChoreRepository.createChore(
                                 memberId = childId,
                                 title = title,
                                 weekdays = selectedWeekdays,
-                                xpMultiplier = xpMultiplier,
+                                xpPoints = xpMultiplier,
                             )
                             onSuccess()
                         } catch (e: Exception) {

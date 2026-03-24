@@ -1,15 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  fetchTasksForToday,
-  fetchTasksForDate,
-  CalendarTaskWithCompletionResponse,
-  markTaskCompleted,
-  unmarkTaskCompleted,
-  createCalendarEvent,
-  updateCalendarEvent,
-  deleteCalendarEvent,
-} from "../../shared/api/calendar";
-import {
   getDailyChoresForDate,
   createDailyChore,
   deleteDailyChore,
@@ -29,10 +19,6 @@ import { getPetFoodName } from "../pet/petFoodUtils";
 import { getPetGradient, isDarkPetTheme } from "../pet/petTheme";
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
 
-type WeekTask =
-  | { source: "calendar"; data: CalendarTaskWithCompletionResponse }
-  | { source: "chore"; data: DailyChoreWithCompletionResponse };
-
 type ParentChildViewProps = {
   childId: string;
   childName: string;
@@ -48,7 +34,6 @@ function getTodayString(): string {
 }
 
 export function ParentChildView({ childId, childName, onBack }: ParentChildViewProps) {
-  const [tasks, setTasks] = useState<CalendarTaskWithCompletionResponse[]>([]);
   const [todayChores, setTodayChores] = useState<DailyChoreWithCompletionResponse[]>([]);
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
@@ -58,28 +43,10 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
     typeof window !== "undefined" ? window.innerWidth : 390
   );
 
-  // Add-task form state
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [xpMultiplier, setXpMultiplier] = useState(1);
-  const [addingTask, setAddingTask] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-
-  // Task action menu state
-  const [menuTaskId, setMenuTaskId] = useState<string | null>(null);
-  const [editTaskId, setEditTaskId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editXp, setEditXp] = useState(1);
-  const [editScope, setEditScope] = useState<"THIS" | "THIS_AND_FOLLOWING" | "ALL">("THIS_AND_FOLLOWING");
-  const [editingTask, setEditingTask] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deletingTask, setDeletingTask] = useState(false);
-
   // Week view state
   const [activeTab, setActiveTab] = useState<"today" | "week">("today");
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week
-  const [weekTasks, setWeekTasks] = useState<Map<string, WeekTask[]>>(new Map());
+  const [weekTasks, setWeekTasks] = useState<Map<string, DailyChoreWithCompletionResponse[]>>(new Map());
   const [loadingWeek, setLoadingWeek] = useState(false);
   const [weekRefreshKey, setWeekRefreshKey] = useState(0);
 
@@ -111,13 +78,11 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
       setLoading(true);
       try {
         const today = getTodayString();
-        const [fetchedTasks, fetchedChores, fetchedPet, fetchedXp] = await Promise.all([
-          fetchTasksForToday(childId).catch(() => [] as CalendarTaskWithCompletionResponse[]),
+        const [fetchedChores, fetchedPet, fetchedXp] = await Promise.all([
           getDailyChoresForDate(childId, today).catch(() => [] as DailyChoreWithCompletionResponse[]),
           fetchMemberPet(childId).catch(() => null),
           fetchMemberXpProgress(childId).catch(() => null),
         ]);
-        setTasks(fetchedTasks);
         setTodayChores(fetchedChores);
         setPet(fetchedPet);
         setXpProgress(fetchedXp);
@@ -155,15 +120,8 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
       const entries = await Promise.all(
         days.map(async (day) => {
           const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-          const [calendarTasks, choreTasks] = await Promise.all([
-            fetchTasksForDate(childId, day).catch(() => [] as CalendarTaskWithCompletionResponse[]),
-            getDailyChoresForDate(childId, key).catch(() => [] as DailyChoreWithCompletionResponse[]),
-          ]);
-          const merged: WeekTask[] = [
-            ...calendarTasks.map(d => ({ source: "calendar" as const, data: d })),
-            ...choreTasks.map(d => ({ source: "chore" as const, data: d })),
-          ];
-          return [key, merged] as const;
+          const chores = await getDailyChoresForDate(childId, key).catch(() => [] as DailyChoreWithCompletionResponse[]);
+          return [key, chores] as const;
         })
       );
       if (!ignore) {
@@ -174,130 +132,6 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
     void loadWeek();
     return () => { ignore = true; };
   }, [activeTab, weekOffset, childId, getWeekDays, weekRefreshKey]);
-
-  const handleToggleTask = async (taskId: string) => {
-    const task = tasks.find((t) => t.event.id === taskId);
-    if (!task) return;
-    const today = getTodayString();
-    setTasks((prev) =>
-      prev.map((t) => (t.event.id === taskId ? { ...t, completed: !t.completed } : t))
-    );
-    try {
-      if (task.completed) {
-        await unmarkTaskCompleted(taskId, childId, today);
-      } else {
-        await markTaskCompleted(taskId, childId, today);
-      }
-    } catch {
-      setTasks((prev) =>
-        prev.map((t) => (t.event.id === taskId ? { ...t, completed: task.completed } : t))
-      );
-    }
-  };
-
-  const handleAddTask = async () => {
-    if (!newTitle.trim()) { setAddError("Titel krävs"); return; }
-    setAddingTask(true);
-    setAddError(null);
-    try {
-      const today = getTodayString();
-      await createCalendarEvent(
-        newTitle.trim(),
-        `${today}T00:00`,
-        null,
-        true,
-        undefined, undefined, undefined,
-        [childId],
-        null, null, null, null,
-        true,
-        xpMultiplier,
-        true,
-      );
-      const updated = await fetchTasksForToday(childId).catch(() => [] as CalendarTaskWithCompletionResponse[]);
-      setTasks(updated);
-      setNewTitle("");
-      setXpMultiplier(1);
-      setShowAddTask(false);
-    } catch (e) {
-      setAddError(e instanceof Error ? e.message : "Kunde inte skapa uppgiften");
-    } finally {
-      setAddingTask(false);
-    }
-  };
-
-  const openEditTask = (task: CalendarTaskWithCompletionResponse) => {
-    setEditTaskId(task.event.id);
-    setEditTitle(task.event.title);
-    setEditXp(task.event.xpPoints ?? 1);
-    setEditScope("THIS_AND_FOLLOWING");
-    setEditError(null);
-    setMenuTaskId(null);
-  };
-
-  const handleEditTask = async () => {
-    const task = tasks.find((t) => t.event.id === editTaskId);
-    if (!task || !editTitle.trim()) { setEditError("Titel krävs"); return; }
-    setEditingTask(true);
-    setEditError(null);
-    try {
-      const isRecurring = !!task.event.recurringType;
-      const today = getTodayString();
-      // For THIS/THIS_AND_FOLLOWING: start the new event/series on today's date,
-      // not the original series start (which may be weeks in the past).
-      // For ALL: keep the original start so the series anchor doesn't move.
-      const startDt = isRecurring && editScope !== "ALL"
-        ? `${today}T00:00`
-        : task.event.startDateTime;
-      await updateCalendarEvent(
-        task.event.id,
-        editTitle.trim(),
-        startDt,
-        task.event.endDateTime ?? null,
-        task.event.isAllDay ?? true,
-        undefined, undefined, undefined,
-        [childId],
-        // Preserve the original recurring config so the backend doesn't strip recurrence
-        isRecurring ? task.event.recurringType : undefined,
-        isRecurring ? (task.event.recurringInterval ?? 1) : undefined,
-        isRecurring ? task.event.recurringEndDate : undefined,
-        isRecurring ? task.event.recurringEndCount : undefined,
-        true,
-        editXp,
-        task.event.isRequired ?? true,
-        isRecurring ? editScope : undefined,
-        isRecurring ? today : undefined,
-      );
-      const updated = await fetchTasksForToday(childId).catch(() => [] as CalendarTaskWithCompletionResponse[]);
-      setTasks(updated);
-      setEditTaskId(null);
-    } catch (e) {
-      setEditError(e instanceof Error ? e.message : "Kunde inte spara");
-    } finally {
-      setEditingTask(false);
-    }
-  };
-
-  const handleDeleteTask = async (scope: "THIS" | "ALL") => {
-    if (!deleteConfirmId) return;
-    const task = tasks.find((t) => t.event.id === deleteConfirmId);
-    if (!task) return;
-    setDeletingTask(true);
-    try {
-      const isRecurring = !!task.event.recurringType;
-      await deleteCalendarEvent(
-        deleteConfirmId,
-        isRecurring ? scope : undefined,
-        isRecurring ? getTodayString() : undefined,
-      );
-      const updated = await fetchTasksForToday(childId).catch(() => [] as CalendarTaskWithCompletionResponse[]);
-      setTasks(updated);
-      setDeleteConfirmId(null);
-    } catch {
-      // silently ignore, re-fetch to get true state
-    } finally {
-      setDeletingTask(false);
-    }
-  };
 
   const handleToggleTodayChore = async (choreId: string) => {
     const chore = todayChores.find(c => c.chore.id === choreId);
@@ -359,18 +193,9 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
     }
   };
 
-  const handleDeleteWeekTask = async (task: WeekTask) => {
+  const handleDeleteWeekTask = async (chore: DailyChoreWithCompletionResponse) => {
     try {
-      if (task.source === "calendar") {
-        const isRecurring = !!task.data.event.recurringType;
-        await deleteCalendarEvent(
-          task.data.event.id,
-          isRecurring ? "ALL" : undefined,
-          isRecurring ? getTodayString() : undefined,
-        );
-      } else {
-        await deleteDailyChore(task.data.chore.id);
-      }
+      await deleteDailyChore(chore.chore.id);
       setWeekRefreshKey(k => k + 1);
     } catch {
       // silently ignore
@@ -393,8 +218,8 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
 
   const foodName = pet ? getPetFoodName(pet.petType) : "mat";
   const petDisplayName = pet ? (pet.name || getPetNameSwedish(pet.petType)) : null;
-  const completedCount = tasks.filter((t) => t.completed).length + todayChores.filter(c => c.completed).length;
-  const totalCount = tasks.length + todayChores.length;
+  const completedCount = todayChores.filter(c => c.completed).length;
+  const totalCount = todayChores.length;
 
   return (
     <div
@@ -642,7 +467,7 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                       {days.map((day, i) => {
                         const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
                         const dayTaskList = weekTasks.get(key) ?? [];
-                        const done = dayTaskList.filter(t => t.source === "calendar" ? t.data.completed : t.data.completed).length;
+                        const done = dayTaskList.filter(t => t.completed).length;
                         const isToday = key === todayStr;
                         return (
                           <div key={key} style={{
@@ -662,33 +487,23 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                             </div>
                             {dayTaskList.length > 0 && (
                               <ul style={{ margin: 0, padding: "6px 8px 8px", listStyle: "none", display: "flex", flexDirection: "column", gap: "3px" }}>
-                                {dayTaskList.map(t => {
-                                  const isCompleted = t.source === "calendar" ? t.data.completed : t.data.completed;
-                                  const title = t.source === "calendar" ? t.data.event.title : t.data.chore.title;
-                                  const xp = t.source === "calendar" ? t.data.event.xpPoints : t.data.chore.xpPoints;
-                                  const taskKey = t.source === "calendar" ? `cal-${t.data.event.id}` : `chore-${t.data.chore.id}`;
-                                  const isChore = t.source === "chore";
-                                  return (
-                                    <li key={taskKey} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", padding: "2px 4px", borderRadius: "6px" }}>
-                                      <span style={{ fontSize: "0.9rem", opacity: isCompleted ? 1 : 0.4, flexShrink: 0 }}>{isCompleted ? "✅" : "⭕"}</span>
-                                      <span style={{ flex: 1, color: isCompleted ? "#718096" : "#2d3748", textDecoration: isCompleted ? "line-through" : "none" }}>{title}</span>
-                                      {xp != null && xp > 0 && (
-                                        <span style={{ fontSize: "0.75rem", color: "#a0aec0", flexShrink: 0 }}>{xp} {foodName}</span>
-                                      )}
-                                      {isChore && (
-                                        <span style={{ fontSize: "0.65rem", color: "#7C3AED", background: "#EDE9FE", borderRadius: "4px", padding: "1px 5px", flexShrink: 0 }}>ny</span>
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleDeleteWeekTask(t)}
-                                        title="Ta bort"
-                                        style={{ background: "none", border: "none", cursor: "pointer", color: "#FCA5A5", fontSize: "0.9rem", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
-                                      >
-                                        ✕
-                                      </button>
-                                    </li>
-                                  );
-                                })}
+                                {dayTaskList.map(t => (
+                                  <li key={`chore-${t.chore.id}`} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", padding: "2px 4px", borderRadius: "6px" }}>
+                                    <span style={{ fontSize: "0.9rem", opacity: t.completed ? 1 : 0.4, flexShrink: 0 }}>{t.completed ? "✅" : "⭕"}</span>
+                                    <span style={{ flex: 1, color: t.completed ? "#718096" : "#2d3748", textDecoration: t.completed ? "line-through" : "none" }}>{t.chore.title}</span>
+                                    {t.chore.xpPoints > 0 && (
+                                      <span style={{ fontSize: "0.75rem", color: "#a0aec0", flexShrink: 0 }}>{t.chore.xpPoints} {foodName}</span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeleteWeekTask(t)}
+                                      title="Ta bort"
+                                      style={{ background: "none", border: "none", cursor: "pointer", color: "#FCA5A5", fontSize: "0.9rem", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
+                                    >
+                                      ✕
+                                    </button>
+                                  </li>
+                                ))}
                               </ul>
                             )}
                           </div>
@@ -714,24 +529,7 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
               <div style={{ display: "flex", gap: "8px" }}>
                 <button
                   type="button"
-                  onClick={() => { setShowAddTask(v => !v); setShowAddTodayChore(false); setAddError(null); }}
-                  style={{
-                    flex: 1,
-                    padding: "8px 10px",
-                    background: showAddTask ? "#0C4A6E" : "#BAE6FD",
-                    color: showAddTask ? "white" : "#0C4A6E",
-                    border: "none",
-                    borderRadius: "10px",
-                    fontWeight: 600,
-                    fontSize: "0.85rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  + Lägg till idag
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowAddTodayChore(v => !v); setShowAddTask(false); setTodayChoreError(null); }}
+                  onClick={() => { setShowAddTodayChore(v => !v); setTodayChoreError(null); }}
                   style={{
                     flex: 1,
                     padding: "8px 10px",
@@ -748,101 +546,6 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                 </button>
               </div>
             </div>
-
-            {/* Inline add-task form */}
-            {showAddTask && (
-              <div style={{
-                background: "#EFF6FF",
-                borderRadius: "14px",
-                padding: "16px",
-                marginBottom: "16px",
-                border: "2px solid #BAE6FD",
-              }}>
-                <p style={{ margin: "0 0 10px", fontWeight: 600, fontSize: "0.95rem", color: "#1e3a5f" }}>
-                  Ny uppgift idag – {childName}
-                </p>
-                <input
-                  type="text"
-                  placeholder="Titel"
-                  value={newTitle}
-                  onChange={e => { setNewTitle(e.target.value); setAddError(null); }}
-                  onKeyDown={e => e.key === "Enter" && handleAddTask()}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "2px solid #BAE6FD",
-                    borderRadius: "10px",
-                    fontSize: "1rem",
-                    marginBottom: "12px",
-                    boxSizing: "border-box",
-                    outline: "none",
-                  }}
-                />
-                <p style={{ margin: "0 0 8px", fontSize: "0.85rem", color: "#1e3a5f", fontWeight: 500 }}>
-                  XP (mat)
-                </p>
-                <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
-                  {[1, 2, 3].map(n => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setXpMultiplier(n)}
-                      style={{
-                        padding: "7px 18px",
-                        borderRadius: "8px",
-                        border: "none",
-                        fontWeight: 600,
-                        fontSize: "0.9rem",
-                        cursor: "pointer",
-                        background: xpMultiplier === n ? "#0C4A6E" : "#BAE6FD",
-                        color: xpMultiplier === n ? "white" : "#0C4A6E",
-                      }}
-                    >
-                      x{n}
-                    </button>
-                  ))}
-                </div>
-                {addError && (
-                  <p style={{ margin: "0 0 8px", color: "#c53030", fontSize: "0.85rem" }}>{addError}</p>
-                )}
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    type="button"
-                    onClick={handleAddTask}
-                    disabled={addingTask}
-                    style={{
-                      flex: 1,
-                      padding: "11px",
-                      background: addingTask ? "#cbd5e0" : "#0C4A6E",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "10px",
-                      fontWeight: 600,
-                      fontSize: "0.95rem",
-                      cursor: addingTask ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {addingTask ? "Sparar…" : "Skapa uppgift"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowAddTask(false); setNewTitle(""); setXpMultiplier(1); setAddError(null); }}
-                    style={{
-                      padding: "11px 18px",
-                      background: "transparent",
-                      color: "#0C4A6E",
-                      border: "2px solid #BAE6FD",
-                      borderRadius: "10px",
-                      fontWeight: 500,
-                      fontSize: "0.95rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Avbryt
-                  </button>
-                </div>
-              </div>
-            )}
 
             {showAddTodayChore && (
               <div style={{ background: "#F5F3FF", borderRadius: "14px", padding: "16px", marginBottom: "16px", border: "2px solid #DDD6FE" }}>
@@ -902,221 +605,12 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
               </div>
             )}
 
-            {activeTab === "today" && tasks.length === 0 && todayChores.length === 0 ? (
+            {activeTab === "today" && todayChores.length === 0 ? (
               <p style={{ margin: 0, color: "#718096", textAlign: "center", padding: "20px 0" }}>
                 Inga sysslor för idag! 🎉
               </p>
             ) : activeTab === "today" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {tasks.map((task) => {
-                  const isEditing = editTaskId === task.event.id;
-                  const isMenuOpen = menuTaskId === task.event.id;
-                  const isDeleteConfirm = deleteConfirmId === task.event.id;
-                  const isRecurring = !!task.event.recurringType;
-                  const bgColor = task.completed ? "#f0fff4" : task.event.isRequired ? "#f7fafc" : "#fff7ed";
-                  const borderColor = task.completed ? "#48bb78" : task.event.isRequired ? "#e2e8f0" : "#fed7aa";
-
-                  return (
-                    <div key={task.event.id} style={{ borderRadius: "12px", border: `2px solid ${borderColor}`, overflow: "hidden" }}>
-                      {/* Main task row */}
-                      <div
-                        style={{
-                          padding: "14px 12px 14px 16px",
-                          background: bgColor,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                        }}
-                      >
-                        <div
-                          onClick={() => handleToggleTask(task.event.id)}
-                          style={{ fontSize: "1.5rem", opacity: task.completed ? 1 : 0.5, cursor: "pointer", flexShrink: 0 }}
-                        >
-                          {task.completed ? "✅" : "⭕"}
-                        </div>
-                        <div
-                          onClick={() => handleToggleTask(task.event.id)}
-                          style={{ flex: 1, cursor: "pointer" }}
-                        >
-                          <div style={{ fontWeight: task.completed ? 600 : 500, color: "#2d3748", textDecoration: task.completed ? "line-through" : "none" }}>
-                            {task.event.title}
-                          </div>
-                          {task.event.xpPoints != null && task.event.xpPoints > 0 && (
-                            <div style={{ fontSize: "0.85rem", color: "#718096", marginTop: "2px" }}>
-                              {task.event.xpPoints} {foodName}{isRecurring ? " · 🔁" : ""}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => { setMenuTaskId(isMenuOpen ? null : task.event.id); setDeleteConfirmId(null); }}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: "1.2rem",
-                            color: "#718096",
-                            padding: "4px 8px",
-                            borderRadius: "8px",
-                            flexShrink: 0,
-                          }}
-                        >
-                          ⋯
-                        </button>
-                      </div>
-
-                      {/* Action menu */}
-                      {isMenuOpen && !isDeleteConfirm && !isEditing && (
-                        <div style={{ background: "#f8fafc", borderTop: `1px solid ${borderColor}`, display: "flex", gap: "8px", padding: "10px 12px" }}>
-                          <button
-                            type="button"
-                            onClick={() => openEditTask(task)}
-                            style={{
-                              flex: 1, padding: "8px", background: "#E0F2FE", color: "#0C4A6E",
-                              border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
-                            }}
-                          >
-                            ✏️ Ändra
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setDeleteConfirmId(task.event.id); setMenuTaskId(null); }}
-                            style={{
-                              flex: 1, padding: "8px", background: "#FEE2E2", color: "#991B1B",
-                              border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
-                            }}
-                          >
-                            🗑️ Ta bort
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Delete confirm */}
-                      {isDeleteConfirm && (
-                        <div style={{ background: "#FEF2F2", borderTop: `1px solid #FCA5A5`, padding: "12px" }}>
-                          <p style={{ margin: "0 0 10px", fontSize: "0.9rem", color: "#991B1B", fontWeight: 600 }}>
-                            {isRecurring ? "Ta bort bara idag eller alla framtida?" : "Ta bort uppgiften?"}
-                          </p>
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            {isRecurring ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteTask("THIS")}
-                                  disabled={deletingTask}
-                                  style={{ flex: 1, padding: "8px", background: deletingTask ? "#cbd5e0" : "#DC2626", color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "0.85rem", cursor: deletingTask ? "not-allowed" : "pointer" }}
-                                >
-                                  Bara idag
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteTask("ALL")}
-                                  disabled={deletingTask}
-                                  style={{ flex: 1, padding: "8px", background: deletingTask ? "#cbd5e0" : "#7F1D1D", color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "0.85rem", cursor: deletingTask ? "not-allowed" : "pointer" }}
-                                >
-                                  Alla framtida
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteTask("THIS")}
-                                disabled={deletingTask}
-                                style={{ flex: 1, padding: "8px", background: deletingTask ? "#cbd5e0" : "#DC2626", color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "0.85rem", cursor: deletingTask ? "not-allowed" : "pointer" }}
-                              >
-                                {deletingTask ? "Tar bort…" : "Ta bort"}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirmId(null)}
-                              style={{ padding: "8px 14px", background: "transparent", color: "#718096", border: "1px solid #e2e8f0", borderRadius: "8px", fontWeight: 500, fontSize: "0.85rem", cursor: "pointer" }}
-                            >
-                              Avbryt
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Edit form */}
-                      {isEditing && (
-                        <div style={{ background: "#EFF6FF", borderTop: `1px solid #BAE6FD`, padding: "14px" }}>
-                          <input
-                            type="text"
-                            value={editTitle}
-                            onChange={e => { setEditTitle(e.target.value); setEditError(null); }}
-                            onKeyDown={e => e.key === "Enter" && handleEditTask()}
-                            style={{
-                              width: "100%", padding: "9px 12px", border: "2px solid #BAE6FD",
-                              borderRadius: "10px", fontSize: "1rem", marginBottom: "10px",
-                              boxSizing: "border-box", outline: "none",
-                            }}
-                          />
-                          {isRecurring && (
-                            <div style={{ marginBottom: "10px" }}>
-                              <p style={{ margin: "0 0 6px", fontSize: "0.82rem", color: "#0C4A6E", fontWeight: 600 }}>Ändra</p>
-                              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                                {(["THIS", "THIS_AND_FOLLOWING", "ALL"] as const).map(s => {
-                                  const label = s === "THIS" ? "Bara idag" : s === "THIS_AND_FOLLOWING" ? "Från och med idag" : "Alla";
-                                  return (
-                                    <button
-                                      key={s}
-                                      type="button"
-                                      onClick={() => setEditScope(s)}
-                                      style={{
-                                        padding: "5px 10px", borderRadius: "8px", border: "none",
-                                        fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
-                                        background: editScope === s ? "#0C4A6E" : "#BAE6FD",
-                                        color: editScope === s ? "white" : "#0C4A6E",
-                                      }}
-                                    >
-                                      {label}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                          <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-                            {[1, 2, 3].map(n => (
-                              <button
-                                key={n}
-                                type="button"
-                                onClick={() => setEditXp(n)}
-                                style={{
-                                  padding: "6px 16px", borderRadius: "8px", border: "none",
-                                  fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
-                                  background: editXp === n ? "#0C4A6E" : "#BAE6FD",
-                                  color: editXp === n ? "white" : "#0C4A6E",
-                                }}
-                              >
-                                x{n}
-                              </button>
-                            ))}
-                          </div>
-                          {editError && <p style={{ margin: "0 0 8px", color: "#c53030", fontSize: "0.85rem" }}>{editError}</p>}
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            <button
-                              type="button"
-                              onClick={handleEditTask}
-                              disabled={editingTask}
-                              style={{ flex: 1, padding: "9px", background: editingTask ? "#cbd5e0" : "#0C4A6E", color: "white", border: "none", borderRadius: "10px", fontWeight: 600, fontSize: "0.9rem", cursor: editingTask ? "not-allowed" : "pointer" }}
-                            >
-                              {editingTask ? "Sparar…" : "Spara"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setEditTaskId(null); setEditError(null); }}
-                              style={{ padding: "9px 16px", background: "transparent", color: "#0C4A6E", border: "2px solid #BAE6FD", borderRadius: "10px", fontWeight: 500, fontSize: "0.9rem", cursor: "pointer" }}
-                            >
-                              Avbryt
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
                 {todayChores.map((choreItem) => {
                   const bgColor = choreItem.completed ? "#f0fff4" : "#f7fafc";
                   const borderColor = choreItem.completed ? "#48bb78" : "#e2e8f0";

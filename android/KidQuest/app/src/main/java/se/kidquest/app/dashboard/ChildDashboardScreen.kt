@@ -56,9 +56,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.calendar.CalendarRepository
+import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.CalendarTaskWithCompletion
+import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.network.FeedPetRequest
 import se.kidquest.app.network.PetResponse
 import se.kidquest.app.network.SelectEggRequest
@@ -94,7 +94,7 @@ fun ChildDashboardScreen(
     var pet by remember { mutableStateOf<PetResponse?>(null) }
     var xp by remember { mutableStateOf<XpProgressResponse?>(null) }
     var balance by remember { mutableStateOf<WalletBalanceResponse?>(null) }
-    var todaysTasks by remember { mutableStateOf<List<CalendarTaskWithCompletion>>(emptyList()) }
+    var todaysTasks by remember { mutableStateOf<List<DailyChoreWithCompletionResponse>>(emptyList()) }
     var collectedFoodCount by remember { mutableStateOf(0) }
     var isFeeding by remember { mutableStateOf(false) }
     var showSelectEggDialog by remember { mutableStateOf(false) }
@@ -119,7 +119,7 @@ fun ChildDashboardScreen(
                 val xpDeferred = async { kotlin.runCatching { ApiClient.xpApi.getCurrentProgress() }.getOrNull() }
                 val walletDeferred = async { kotlin.runCatching { ApiClient.walletApi.getWalletBalance() }.getOrNull() }
                 val foodDeferred = async { kotlin.runCatching { ApiClient.petsApi.getCollectedFood() }.getOrNull() }
-                val tasksDeferred = async { CalendarRepository.fetchTasksForToday(childId) }
+                val tasksDeferred = async { DailyChoreRepository.fetchChoresForToday(childId) }
 
                 val petResp = petDeferred.await()
                 val xpResp = xpDeferred.await()
@@ -553,7 +553,7 @@ fun ChildDashboardScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.heightIn(max = 260.dp),
                         ) {
-                            items(todaysTasks, key = { it.event.id }) { task ->
+                            items(todaysTasks, key = { it.chore.id }) { task ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(
@@ -572,10 +572,10 @@ fun ChildDashboardScreen(
                                                 taskToggleScope.launch {
                                                     taskToggleMutex.withLock {
                                                         val currentCompleted = task.completed
-                                                        val eventId = task.event.id
+                                                        val choreId = task.chore.id
 
                                                         todaysTasks = todaysTasks.map {
-                                                            if (it.event.id == eventId) {
+                                                            if (it.chore.id == choreId) {
                                                                 it.copy(completed = !currentCompleted)
                                                             } else {
                                                                 it
@@ -583,9 +583,9 @@ fun ChildDashboardScreen(
                                                         }
 
                                                         try {
-                                                            CalendarRepository.toggleTaskCompletion(
-                                                                eventId = eventId,
-                                                                memberId = childId,
+                                                            DailyChoreRepository.toggleChoreCompletion(
+                                                                choreId = choreId,
+                                                                isCurrentlyCompleted = currentCompleted,
                                                             )
                                                             // Debounce: en omladdning ~400 ms efter senaste toggle så att snabba klick inte avbryter LaunchedEffect upprepade gånger
                                                             refreshDebounceJob?.cancel()
@@ -595,7 +595,7 @@ fun ChildDashboardScreen(
                                                             }
                                                         } catch (e: Exception) {
                                                             todaysTasks = todaysTasks.map {
-                                                                if (it.event.id == eventId) {
+                                                                if (it.chore.id == choreId) {
                                                                     it.copy(completed = currentCompleted)
                                                                 } else {
                                                                     it
@@ -614,14 +614,14 @@ fun ChildDashboardScreen(
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
                                             Text(
-                                                text = task.event.title,
+                                                text = task.chore.title,
                                                 style = MaterialTheme.typography.bodyLarge,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = cardTextPrimary,
                                             )
-                                            if (task.event.xpPoints != null && task.event.xpPoints > 0) {
+                                            if (task.chore.xpPoints > 0) {
                                                 Text(
-                                                    text = "${task.event.xpPoints} mat",
+                                                    text = "${task.chore.xpPoints} mat",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = cardTextSecondary,
                                                 )
