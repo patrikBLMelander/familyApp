@@ -54,6 +54,7 @@ fun ChildTasksScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var refreshKey by remember { mutableStateOf(0) }
     var showAddChoreDialog by remember { mutableStateOf(false) }
+    var showAddSingleDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(childId, refreshKey) {
@@ -152,13 +153,22 @@ fun ChildTasksScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = { showAddChoreDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Lägg till återkommande syssla")
+                Button(
+                    onClick = { showAddSingleDialog = true },
+                    modifier = Modifier.weight(1f).height(52.dp),
+                ) {
+                    Text("+ Idag")
+                }
+                Button(
+                    onClick = { showAddChoreDialog = true },
+                    modifier = Modifier.weight(1f).height(52.dp),
+                ) {
+                    Text("🔁 Återkommande")
+                }
             }
         }
     }
@@ -170,6 +180,18 @@ fun ChildTasksScreen(
             onDismiss = { showAddChoreDialog = false },
             onSuccess = {
                 showAddChoreDialog = false
+                refreshKey++
+            },
+        )
+    }
+
+    if (showAddSingleDialog) {
+        AddSingleTaskDialog(
+            childName = childName,
+            childId = childId,
+            onDismiss = { showAddSingleDialog = false },
+            onSuccess = {
+                showAddSingleDialog = false
                 refreshKey++
             },
         )

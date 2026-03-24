@@ -105,6 +105,12 @@ interface WalletApi {
     @POST("wallet/expense")
     suspend fun recordExpense(@Body body: RecordExpenseRequest): Response<Unit>
 
+    @POST("wallet/members/{memberId}/expense")
+    suspend fun recordExpenseForMember(
+        @Path("memberId") memberId: String,
+        @Body body: RecordExpenseRequest,
+    ): Response<Unit>
+
     @GET("wallet/categories")
     suspend fun getExpenseCategories(): List<ExpenseCategoryResponse>
 

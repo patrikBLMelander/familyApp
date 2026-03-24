@@ -53,6 +53,7 @@ import se.kidquest.app.dashboard.ChildDashboardScreen
 import se.kidquest.app.dashboard.ChildPetScreen
 import se.kidquest.app.dashboard.ChildTasksScreen
 import se.kidquest.app.dashboard.ChildWalletScreen
+import se.kidquest.app.dashboard.FamilyTasksScreen
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
 import kotlinx.coroutines.launch
@@ -68,6 +69,7 @@ private sealed class AppScreen {
     data class ChildPet(val childId: String, val childName: String) : AppScreen()
     data class ChildWallet(val childId: String, val childName: String, val isOwnWallet: Boolean) : AppScreen()
     data class ChildTasks(val childId: String, val childName: String) : AppScreen()
+    data object FamilyTasks : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -149,6 +151,12 @@ class MainActivity : ComponentActivity() {
                                 returnToChildDashboard = null
                                 currentScreen = AppScreen.ChildTasks(id, name)
                             },
+                            onFamilyTasks = {
+                                currentScreen = AppScreen.FamilyTasks
+                            },
+                        )
+                        AppScreen.FamilyTasks -> FamilyTasksScreen(
+                            onBack = { currentScreen = AppScreen.Home },
                         )
                         AppScreen.ChildInviteLogin -> ChildInviteLoginScreen(
                             modifier = Modifier.padding(innerPadding),

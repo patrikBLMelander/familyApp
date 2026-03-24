@@ -33,6 +33,9 @@ fun RecordExpenseDialog(
     currentBalance: Int,
     onDismiss: () -> Unit,
     onSuccess: () -> Unit,
+    /** When set, the expense is recorded on behalf of this member (parent flow). */
+    memberId: String? = null,
+    childName: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     var amount by remember { mutableStateOf("") }
@@ -62,7 +65,7 @@ fun RecordExpenseDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Registrera köp") },
+        title = { Text(if (childName != null) "Registrera köp – $childName" else "Registrera köp") },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (loadingData) {
@@ -141,14 +144,17 @@ fun RecordExpenseDialog(
                     scope.launch {
                         try {
                             withContext(Dispatchers.IO) {
-                                ApiClient.walletApi.recordExpense(
-                                    RecordExpenseRequest(
-                                        amount = amountKr,
-                                        description = description.ifBlank { null },
-                                        categoryId = cat,
-                                        savingsGoalAllocations = null,
-                                    ),
+                                val req = RecordExpenseRequest(
+                                    amount = amountKr,
+                                    description = description.ifBlank { null },
+                                    categoryId = cat,
+                                    savingsGoalAllocations = null,
                                 )
+                                if (memberId != null) {
+                                    ApiClient.walletApi.recordExpenseForMember(memberId, req)
+                                } else {
+                                    ApiClient.walletApi.recordExpense(req)
+                                }
                             }
                             onSuccess()
                         } catch (e: Exception) {

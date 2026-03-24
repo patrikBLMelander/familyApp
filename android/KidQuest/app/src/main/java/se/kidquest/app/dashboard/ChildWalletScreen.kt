@@ -193,6 +193,15 @@ fun ChildWalletScreen(
                             ) {
                                 Text("Ge pengar")
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { showExpenseDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = b.balance > 0,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2B6CB0)),
+                            ) {
+                                Text("Registrera köp")
+                            }
                         }
                     }
                 }
@@ -276,11 +285,13 @@ fun ChildWalletScreen(
             onSuccess = { showGiveMoneyDialog = false; refreshKey++ },
         )
     }
-    if (isOwnWallet && showExpenseDialog && balance != null) {
+    if (showExpenseDialog && balance != null) {
         RecordExpenseDialog(
             currentBalance = balance!!.balance,
             onDismiss = { showExpenseDialog = false },
             onSuccess = { showExpenseDialog = false; refreshKey++ },
+            memberId = if (isOwnWallet) null else childId,
+            childName = if (isOwnWallet) null else childName,
         )
     }
     if (isOwnWallet && showCreateGoalDialog) {

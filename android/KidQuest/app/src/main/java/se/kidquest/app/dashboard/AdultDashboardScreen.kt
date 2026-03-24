@@ -46,11 +46,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.calendar.CalendarRepository
+import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.FamilyMemberResponse
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +63,7 @@ fun AdultDashboardScreen(
     onChildPet: (childId: String, childName: String) -> Unit = { _, _ -> },
     onChildWallet: (childId: String, childName: String) -> Unit = { _, _ -> },
     onChildTasks: (childId: String, childName: String) -> Unit = { _, _ -> },
+    onFamilyTasks: () -> Unit = {},
 ) {
     var children by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -77,37 +77,20 @@ fun AdultDashboardScreen(
         try {
             val all = ApiClient.familyMembersApi.getAllMembers()
             children = all.filter { it.role == "CHILD" || it.role == "ASSISTANT" }
-            val today = LocalDate.now()
-            val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
             childSummaries = coroutineScope {
                 children.map { child ->
                     async {
                         try {
-                            val tasksDeferred = async { CalendarRepository.fetchTasksForToday(child.id) }
+                            val choresDeferred = async { DailyChoreRepository.fetchChoresForToday(child.id) }
                             val petDeferred = async { kotlin.runCatching { ApiClient.petsApi.getMemberPet(child.id) }.getOrNull() }
-                            val completionsDeferred = async {
-                                kotlin.runCatching { ApiClient.calendarApi.getTaskCompletionsForMember(child.id) }.getOrNull()
-                                    ?: emptyList()
-                            }
 
-                            val tasksToday = tasksDeferred.await()
+                            val chores = choresDeferred.await()
                             val petResp = petDeferred.await()
-                            val completions = completionsDeferred.await()
 
-                            val total = tasksToday.size
-                            val done = tasksToday.count { it.completed }
-                            val nextTaskTitle = tasksToday.firstOrNull { !it.completed }?.event?.title
+                            val total = chores.size
+                            val done = chores.count { it.completed }
+                            val nextTaskTitle = chores.firstOrNull { !it.completed }?.chore?.title
                             val hasPet = petResp?.isSuccessful == true && petResp.body() != null
-
-                            var streak = 0
-                            var date = today
-                            while (true) {
-                                val dateStr = dateFormatter.format(date)
-                                if (completions.any { it.occurrenceDate == dateStr }) {
-                                    streak++
-                                    date = date.minusDays(1)
-                                } else break
-                            }
 
                             child.id to ChildSummary(
                                 memberId = child.id,
@@ -115,7 +98,7 @@ fun AdultDashboardScreen(
                                 todaysDone = done,
                                 todaysTotal = total,
                                 hasPet = hasPet,
-                                streakDays = streak,
+                                streakDays = 0,
                                 nextTaskTitle = nextTaskTitle,
                             )
                         } catch (_: Exception) {
@@ -277,6 +260,24 @@ fun AdultDashboardScreen(
                                 }
                             }
                         }
+                    }
+                }
+
+                item {
+                    FilledTonalButton(
+                        onClick = onFamilyTasks,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = buttonPastel,
+                            contentColor = buttonOnPastel,
+                        ),
+                    ) {
+                        Icon(Icons.Default.Pets, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text("Familjens uppgifter idag")
                     }
                 }
 

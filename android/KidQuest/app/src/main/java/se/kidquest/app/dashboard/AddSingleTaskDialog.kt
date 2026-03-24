@@ -21,8 +21,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.calendar.CalendarRepository
+import se.kidquest.app.chore.DailyChoreRepository
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 @Composable
 fun AddSingleTaskDialog(
@@ -76,10 +77,12 @@ fun AddSingleTaskDialog(
                     error = null
                     scope.launch {
                         try {
-                            CalendarRepository.createSingleTaskToday(
+                            val todayWeekday = LocalDate.now().dayOfWeek.value // 1=Mon … 7=Sun
+                            DailyChoreRepository.createChore(
                                 memberId = childId,
-                                title = title,
-                                xpMultiplier = xpMultiplier,
+                                title = title.trim(),
+                                weekdays = setOf(todayWeekday),
+                                xpPoints = xpMultiplier,
                             )
                             onSuccess()
                         } catch (e: Exception) {
