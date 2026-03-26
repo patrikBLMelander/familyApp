@@ -154,13 +154,16 @@ public class DailyChoreService {
 
         var completion = completionRepository.findByChore_IdAndMember_IdAndOccurrenceDate(choreId, chore.getMember().getId(), date);
         if (completion.isPresent()) {
-            // Remove food best-effort (if already fed, skip)
             if (chore.getXpPoints() > 0) {
-                try {
-                    foodService.removeFood(chore.getMember().getId(), chore.getXpPoints());
-                } catch (Exception e) {
-                    System.err.println("Could not remove food for chore uncompletion (already fed?): choreId=" + choreId + ", error=" + e.getMessage());
+                int unfedCount = foodService.getUnfedFoodCount(chore.getMember().getId());
+                if (unfedCount < chore.getXpPoints()) {
+                    throw new IllegalArgumentException(
+                            String.format("Kan inte avmarkera syssla: Du har inte tillräckligt med omatad mat. " +
+                                    "Du behöver %d omatad mat, men har bara %d omatad mat totalt.",
+                                    chore.getXpPoints(), unfedCount)
+                    );
                 }
+                foodService.removeFood(chore.getMember().getId(), chore.getXpPoints());
             }
             completionRepository.delete(completion.get());
         }
