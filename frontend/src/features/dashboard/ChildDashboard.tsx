@@ -40,6 +40,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
   const [memberId, setMemberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [choreToggleError, setChoreToggleError] = useState<string | null>(null);
   const [hasIntegratedImage, setHasIntegratedImage] = useState<boolean>(false);
   
   // Food collection state
@@ -185,6 +186,14 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
   const handleToggleChore = async (choreId: string) => {
     const chore = chores.find(c => c.chore.id === choreId);
     if (!chore) return;
+
+    // Front-end guard: block unchecking when there is no food left to give back
+    if (chore.completed && chore.chore.xpPoints > 0 && collectedFoodCount === 0) {
+      setChoreToggleError("Du kan inte avmarkera sysslan – all mat har redan matats till husdjuret.");
+      setTimeout(() => setChoreToggleError(null), 4000);
+      return;
+    }
+
     const today = getTodayLocalDateString();
     setChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: !c.completed } : c));
     try {
@@ -209,6 +218,10 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
     } catch (e) {
       console.error("Error toggling chore:", e);
       setChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: chore.completed } : c));
+      if (chore.completed) {
+        setChoreToggleError("Du kan inte avmarkera sysslan – du har inte tillräckligt med omatad mat.");
+        setTimeout(() => setChoreToggleError(null), 4000);
+      }
     }
   };
 
@@ -734,6 +747,20 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
             {completedTasksCount} / {totalTasksCount}
           </span>
         </div>
+
+        {choreToggleError && (
+          <div style={{
+            backgroundColor: "#fff5f5",
+            border: "1px solid #fc8181",
+            borderRadius: "8px",
+            padding: "10px 14px",
+            marginBottom: "8px",
+            color: "#c53030",
+            fontSize: "0.875rem",
+          }}>
+            {choreToggleError}
+          </div>
+        )}
 
         {chores.length === 0 ? (
           <p style={{
