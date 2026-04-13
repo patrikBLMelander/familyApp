@@ -196,6 +196,7 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
   const handleDeleteWeekTask = async (chore: DailyChoreWithCompletionResponse) => {
     try {
       await deleteDailyChore(chore.chore.id);
+      setTodayChores(prev => prev.filter(c => c.chore.id !== chore.chore.id));
       setWeekRefreshKey(k => k + 1);
     } catch {
       // silently ignore
@@ -633,6 +634,14 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                             </div>
                           )}
                         </div>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void handleDeleteWeekTask(choreItem); }}
+                          title="Ta bort"
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#FCA5A5", fontSize: "1.2rem", padding: "4px 6px", flexShrink: 0, lineHeight: 1 }}
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
                   );

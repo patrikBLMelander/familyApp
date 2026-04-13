@@ -4,6 +4,7 @@ import {
   createDailyChore,
   markDailyChoreCompleted,
   unmarkDailyChoreCompleted,
+  deleteDailyChore,
   DailyChoreWithCompletionResponse,
 } from "../../shared/api/dailyChores";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
@@ -58,6 +59,7 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
   const [recurringXp, setRecurringXp] = useState(1);
   const [addingRecurring, setAddingRecurring] = useState(false);
   const [recurringError, setRecurringError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -138,6 +140,21 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
       }
     } catch {
       setChores(prev => prev.map(c => c.chore.id === choreId ? { ...c, completed: chore.completed } : c));
+    }
+  };
+
+  const handleDeleteChore = async (choreId: string) => {
+    setChores(prev => prev.filter(c => c.chore.id !== choreId));
+    setConfirmDeleteId(null);
+    try {
+      await deleteDailyChore(choreId);
+    } catch {
+      // Restore on failure
+      const today = getTodayString();
+      if (memberId) {
+        const restored = await getDailyChoresForDate(memberId, today).catch(() => [] as DailyChoreWithCompletionResponse[]);
+        setChores(restored);
+      }
     }
   };
 
@@ -522,7 +539,33 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
                           </div>
                         )}
                       </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(choreItem.chore.id); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 6px", fontSize: "1.1rem", color: "#a0aec0", flexShrink: 0 }}
+                        aria-label="Ta bort syssla"
+                      >
+                        🗑️
+                      </button>
                     </div>
+                    {confirmDeleteId === choreItem.chore.id && (
+                      <div style={{ padding: "10px 16px", background: "#fff5f5", borderTop: `1px solid ${borderColor}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                        <span style={{ fontSize: "0.9rem", color: "#c53030" }}>Ta bort sysslan?</span>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            onClick={() => void handleDeleteChore(choreItem.chore.id)}
+                            style={{ padding: "5px 14px", background: "#e53e3e", color: "white", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer" }}
+                          >
+                            Ta bort
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            style={{ padding: "5px 14px", background: "#edf2f7", color: "#4a5568", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer" }}
+                          >
+                            Avbryt
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
