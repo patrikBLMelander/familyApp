@@ -18,16 +18,27 @@ type PetImageProps = {
 export function PetImage({ petType, growthStage, size = 100 }: PetImageProps) {
   const validStage = Math.max(1, Math.min(5, growthStage));
   const normalizedPetType = petType.toLowerCase();
-  
-  // Construct image path
-  // Images should be in: /public/pets/{petType}/{petType}-stage{1-5}.png
-  const imagePath = `/pets/${normalizedPetType}/${normalizedPetType}-stage${validStage}.png`;
-  
-  // Fallback if image doesn't exist - show a placeholder
+
+  // Primary path: transparent stage image (no background)
+  // Fallback path: integrated image (also transparent for most pets)
+  const stagePath = `/pets/${normalizedPetType}/${normalizedPetType}-stage${validStage}.png`;
+  const integratedPath = `/pets/${normalizedPetType}/${normalizedPetType}-integrated-stage${validStage}.png`;
+
+  const [imageSrc, setImageSrc] = React.useState(stagePath);
   const [imageError, setImageError] = React.useState(false);
-  
+
+  React.useEffect(() => {
+    setImageSrc(stagePath);
+    setImageError(false);
+  }, [stagePath]);
+
   const handleImageError = () => {
-    setImageError(true);
+    if (imageSrc === stagePath) {
+      // Stage image missing — try the integrated image
+      setImageSrc(integratedPath);
+    } else {
+      setImageError(true);
+    }
   };
 
   if (imageError) {
@@ -56,16 +67,14 @@ export function PetImage({ petType, growthStage, size = 100 }: PetImageProps) {
 
   return (
     <img
-      src={imagePath}
+      src={imageSrc}
       alt={`${petType} at growth stage ${validStage}`}
       style={{
         display: "block",
-        maxWidth: `${size}px`,
-        maxHeight: `${size}px`,
-        width: "auto",
-        height: "auto",
+        width: `${size}px`,
+        height: `${size}px`,
         objectFit: "contain",
-        imageRendering: "crisp-edges", // Keep sharp edges for pixel art style if needed
+        objectPosition: "center",
       }}
       onError={handleImageError}
     />

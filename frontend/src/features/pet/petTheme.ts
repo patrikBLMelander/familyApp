@@ -11,6 +11,8 @@ const petGradients: Record<string, { from: string; to: string }> = {
   hydra:    { from: "#C4B5FD", to: "#4C1D95" },
   unicorn:  { from: "#FDE68A", to: "#F9A8D4" },
   kapybara: { from: "#DCFCE7", to: "#22C55E" },
+  shark:    { from: "#BAE6FD", to: "#0369A1" },
+  lion:     { from: "#FEF3C7", to: "#D97706" },
 };
 
 const defaultGradient = { from: "#E0E7FF", to: "#E0F2FE" };

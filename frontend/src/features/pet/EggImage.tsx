@@ -20,9 +20,12 @@ export function EggImage({ petType, eggStage, size = 160 }: EggImageProps) {
   const validStage = Math.max(1, Math.min(5, eggStage));
   const normalizedPetType = petType.toLowerCase();
   
-  // Construct image path
-  // Images should be in: /public/pets/{petType}/{petType}-egg-stage{1-5}.png
-  const imagePath = `/pets/${normalizedPetType}/${normalizedPetType}-egg-stage${validStage}.png`;
+  // Construct image path.
+  // Most pets use hyphens: {petType}-egg-stage{N}.png
+  // Shark uses underscores: shark_egg_stage{N}.png
+  const imagePath = normalizedPetType === "shark"
+    ? `/pets/${normalizedPetType}/${normalizedPetType}_egg_stage${validStage}.png`
+    : `/pets/${normalizedPetType}/${normalizedPetType}-egg-stage${validStage}.png`;
   
   // Fallback if image doesn't exist
   const [imageError, setImageError] = React.useState(false);

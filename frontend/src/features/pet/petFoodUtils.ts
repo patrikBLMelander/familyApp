@@ -17,6 +17,8 @@ export function getPetFoodEmoji(petType: string): string {
     hydra: "💧", // Water drops
     unicorn: "✨", // Star fruits
     kapybara: "🌿", // Grass
+    shark: "🐠", // Fish
+    lion: "🥩", // Meat
   };
   return foodMap[normalizedPetType] || "🍎"; // Default to apple
 }
@@ -36,6 +38,8 @@ export function getPetFoodName(petType: string): string {
     hydra: "vattendroppar",
     unicorn: "stjärnfrukter",
     kapybara: "gräs",
+    shark: "fiskar",
+    lion: "kött",
   };
   return foodNameMap[normalizedPetType] || "mat";
 }

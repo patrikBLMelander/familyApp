@@ -4,7 +4,7 @@ import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp"
 import { getDailyChoresForDate, markDailyChoreCompleted, unmarkDailyChoreCompleted, DailyChoreWithCompletionResponse } from "../../shared/api/dailyChores";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
-import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
+import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, checkStandaloneImageExists, getSeasonalBackgroundPath, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
 import { getPetFoodEmoji, getPetFoodName, getRandomPetMessage } from "../pet/petFoodUtils";
 import { getPetGradient, isDarkPetTheme } from "../pet/petTheme";
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
@@ -42,6 +42,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
   const [error, setError] = useState<string | null>(null);
   const [choreToggleError, setChoreToggleError] = useState<string | null>(null);
   const [hasIntegratedImage, setHasIntegratedImage] = useState<boolean>(false);
+  const [hasStandaloneImage, setHasStandaloneImage] = useState<boolean>(false);
   
   // Food collection state
   const [collectedFoodCount, setCollectedFoodCount] = useState<number>(0);
@@ -149,10 +150,14 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           previousLevelRef.current = xpData.currentLevel;
         }
 
-        // Check if integrated image exists for this pet
+        // Check if integrated or standalone image exists for this pet
         if (petData) {
-          const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
+          const [integratedExists, standaloneExists] = await Promise.all([
+            checkIntegratedImageExists(petData.petType, petData.growthStage),
+            checkStandaloneImageExists(petData.petType, petData.growthStage),
+          ]);
           setHasIntegratedImage(integratedExists);
+          setHasStandaloneImage(standaloneExists);
         }
 
         setChores(choresData);
@@ -206,7 +211,6 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
       } else {
         await markDailyChoreCompleted(choreId, today);
         if (chore.chore.xpPoints > 0 && memberId) {
-          // Reload XP/food after completing a chore
           const [xpData, foodData] = await Promise.all([
             fetchCurrentXpProgress().catch(() => null),
             getCollectedFood().catch(() => ({ foodItems: [], totalCount: 0 })),
@@ -287,8 +291,12 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
           const petData = await fetchCurrentPet().catch(() => null);
           if (petData) {
             setPet(petData);
-            const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
+            const [integratedExists, standaloneExists] = await Promise.all([
+              checkIntegratedImageExists(petData.petType, petData.growthStage),
+              checkStandaloneImageExists(petData.petType, petData.growthStage),
+            ]);
             setHasIntegratedImage(integratedExists);
+            setHasStandaloneImage(standaloneExists);
           }
         }
       }
@@ -491,7 +499,9 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
         {/* Image container with 3:2 aspect ratio (1440×960) */}
         <div
           style={{
-            backgroundImage: hasIntegratedImage
+            backgroundImage: hasStandaloneImage
+              ? `url(${getSeasonalBackgroundPath()})`
+              : hasIntegratedImage
               ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
               : `url(${getPetBackgroundImagePath(pet.petType)})`,
             backgroundSize: "cover",
@@ -507,8 +517,7 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
             paddingBottom: pet ? (windowWidth < 768 ? "40px" : "60px") : "0",
           }}
         >
-          {/* Only show PetVisualization if integrated image doesn't exist */}
-          {!hasIntegratedImage && (
+          {(hasStandaloneImage || !hasIntegratedImage) && (
             <div style={{
               display: "flex",
               alignItems: "center",

@@ -38,6 +38,42 @@ export function getPetBackgroundImagePath(petType: string): string {
 }
 
 /**
+ * Get the current season based on the current month.
+ * Mar–May = spring, Jun–Aug = summer, Sep–Nov = autumn, Dec–Feb = winter
+ */
+export function getCurrentSeason(): string {
+  const month = new Date().getMonth() + 1; // 1–12
+  if (month >= 3 && month <= 5) return "spring";
+  if (month >= 6 && month <= 8) return "summer";
+  if (month >= 9 && month <= 11) return "autumn";
+  return "winter";
+}
+
+/**
+ * Get the path to the current seasonal background image.
+ * Format: /background/{season}.png
+ */
+export function getSeasonalBackgroundPath(): string {
+  return `/background/${getCurrentSeason()}.png`;
+}
+
+/**
+ * Check if a standalone pet stage image exists (transparent/no-background variant).
+ * Format: /pets/{petType}/{petType}-stage{stage}.png
+ * Returns a promise that resolves to true if the image loads successfully.
+ */
+export function checkStandaloneImageExists(petType: string, growthStage: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const stage = Math.max(1, Math.min(5, growthStage));
+    const normalizedPetType = petType.toLowerCase();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = `/pets/${normalizedPetType}/${normalizedPetType}-stage${stage}.png`;
+  });
+}
+
+/**
  * Get Swedish name for a pet type.
  * Returns the Swedish name or the petType itself if not found.
  */
@@ -56,6 +92,8 @@ export function getPetNameSwedish(petType: string): string {
     hydra: "Hydra",
     unicorn: "Enhörning",
     kapybara: "Kapybara",
+    shark: "Haj",
+    lion: "Lejon",
   };
   return petNames[normalizedPetType] || petType;
 }
@@ -79,6 +117,8 @@ export function getPetNameSwedishLowercase(petType: string): string {
     hydra: "hydra",
     unicorn: "enhörning",
     kapybara: "kapybara",
+    shark: "haj",
+    lion: "lejon",
   };
   return petNames[normalizedPetType] || petType;
 }

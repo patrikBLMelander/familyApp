@@ -7,7 +7,7 @@ import { AGE_GROUPS, TASK_SUGGESTIONS, AgeGroup } from "../familymembers/taskSug
 import { fetchCurrentPet, PetResponse, feedPet, getCollectedFood, getLastFedDate, fetchMemberPet } from "../../shared/api/pets";
 import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp";
 import { PetVisualization } from "../pet/PetVisualization";
-import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
+import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, checkStandaloneImageExists, getSeasonalBackgroundPath, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
 import { getPetFoodEmoji, getPetFoodName, getRandomPetMessage } from "../pet/petFoodUtils";
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
 import { ConfettiAnimation } from "./components/ConfettiAnimation";
@@ -51,6 +51,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
   const [petMood, setPetMood] = useState<"happy" | "hungry">("happy");
   const [petMessage, setPetMessage] = useState<string>("");
   const [hasIntegratedImage, setHasIntegratedImage] = useState<boolean>(false);
+  const [hasStandaloneImage, setHasStandaloneImage] = useState<boolean>(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
   const previousLevelRef = useRef<number>(0);
 
@@ -137,9 +138,13 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
           previousLevelRef.current = xpData.currentLevel;
         }
 
-        // Check if integrated image exists
-        const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
+        // Check if integrated or standalone image exists
+        const [integratedExists, standaloneExists] = await Promise.all([
+          checkIntegratedImageExists(petData.petType, petData.growthStage),
+          checkStandaloneImageExists(petData.petType, petData.growthStage),
+        ]);
         setHasIntegratedImage(integratedExists);
+        setHasStandaloneImage(standaloneExists);
 
         // Check pet mood
         const wasFedToday = isDateToday(lastFedData.lastFedAt);
@@ -352,8 +357,12 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
           const petData = await fetchCurrentPet().catch(() => null);
           if (petData) {
             setPet(petData);
-            const integratedExists = await checkIntegratedImageExists(petData.petType, petData.growthStage);
+            const [integratedExists, standaloneExists] = await Promise.all([
+              checkIntegratedImageExists(petData.petType, petData.growthStage),
+              checkStandaloneImageExists(petData.petType, petData.growthStage),
+            ]);
             setHasIntegratedImage(integratedExists);
+            setHasStandaloneImage(standaloneExists);
           }
         }
       }
@@ -486,7 +495,9 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
           }}>
             <div
               style={{
-                backgroundImage: hasIntegratedImage
+                backgroundImage: hasStandaloneImage
+                  ? `url(${getSeasonalBackgroundPath()})`
+                  : hasIntegratedImage
                   ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
                   : `url(${getPetBackgroundImagePath(pet.petType)})`,
                 backgroundSize: "cover",
@@ -500,7 +511,7 @@ export function AdultDashboard({ onNavigate, familyId }: AdultDashboardProps) {
                 paddingBottom: windowWidth < 768 ? "40px" : "60px",
               }}
             >
-              {!hasIntegratedImage && (
+              {(hasStandaloneImage || !hasIntegratedImage) && (
                 <div style={{
                   display: "flex",
                   alignItems: "center",

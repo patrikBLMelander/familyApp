@@ -31,6 +31,8 @@ const EGG_NAMES: Record<string, string> = {
   teal_egg: "Turkost ägg",
   pink_egg: "Rosa ägg",
   cyan_egg: "Cyan ägg",
+  white_egg: "Vitt ägg",
+  golden_egg: "Gyllene ägg",
 };
 
 function getEggName(eggType: string): string {
