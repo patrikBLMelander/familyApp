@@ -13,8 +13,11 @@ import {
   getIntegratedPetImagePath,
   getPetBackgroundImagePath,
   checkIntegratedImageExists,
+  checkStandaloneImageExists,
+  getSeasonalBackgroundPath,
   getPetNameSwedish,
 } from "../pet/petImageUtils";
+import { PetVisualization } from "../pet/PetVisualization";
 import { getPetFoodName } from "../pet/petFoodUtils";
 import { getPetGradient, isDarkPetTheme } from "../pet/petTheme";
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
@@ -39,6 +42,7 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasIntegratedImage, setHasIntegratedImage] = useState(false);
+  const [hasStandaloneImage, setHasStandaloneImage] = useState(false);
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 390
   );
@@ -87,8 +91,12 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
         setPet(fetchedPet);
         setXpProgress(fetchedXp);
         if (fetchedPet) {
-          const exists = await checkIntegratedImageExists(fetchedPet.petType, fetchedPet.growthStage);
-          setHasIntegratedImage(exists);
+          const [standalone, integrated] = await Promise.all([
+            checkStandaloneImageExists(fetchedPet.petType, fetchedPet.growthStage),
+            checkIntegratedImageExists(fetchedPet.petType, fetchedPet.growthStage),
+          ]);
+          setHasStandaloneImage(standalone);
+          setHasIntegratedImage(integrated);
         }
       } finally {
         setLoading(false);
@@ -276,7 +284,9 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
             >
               <div
                 style={{
-                  backgroundImage: hasIntegratedImage
+                  backgroundImage: hasStandaloneImage
+                    ? `url(${getSeasonalBackgroundPath()})`
+                    : hasIntegratedImage
                     ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
                     : `url(${getPetBackgroundImagePath(pet.petType)})`,
                   backgroundSize: "cover",
@@ -290,6 +300,17 @@ export function ParentChildView({ childId, childName, onBack }: ParentChildViewP
                   paddingBottom: windowWidth < 768 ? "40px" : "60px",
                 }}
               >
+                {(hasStandaloneImage || !hasIntegratedImage) && (
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "100%",
+                    padding: "20px",
+                  }}>
+                    <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
+                  </div>
+                )}
                 <div
                   style={{
                     position: "absolute",

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { fetchAllFamilyMembers, FamilyMemberResponse } from "../../shared/api/familyMembers";
 import { fetchMemberXpProgress, fetchMemberXpHistory, awardBonusXp, XpProgressResponse, XpHistoryResponse } from "../../shared/api/xp";
 import { fetchMemberPet, fetchMemberPetHistory, PetResponse, PetHistoryResponse } from "../../shared/api/pets";
-import { getIntegratedPetImagePath, getPetNameSwedish } from "../pet/petImageUtils";
+import { getIntegratedPetImagePath, checkIntegratedImageExists, checkStandaloneImageExists, getSeasonalBackgroundPath, getPetNameSwedish } from "../pet/petImageUtils";
+import { PetVisualization } from "../pet/PetVisualization";
 import { getPetFoodEmoji, getPetFoodName } from "../pet/petFoodUtils";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
@@ -26,6 +27,7 @@ type ChildXpData = {
 export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
   const [children, setChildren] = useState<FamilyMemberResponse[]>([]);
   const [childrenXpData, setChildrenXpData] = useState<Map<string, ChildXpData>>(new Map());
+  const [petImageFlags, setPetImageFlags] = useState<Map<string, { standalone: boolean; integrated: boolean }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bonusXpDialog, setBonusXpDialog] = useState<{ childId: string; childName: string } | null>(null);
@@ -90,6 +92,21 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
         }
 
         setChildrenXpData(xpDataMap);
+
+        // Check standalone + integrated image availability per child's current pet
+        const flagEntries = await Promise.all(
+          childDataResults
+            .filter(r => r.data.pet)
+            .map(async (r) => {
+              const pet = r.data.pet!;
+              const [standalone, integrated] = await Promise.all([
+                checkStandaloneImageExists(pet.petType, pet.growthStage),
+                checkIntegratedImageExists(pet.petType, pet.growthStage),
+              ]);
+              return [r.childId, { standalone, integrated }] as [string, { standalone: boolean; integrated: boolean }];
+            })
+        );
+        setPetImageFlags(new Map(flagEntries));
       } catch (e) {
         console.error("Error loading children XP data:", e);
         setError("Kunde inte ladda data.");
@@ -139,6 +156,20 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           }
           return newMap;
         });
+
+        // Refresh image flags if pet grew to a new stage
+        const currentPet = pet;
+        if (currentPet) {
+          const [standalone, integrated] = await Promise.all([
+            checkStandaloneImageExists(currentPet.petType, currentPet.growthStage),
+            checkIntegratedImageExists(currentPet.petType, currentPet.growthStage),
+          ]);
+          setPetImageFlags(prev => {
+            const next = new Map(prev);
+            next.set(bonusXpDialog.childId, { standalone, integrated });
+            return next;
+          });
+        }
       } catch (e) {
         console.error("Error reloading child data after bonus XP:", e);
         // Continue anyway - food was created successfully
@@ -320,16 +351,28 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
           }
           
 
-          // All pets have integrated images, so always use them (EXACT same as ChildDashboard)
-          const imagePath = pet ? getIntegratedPetImagePath(pet.petType, pet.growthStage) : undefined;
-          
+          // Prefer standalone + seasonal background; fall back to integrated image as background.
+          const flags = petImageFlags.get(child.id);
+          const hasStandaloneImage = flags?.standalone ?? false;
+          const hasIntegratedImage = flags?.integrated ?? false;
+          const backgroundPath = pet
+            ? hasStandaloneImage
+              ? getSeasonalBackgroundPath()
+              : hasIntegratedImage
+              ? getIntegratedPetImagePath(pet.petType, pet.growthStage)
+              : undefined
+            : undefined;
+          const backgroundSize = hasStandaloneImage ? "cover" : pet ? "contain" : undefined;
+          const backgroundPosition = hasStandaloneImage ? "center" : "center top";
+          const showPetOverlay = pet && (hasStandaloneImage || !hasIntegratedImage);
+
           return (
             <div key={child.id} style={{ marginBottom: "24px" }}>
               {/* Header with name and XP button - above the card, not over the image */}
-              <div style={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center", 
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
                 marginBottom: "12px",
                 gap: "8px",
               }}>
@@ -345,12 +388,12 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                   + Ge mat
                 </button>
               </div>
-              
+
               {/* Pet card with image */}
               <section className="card" style={{
-                backgroundImage: imagePath ? `url(${imagePath})` : undefined,
-                backgroundSize: pet ? "contain" : undefined,
-                backgroundPosition: "center top", // Position image at top to show more of it
+                backgroundImage: backgroundPath ? `url(${backgroundPath})` : undefined,
+                backgroundSize,
+                backgroundPosition,
                 backgroundRepeat: "no-repeat",
                 backgroundColor: "white", // Fallback if image doesn't load (same as ChildDashboard)
                 borderRadius: "24px",
@@ -365,6 +408,16 @@ export function ChildrenXpView({ onNavigate }: ChildrenXpViewProps) {
                 maxWidth: "100%",
                 boxSizing: "border-box",
               }}>
+              {showPetOverlay && pet && (
+                <div style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginBottom: "16px",
+                }}>
+                  <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
+                </div>
+              )}
               
               {/* Text overlay at bottom with solid background for readability (EXACT same as ChildDashboard) */}
               <div style={{

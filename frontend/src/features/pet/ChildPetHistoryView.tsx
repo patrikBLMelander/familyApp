@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchPetHistory, PetHistoryResponse } from "../../shared/api/pets";
 import { fetchXpHistory, XpHistoryResponse } from "../../shared/api/xp";
 import { PetVisualization } from "./PetVisualization";
-import { getIntegratedPetImagePath, checkIntegratedImageExists, getPetNameSwedish } from "./petImageUtils";
+import { getIntegratedPetImagePath, checkIntegratedImageExists, checkStandaloneImageExists, getSeasonalBackgroundPath, getPetNameSwedish } from "./petImageUtils";
 import { getPetFoodEmoji, getPetFoodName } from "./petFoodUtils";
 
 type ViewKey = "dashboard";
@@ -45,6 +45,7 @@ export function ChildPetHistoryView({ onNavigate, childName }: ChildPetHistoryVi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasIntegratedImages, setHasIntegratedImages] = useState<Map<string, boolean>>(new Map());
+  const [hasStandaloneImages, setHasStandaloneImages] = useState<Map<string, boolean>>(new Map());
 
   useEffect(() => {
     const load = async () => {
@@ -60,17 +61,20 @@ export function ChildPetHistoryView({ onNavigate, childName }: ChildPetHistoryVi
         setPetHistory(pets);
         setXpHistory(xp);
 
-        // Check for integrated images for all pets
+        // Check for standalone + integrated images for all pets in parallel
         const imageChecks = await Promise.all(
           pets.map(async (pet) => {
             const key = `${pet.petType}-${pet.finalGrowthStage}`;
-            const exists = await checkIntegratedImageExists(pet.petType, pet.finalGrowthStage);
-            return [key, exists] as [string, boolean];
+            const [standalone, integrated] = await Promise.all([
+              checkStandaloneImageExists(pet.petType, pet.finalGrowthStage),
+              checkIntegratedImageExists(pet.petType, pet.finalGrowthStage),
+            ]);
+            return { key, standalone, integrated };
           })
         );
 
-        const imageMap = new Map<string, boolean>(imageChecks);
-        setHasIntegratedImages(imageMap);
+        setHasStandaloneImages(new Map(imageChecks.map(c => [c.key, c.standalone])));
+        setHasIntegratedImages(new Map(imageChecks.map(c => [c.key, c.integrated])));
       } catch (e) {
         console.error("Error loading pet history:", e);
         setError("Kunde inte ladda historiken. Försök igen.");
@@ -190,6 +194,7 @@ export function ChildPetHistoryView({ onNavigate, childName }: ChildPetHistoryVi
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           {combinedHistory.map(({ pet, xp }) => {
             const imageKey = `${pet.petType}-${pet.finalGrowthStage}`;
+            const hasStandaloneImage = hasStandaloneImages.get(imageKey) || false;
             const hasIntegratedImage = hasIntegratedImages.get(imageKey) || false;
             const foodEmoji = getPetFoodEmoji(pet.petType);
             const foodName = getPetFoodName(pet.petType);
@@ -210,13 +215,15 @@ export function ChildPetHistoryView({ onNavigate, childName }: ChildPetHistoryVi
                 {/* Pet Image Section */}
                 <div
                   style={{
-                    backgroundImage: hasIntegratedImage
+                    backgroundImage: hasStandaloneImage
+                      ? `url(${getSeasonalBackgroundPath()})`
+                      : hasIntegratedImage
                       ? `url(${getIntegratedPetImagePath(pet.petType, pet.finalGrowthStage)})`
                       : undefined,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                     backgroundRepeat: "no-repeat",
-                    backgroundColor: hasIntegratedImage ? "white" : "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+                    backgroundColor: hasStandaloneImage || hasIntegratedImage ? "white" : "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
                     width: "100%",
                     aspectRatio: "3 / 2",
                     position: "relative",
@@ -226,7 +233,7 @@ export function ChildPetHistoryView({ onNavigate, childName }: ChildPetHistoryVi
                     padding: "20px",
                   }}
                 >
-                  {!hasIntegratedImage && (
+                  {(hasStandaloneImage || !hasIntegratedImage) && (
                     <PetVisualization
                       petType={pet.petType}
                       growthStage={pet.finalGrowthStage}

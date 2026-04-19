@@ -15,8 +15,11 @@ import {
   getIntegratedPetImagePath,
   getPetBackgroundImagePath,
   checkIntegratedImageExists,
+  checkStandaloneImageExists,
+  getSeasonalBackgroundPath,
   getPetNameSwedish,
 } from "../pet/petImageUtils";
+import { PetVisualization } from "../pet/PetVisualization";
 import { HalfCircleProgress } from "./components/HalfCircleProgress";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "childrenxp" | "childrenwallet" | "childview";
@@ -44,6 +47,7 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
   const [pet, setPet] = useState<PetResponse | null>(null);
   const [xpProgress, setXpProgress] = useState<XpProgressResponse | null>(null);
   const [hasIntegratedImage, setHasIntegratedImage] = useState(false);
+  const [hasStandaloneImage, setHasStandaloneImage] = useState(false);
   const [petMood, setPetMood] = useState<"happy" | "hungry">("hungry");
   const [petMoodMessage, setPetMoodMessage] = useState("");
   const [showXpGain, setShowXpGain] = useState(false);
@@ -96,8 +100,12 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
       setPet(fetchedPet);
       setXpProgress(fetchedXp);
       if (fetchedPet) {
-        const exists = await checkIntegratedImageExists(fetchedPet.petType, fetchedPet.growthStage);
-        setHasIntegratedImage(exists);
+        const [standalone, integrated] = await Promise.all([
+          checkStandaloneImageExists(fetchedPet.petType, fetchedPet.growthStage),
+          checkIntegratedImageExists(fetchedPet.petType, fetchedPet.growthStage),
+        ]);
+        setHasStandaloneImage(standalone);
+        setHasIntegratedImage(integrated);
       }
       const mood = lastFed?.lastFedAt?.startsWith(getTodayString()) ? "happy" : "hungry";
       setPetMood(mood);
@@ -131,7 +139,12 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
             const updatedPet = await fetchCurrentPet().catch(() => null);
             setPet(updatedPet);
             if (updatedPet) {
-              setHasIntegratedImage(await checkIntegratedImageExists(updatedPet.petType, updatedPet.growthStage));
+              const [standalone, integrated] = await Promise.all([
+                checkStandaloneImageExists(updatedPet.petType, updatedPet.growthStage),
+                checkIntegratedImageExists(updatedPet.petType, updatedPet.growthStage),
+              ]);
+              setHasStandaloneImage(standalone);
+              setHasIntegratedImage(integrated);
             }
           }
           setPetMood("happy");
@@ -266,7 +279,9 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
                 >
                   <div
                     style={{
-                      backgroundImage: hasIntegratedImage
+                      backgroundImage: hasStandaloneImage
+                        ? `url(${getSeasonalBackgroundPath()})`
+                        : hasIntegratedImage
                         ? `url(${getIntegratedPetImagePath(pet.petType, pet.growthStage)})`
                         : `url(${getPetBackgroundImagePath(pet.petType)})`,
                       backgroundSize: "cover",
@@ -280,6 +295,17 @@ export function AdultChoresView({ onNavigate }: AdultChoresViewProps) {
                       paddingBottom: windowWidth < 768 ? "40px" : "60px",
                     }}
                   >
+                    {(hasStandaloneImage || !hasIntegratedImage) && (
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        height: "100%",
+                        padding: "20px",
+                      }}>
+                        <PetVisualization petType={pet.petType} growthStage={pet.growthStage} size="large" />
+                      </div>
+                    )}
                     <div
                       style={{
                         position: "absolute",
