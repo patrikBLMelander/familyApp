@@ -65,7 +65,7 @@ export default defineConfig({
             urlPattern: /\/pets\/.*\.png$/i,
             handler: "StaleWhileRevalidate",
             options: {
-              cacheName: "pet-images-cache-v2", // bumped to clear old 30-day CacheFirst entries
+              cacheName: "pet-images-cache-v3", // bumped to purge stale pet images after standalone-image redesign
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
