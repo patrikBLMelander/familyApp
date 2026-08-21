@@ -43,6 +43,13 @@ object DailyChoreRepository {
         )
     }
 
+    suspend fun deleteChore(choreId: String) = withContext(Dispatchers.IO) {
+        val response = ApiClient.dailyChoreApi.deleteChore(choreId)
+        if (!response.isSuccessful) {
+            throw IllegalStateException("Kunde inte ta bort sysslan (HTTP ${response.code()})")
+        }
+    }
+
     suspend fun toggleChoreCompletion(
         choreId: String,
         isCurrentlyCompleted: Boolean,

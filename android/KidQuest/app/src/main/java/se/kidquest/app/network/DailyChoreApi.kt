@@ -66,4 +66,10 @@ interface DailyChoreApi {
     suspend fun createChore(
         @Body body: CreateDailyChoreRequest,
     ): DailyChoreResponse
+
+    /** Removes the chore itself, not a completion. Existing completions go with it. */
+    @DELETE("daily-chores/{choreId}")
+    suspend fun deleteChore(
+        @Path("choreId") choreId: String,
+    ): Response<Unit>
 }

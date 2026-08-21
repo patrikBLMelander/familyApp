@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -31,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,12 +50,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import se.kidquest.app.chore.DailyChoreRepository
-import se.kidquest.app.network.DailyChoreWithCompletionResponse
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.launch
+import se.kidquest.app.chore.DailyChoreRepository
+import se.kidquest.app.network.DailyChoreWithCompletionResponse
 
 private val CHILD_WEEKDAY_ABBREVS = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 private val CHILD_WEEKDAY_LABELS_SV = listOf("Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön")
@@ -78,6 +81,9 @@ fun ChildTasksScreen(
     var refreshKey by remember { mutableStateOf(0) }
     var activeTab by remember { mutableStateOf("today") }
     var showAddChoreDialog by remember { mutableStateOf(false) }
+    // The chore awaiting delete confirmation, so a mistyped chore can be removed
+    // without a stray tap wiping one that was fine.
+    var chorePendingDelete by remember { mutableStateOf<DailyChoreWithCompletionResponse?>(null) }
     var showAddSingleDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -299,6 +305,17 @@ fun ChildTasksScreen(
                                                 )
                                             }
                                         }
+                                        IconButton(
+                                            onClick = { chorePendingDelete = task },
+                                            modifier = Modifier.size(36.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Ta bort ${task.chore.title}",
+                                                tint = Color(0xFF9CA3AF),
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -350,6 +367,45 @@ fun ChildTasksScreen(
                 }
             }
         }
+    }
+
+    chorePendingDelete?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { chorePendingDelete = null },
+            title = { Text("Ta bort sysslan?") },
+            text = {
+                Text(
+                    "\"${pending.chore.title}\" tas bort för $childName, tillsammans med " +
+                        "historiken över när den blivit gjord. Det går inte att ångra.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val choreId = pending.chore.id
+                        val previous = tasks
+                        // Optimistic: the row disappears at once and comes back if the
+                        // call fails, which is how the web version behaves.
+                        tasks = tasks.filterNot { it.chore.id == choreId }
+                        chorePendingDelete = null
+                        scope.launch {
+                            try {
+                                DailyChoreRepository.deleteChore(choreId)
+                                refreshKey++
+                            } catch (e: Exception) {
+                                tasks = previous
+                                toggleError = e.message ?: "Kunde inte ta bort sysslan."
+                            }
+                        }
+                    },
+                ) {
+                    Text("Ta bort", color = Color(0xFFC53030))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { chorePendingDelete = null }) { Text("Avbryt") }
+            },
+        )
     }
 
     if (showAddChoreDialog) {
