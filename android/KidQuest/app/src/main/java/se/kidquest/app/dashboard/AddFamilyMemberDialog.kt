@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -21,12 +22,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.chore.DailyChoreRepository
-import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.CreateFamilyMemberRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import se.kidquest.app.chore.DailyChoreRepository
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.CreateFamilyMemberRequest
 
 @Composable
 fun AddFamilyMemberDialog(
@@ -38,10 +39,13 @@ fun AddFamilyMemberDialog(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedAgeRange by remember { mutableStateOf<AgeRange?>(null) }
+    // Only CHILD and PARENT are offered. ASSISTANT ("Äldre barn") still exists in
+    // the backend for members created before, but is no longer handed out.
+    var isParent by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lägg till barn") },
+        title = { Text("Lägg till familjemedlem") },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -51,6 +55,33 @@ fun AddFamilyMemberDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = !isParent,
+                        onClick = { isParent = false },
+                        label = { Text("Barn") },
+                    )
+                    FilterChip(
+                        selected = isParent,
+                        onClick = { isParent = true },
+                        label = { Text("Förälder") },
+                    )
+                }
+                if (isParent) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Föräldern kopplar sin telefon med QR-koden på deras kort. " +
+                            "E-post och lösenord kan sättas i webbappen om de behöver " +
+                            "logga in på en ny enhet.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                // Age only drives suggested chores, which a parent has no use for.
+                if (!isParent) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "Ålder (valfritt – för färdiga uppgifter)",
@@ -104,6 +135,7 @@ fun AddFamilyMemberDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                }
             }
         },
         confirmButton = {
@@ -116,10 +148,13 @@ fun AddFamilyMemberDialog(
                         try {
                             val member = withContext(Dispatchers.IO) {
                                 ApiClient.familyMembersApi.createMember(
-                                    CreateFamilyMemberRequest(name = name.trim(), role = "CHILD"),
+                                    CreateFamilyMemberRequest(
+                                        name = name.trim(),
+                                        role = if (isParent) "PARENT" else "CHILD",
+                                    ),
                                 )
                             }
-                            selectedAgeRange?.let { range ->
+                            selectedAgeRange?.takeIf { !isParent }?.let { range ->
                                 createDefaultTasksForAgeRange(
                                     memberId = member.id,
                                     ageRange = range,

@@ -15,29 +15,35 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Wallet
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,10 +52,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.FamilyMemberResponse
-import java.time.LocalDate
+import se.kidquest.app.network.UpdateFamilyMemberRequest
+import se.kidquest.app.session.TokenStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,17 +79,26 @@ fun AdultDashboardScreen(
     onFamilyTasks: () -> Unit = {},
 ) {
     var children by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
+    // refreshKey comes from the caller; this covers reloads the screen triggers
+    // itself, such as after a rename or a delete.
+    var localRefresh by remember { mutableStateOf(0) }
+    var memberPendingRename by remember { mutableStateOf<FamilyMemberResponse?>(null) }
+    var memberPendingDelete by remember { mutableStateOf<FamilyMemberResponse?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var inviteChild by remember { mutableStateOf<FamilyMemberResponse?>(null) }
     var childSummaries by remember { mutableStateOf<Map<String, ChildSummary>>(emptyMap()) }
+    var adults by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
+    // Used to mark the signed-in parent and keep them out of their own delete menu.
+    val currentMemberId = remember { TokenStore.getSession()?.memberId }
 
-    LaunchedEffect(refreshKey) {
+    LaunchedEffect(refreshKey, localRefresh) {
         loading = true
         error = null
         try {
             val all = ApiClient.familyMembersApi.getAllMembers()
             children = all.filter { it.role == "CHILD" || it.role == "ASSISTANT" }
+            adults = all.filter { it.role == "PARENT" }
             childSummaries = coroutineScope {
                 children.map { child ->
                     async {
@@ -331,13 +353,63 @@ fun AdultDashboardScreen(
                             onPetClick = { onChildPet(child.id, child.name) },
                             onWalletClick = { onChildWallet(child.id, child.name) },
                             onTasksClick = { onChildTasks(child.id, child.name) },
+                            onRenameClick = { memberPendingRename = child },
+                            onDeleteClick = { memberPendingDelete = child },
                             onInviteClick = { inviteChild = child },
+                        )
+                    }
+                }
+
+                if (adults.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Vuxna",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textPrimary,
+                            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(adults, key = { it.id }) { adult ->
+                        AdultCard(
+                            name = adult.name,
+                            isCurrentUser = adult.id == currentMemberId,
+                            cardPastel = cardPastel,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            buttonPastel = buttonPastel,
+                            buttonOnPastel = buttonOnPastel,
+                            onRenameClick = { memberPendingRename = adult },
+                            onDeleteClick = { memberPendingDelete = adult },
+                            onInviteClick = { inviteChild = adult },
                         )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            memberPendingRename?.let { member ->
+                RenameMemberDialog(
+                    member = member,
+                    onDismiss = { memberPendingRename = null },
+                    onRenamed = {
+                        memberPendingRename = null
+                        localRefresh++
+                    },
+                )
+            }
+
+            memberPendingDelete?.let { member ->
+                DeleteMemberDialog(
+                    member = member,
+                    onDismiss = { memberPendingDelete = null },
+                    onDeleted = {
+                        memberPendingDelete = null
+                        localRefresh++
+                    },
+                )
+            }
 
             if (showAddMemberHint && children.isEmpty()) {
                 Card(
@@ -360,7 +432,7 @@ fun AdultDashboardScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Tryck på \"Lägg till barn\" här nedanför så hjälper vi dig komma igång.",
+                            text = "Tryck på \"Lägg till familjemedlem\" här nedanför så hjälper vi dig komma igång.",
                             style = MaterialTheme.typography.bodySmall,
                             color = textSecondary,
                         )
@@ -384,7 +456,7 @@ fun AdultDashboardScreen(
             ) {
                 Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.size(8.dp))
-                Text("Lägg till barn")
+                Text("Lägg till familjemedlem")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -421,7 +493,10 @@ private fun ChildCard(
     onWalletClick: () -> Unit,
     onTasksClick: () -> Unit,
     onInviteClick: () -> Unit,
+    onRenameClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {},
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -433,12 +508,46 @@ private fun ChildCard(
         Column(
             modifier = Modifier.padding(20.dp),
         ) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = textPrimary,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = textPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Fler val för $name",
+                            tint = textPrimary,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Byt namn") },
+                            onClick = {
+                                menuOpen = false
+                                onRenameClick()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Ta bort", color = Color(0xFFC53030)) },
+                            onClick = {
+                                menuOpen = false
+                                onDeleteClick()
+                            },
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
             summary?.let { s ->
                 Text(
@@ -525,6 +634,246 @@ private fun ChildCard(
                 ),
             ) {
                 Text("Bjud in till appen")
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun RenameMemberDialog(
+    member: FamilyMemberResponse,
+    onDismiss: () -> Unit,
+    onRenamed: () -> Unit,
+) {
+    var name by remember { mutableStateOf(member.name) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = { Text("Byt namn") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Namn") },
+                    singleLine = true,
+                    enabled = !saving,
+                )
+                error?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !saving && name.isNotBlank() && name.trim() != member.name,
+                onClick = {
+                    saving = true
+                    error = null
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                ApiClient.familyMembersApi.updateMember(
+                                    memberId = member.id,
+                                    body = UpdateFamilyMemberRequest(name = name.trim()),
+                                )
+                            }
+                            onRenamed()
+                        } catch (e: Exception) {
+                            error = e.message ?: "Kunde inte byta namn."
+                        } finally {
+                            saving = false
+                        }
+                    }
+                },
+            ) {
+                Text(if (saving) "Sparar…" else "Spara")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !saving) { Text("Avbryt") }
+        },
+    )
+}
+
+/**
+ * Deleting a member takes their chores, completions, XP, pet history and wallet
+ * records with them, and none of it can be restored. The name has to be typed to
+ * confirm -- a plain "are you sure" is too easy to tap past for something this
+ * final, especially with the option sitting in a menu next to "Byt namn".
+ */
+@Composable
+private fun DeleteMemberDialog(
+    member: FamilyMemberResponse,
+    onDismiss: () -> Unit,
+    onDeleted: () -> Unit,
+) {
+    var typed by remember { mutableStateOf("") }
+    var deleting by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val confirmed = typed.trim().equals(member.name.trim(), ignoreCase = true)
+
+    AlertDialog(
+        onDismissRequest = { if (!deleting) onDismiss() },
+        title = { Text("Ta bort ${member.name}?") },
+        text = {
+            Column {
+                Text(
+                    "Det här tar bort ${member.name} ur familjen, tillsammans med alla " +
+                        "sysslor, XP, djur och plånbokshistorik. Det går inte att ångra.",
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Skriv ${member.name} för att bekräfta:",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = { typed = it },
+                    singleLine = true,
+                    enabled = !deleting,
+                )
+                error?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = confirmed && !deleting,
+                onClick = {
+                    deleting = true
+                    error = null
+                    scope.launch {
+                        try {
+                            val response = withContext(Dispatchers.IO) {
+                                ApiClient.familyMembersApi.deleteMember(member.id)
+                            }
+                            if (!response.isSuccessful) {
+                                throw IllegalStateException("HTTP ${response.code()}")
+                            }
+                            onDeleted()
+                        } catch (e: Exception) {
+                            error = e.message ?: "Kunde inte ta bort medlemmen."
+                        } finally {
+                            deleting = false
+                        }
+                    }
+                },
+            ) {
+                Text(
+                    text = if (deleting) "Tar bort…" else "Ta bort",
+                    color = if (confirmed) Color(0xFFC53030) else Color(0xFF9CA3AF),
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !deleting) { Text("Avbryt") }
+        },
+    )
+}
+
+
+/**
+ * A parent or other adult. Deliberately plainer than ChildCard: adults have no pet,
+ * no chore progress and no wallet to show, so the card is identity plus the two
+ * things you might do to it.
+ *
+ * The signed-in parent gets no delete option -- removing your own account from the
+ * device you are holding is never what you meant, and there is no way back.
+ */
+@Composable
+private fun AdultCard(
+    name: String,
+    isCurrentUser: Boolean,
+    cardPastel: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    buttonPastel: Color,
+    buttonOnPastel: Color,
+    onRenameClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onInviteClick: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardPastel.copy(alpha = 0.95f)),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isCurrentUser) "$name (du)" else name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary,
+                    )
+                    Text(
+                        text = "Förälder",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary,
+                    )
+                }
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Fler val för $name",
+                            tint = textPrimary,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Byt namn") },
+                            onClick = {
+                                menuOpen = false
+                                onRenameClick()
+                            },
+                        )
+                        if (!isCurrentUser) {
+                            DropdownMenuItem(
+                                text = { Text("Ta bort", color = Color(0xFFC53030)) },
+                                onClick = {
+                                    menuOpen = false
+                                    onDeleteClick()
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            if (!isCurrentUser) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onInviteClick,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = buttonPastel,
+                        contentColor = buttonOnPastel,
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("Koppla telefon")
+                }
             }
         }
     }
