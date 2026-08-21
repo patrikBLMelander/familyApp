@@ -2,6 +2,7 @@ package se.kidquest.app.dashboard
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -100,6 +101,9 @@ fun ChildDashboardScreen(
     var collectedFoodCount by remember { mutableStateOf(0) }
     var isFeeding by remember { mutableStateOf(false) }
     var showSelectEggDialog by remember { mutableStateOf(false) }
+    // Distinct from "no pet": the request itself failed, so we must not claim the
+    // child has not chosen an egg.
+    var petLoadFailed by remember { mutableStateOf(false) }
     var showConfetti by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableStateOf(0) }
     var isInitialLoad by remember { mutableStateOf(true) }
@@ -115,21 +119,42 @@ fun ChildDashboardScreen(
             loading = true
         }
         error = null
+        petLoadFailed = false
         try {
             coroutineScope {
-                val petDeferred = async { kotlin.runCatching { ApiClient.petsApi.getCurrentPet() }.getOrNull() }
+                val petDeferred = async { kotlin.runCatching { ApiClient.petsApi.getCurrentPet() } }
                 val xpDeferred = async { kotlin.runCatching { ApiClient.xpApi.getCurrentProgress() }.getOrNull() }
                 val walletDeferred = async { kotlin.runCatching { ApiClient.walletApi.getWalletBalance() }.getOrNull() }
                 val foodDeferred = async { kotlin.runCatching { ApiClient.petsApi.getCollectedFood() }.getOrNull() }
                 val tasksDeferred = async { DailyChoreRepository.fetchChoresForToday(childId) }
 
-                val petResp = petDeferred.await()
+                val petResult = petDeferred.await()
+                val petResp = petResult.getOrNull()
                 val xpResp = xpDeferred.await()
                 val walletResp = walletDeferred.await()
                 val foodResp = foodDeferred.await()
                 todaysTasks = tasksDeferred.await()
 
                 pet = if (petResp?.isSuccessful == true) petResp.body() else null
+
+                // A 404 genuinely means "this child has no pet this month", which is what
+                // opens the egg picker. Anything else - a 500, a timeout, a dropped
+                // connection - must not be reported as "you haven't chosen an egg", or a
+                // child who already has a pet is told to pick another one and then hits
+                // "Pet already selected for this month" when they try.
+                petLoadFailed = when {
+                    petResult.isFailure -> true
+                    petResp == null -> true
+                    petResp.isSuccessful -> false
+                    petResp.code() == 404 -> false
+                    else -> true
+                }
+                if (petLoadFailed) {
+                    val reason = petResult.exceptionOrNull()?.message
+                        ?: petResp?.let { "HTTP ${it.code()}" }
+                        ?: "okänt fel"
+                    Log.w("ChildDashboard", "Kunde inte hämta djur för $childId: $reason")
+                }
                 xp = if (xpResp?.isSuccessful == true) xpResp.body() else null
                 balance = walletResp
                 collectedFoodCount = foodResp?.totalCount ?: 0
@@ -152,8 +177,8 @@ fun ChildDashboardScreen(
     }
 
     var hasAutoOpenedEggDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(loading, pet, error) {
-        if (!loading && error == null && pet == null && !hasAutoOpenedEggDialog) {
+    LaunchedEffect(loading, pet, error, petLoadFailed) {
+        if (!loading && error == null && !petLoadFailed && pet == null && !hasAutoOpenedEggDialog) {
             hasAutoOpenedEggDialog = true
             showSelectEggDialog = true
         }
@@ -347,6 +372,22 @@ fun ChildDashboardScreen(
                             fontWeight = FontWeight.Bold,
                             color = cardTextPrimary,
                         )
+                    } else if (petLoadFailed) {
+                        // Offering "Välj ägg" here would be wrong: the child may well
+                        // already have a pet that we simply failed to load.
+                        Text(
+                            text = "Kunde inte hämta ditt djur just nu",
+                            color = cardTextSecondary,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { refreshKey++ },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp),
+                        ) {
+                            Text("Försök igen")
+                        }
                     } else {
                         Text(text = "Inget djur denna månad", color = cardTextSecondary)
                         Spacer(modifier = Modifier.height(8.dp))
@@ -728,6 +769,9 @@ private fun SelectEggDialog(
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var isNaming by remember { mutableStateOf(false) }
+    // Set once the pet is persisted. The hatching animation plays afterwards and
+    // hands this to onEggSelected, so nothing is celebrated before it is saved.
+    var savedPet by remember { mutableStateOf<PetResponse?>(null) }
     var showHint by remember { mutableStateOf(false) }
     var isHatching by remember { mutableStateOf(false) }
     var hatchingStage by remember { mutableStateOf(1) }
@@ -751,8 +795,9 @@ private fun SelectEggDialog(
         }
     }
 
-    LaunchedEffect(isHatching, selectedEgg) {
-        if (isHatching && selectedEgg != null) {
+    LaunchedEffect(isHatching) {
+        val pet = savedPet
+        if (isHatching && pet != null) {
             showCelebrate = false
             for (stage in 1..5) {
                 hatchingStage = stage
@@ -760,14 +805,12 @@ private fun SelectEggDialog(
             }
             showCelebrate = true
             delay(2000)
-            showCelebrate = false
-            isHatching = false
-            isNaming = true
+            onEggSelected(pet)
         }
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isHatching && !saving) onDismiss() },
         containerColor = if (isHatching) Color.White else MaterialTheme.colorScheme.surface,
         title = {
             Text(
@@ -879,14 +922,15 @@ private fun SelectEggDialog(
                     }
                 } else {
                     val egg = selectedEgg
-                    if (egg != null) {
-                        PetVisual(
-                            petType = PetImages.petTypeForEgg(egg),
-                            growthStage = 1,
-                            contentDescription = "Nytt djur",
+                    val namingEggDrawable = PetImages.eggDrawable(LocalContext.current, egg)
+                    if (namingEggDrawable != null) {
+                        Image(
+                            painter = painterResource(id = namingEggDrawable),
+                            contentDescription = "Ditt ägg",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(160.dp),
+                            contentScale = ContentScale.Fit,
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                     }
@@ -908,14 +952,14 @@ private fun SelectEggDialog(
             TextButton(
                 onClick = {
                     val egg = selectedEgg ?: return@TextButton
-                    if (!isNaming && !isHatching) {
-                        // Starta kläckningssekvens
-                        isHatching = true
-                        hatchingStage = 1
+                    if (isHatching) return@TextButton
+                    if (!isNaming) {
+                        // Ask for the name first. The egg is not persisted yet, so
+                        // backing out here loses nothing the child was promised.
+                        isNaming = true
                         showHint = false
                         return@TextButton
                     }
-                    if (isHatching) return@TextButton
                     saving = true
                     error = null
                     scope.launch {
@@ -928,7 +972,11 @@ private fun SelectEggDialog(
                                     ),
                                 )
                             }
-                            onEggSelected(pet)
+                            // Saved. Only now does the egg get to hatch.
+                            savedPet = pet
+                            isNaming = false
+                            hatchingStage = 1
+                            isHatching = true
                         } catch (e: Exception) {
                             error = e.message ?: "Kunde inte välja ägg"
                         } finally {
@@ -943,14 +991,16 @@ private fun SelectEggDialog(
                         saving -> "Väljer…"
                         isHatching -> "Ägget kläcks…"
                         !isNaming -> "Välj"
-                        else -> "Spara namn"
+                        else -> "Spara och kläck"
                     },
                 )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Välj senare")
+            if (!isHatching && !saving) {
+                TextButton(onClick = onDismiss) {
+                    Text("Välj senare")
+                }
             }
         },
     )
