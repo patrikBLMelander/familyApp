@@ -1,6 +1,7 @@
 package com.familyapp.api.family;
 
 import com.familyapp.application.family.FamilyService;
+import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.domain.family.Family;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
@@ -13,9 +14,11 @@ import java.util.UUID;
 public class FamilyController {
 
     private final FamilyService service;
+    private final FamilyMemberService memberService;
 
-    public FamilyController(FamilyService service) {
+    public FamilyController(FamilyService service, FamilyMemberService memberService) {
         this.service = service;
+        this.memberService = memberService;
     }
 
     @PostMapping("/register")
@@ -51,6 +54,25 @@ public class FamilyController {
     ) {
         var family = service.updateFamilyName(familyId, request.name());
         return toResponse(family);
+    }
+
+    /**
+     * Deletes the caller's family and everything in it. Required by both stores.
+     *
+     * The device token identifies who is asking; the service checks they are a
+     * parent of this family before touching anything.
+     */
+    @DeleteMapping("/{familyId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteFamily(
+            @PathVariable("familyId") UUID familyId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        var requester = memberService.getMemberByDeviceToken(deviceToken);
+        service.deleteFamily(familyId, requester.id());
     }
 
     private FamilyResponse toResponse(Family family) {

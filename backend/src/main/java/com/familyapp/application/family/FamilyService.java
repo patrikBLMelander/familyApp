@@ -123,6 +123,54 @@ public class FamilyService {
                 .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
     }
 
+    /**
+     * Removes a family and everything belonging to it.
+     *
+     * Required by both stores: Apple mandates in-app account deletion and Google
+     * requires a data-deletion path. There is no soft delete and no undo.
+     *
+     * The work is done by the database. Every foreign key from family cascades --
+     * members, and through them chores, completions, pets, XP, wallets, savings
+     * goals and transactions, plus the family's calendar, lists and tasks. V40
+     * converted the three wallet constraints that were RESTRICT and would
+     * otherwise have blocked this outright.
+     *
+     * Only a parent of that family may do it. A child device token must not be
+     * able to erase the household.
+     */
+    public void deleteFamily(UUID familyId, UUID requesterId) {
+        var family = familyRepository.findById(familyId)
+                .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
+
+        var requester = memberRepository.findById(requesterId)
+                .orElseThrow(() -> new IllegalArgumentException("Requester not found: " + requesterId));
+
+        var requesterFamilyId = requester.getFamily() != null ? requester.getFamily().getId() : null;
+        if (!familyId.equals(requesterFamilyId)) {
+            throw new IllegalArgumentException("Not a member of this family");
+        }
+        if (!Role.PARENT.name().equals(requester.getRole())) {
+            throw new IllegalArgumentException("Only a parent can delete the family");
+        }
+
+        // Cached device tokens and member lookups would otherwise keep resolving to
+        // rows that no longer exist, letting a deleted member authenticate.
+        var members = memberRepository.findByFamilyId(familyId);
+        for (var member : members) {
+            if (member.getDeviceToken() != null) {
+                cacheService.evictDeviceToken(member.getDeviceToken());
+            }
+            cacheService.evictMember(member.getId());
+        }
+        cacheService.evictFamilyMembers(familyId);
+        cacheService.evictCategories(familyId);
+
+        log.info("Deleting family {} with {} members, requested by {}",
+                familyId, members.size(), requesterId);
+
+        familyRepository.delete(family);
+    }
+
     public Family updateFamilyName(UUID familyId, String name) {
         var entity = familyRepository.findById(familyId)
                 .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
