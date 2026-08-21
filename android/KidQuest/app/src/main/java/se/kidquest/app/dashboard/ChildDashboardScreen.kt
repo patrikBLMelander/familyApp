@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -67,6 +68,7 @@ import se.kidquest.app.network.XpProgressResponse
 import se.kidquest.app.pet.PetFoodUtils
 import se.kidquest.app.pet.PetNameUtils
 import se.kidquest.app.pet.PetImages
+import se.kidquest.app.pet.PetVisual
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -245,7 +247,6 @@ fun ChildDashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (pet != null) {
-                        val integratedId = PetImages.getIntegratedPetDrawable(pet!!.petType, pet!!.growthStage)
                         val petName = pet!!.name ?: PetNameUtils.getPetNameSwedish(pet!!.petType)
                         val hasFedToday = lastFedDate == todayString
                         val isHungry = !hasFedToday
@@ -287,19 +288,12 @@ fun ChildDashboardScreen(
                                 .height(220.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (integratedId != null) {
-                                Image(
-                                    painter = painterResource(id = integratedId),
-                                    contentDescription = petName,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentScale = ContentScale.Fit,
-                                )
-                            } else {
-                                Text(
-                                    text = "🐾",
-                                    style = MaterialTheme.typography.displayLarge,
-                                )
-                            }
+                            PetVisual(
+                                petType = pet!!.petType,
+                                growthStage = pet!!.growthStage,
+                                contentDescription = petName,
+                                modifier = Modifier.fillMaxSize(),
+                            )
 
                             xp?.let { progress ->
                                 val xpThresholds = listOf(0, 10, 35, 70, 125)
@@ -796,7 +790,7 @@ private fun SelectEggDialog(
                     Text(text = error!!, color = MaterialTheme.colorScheme.error)
                 } else if (isHatching) {
                     val egg = selectedEgg
-                    val eggStageDrawable = PetImages.getEggStageDrawable(egg, hatchingStage)
+                    val eggStageDrawable = PetImages.eggDrawable(LocalContext.current, egg, hatchingStage)
                     if (showCelebrate) {
                         Text(
                             text = "Grattis! Ditt ägg har kläckts!",
@@ -824,7 +818,7 @@ private fun SelectEggDialog(
                     Spacer(modifier = Modifier.height(12.dp))
                     eggTypes.forEach { egg ->
                         val isSelected = egg == selectedEgg
-                        val eggDrawable = PetImages.getEggDrawable(egg)
+                        val eggDrawable = PetImages.eggDrawable(LocalContext.current, egg)
                         val label = getEggLabel(egg)
                         Card(
                             modifier = Modifier
@@ -886,18 +880,15 @@ private fun SelectEggDialog(
                 } else {
                     val egg = selectedEgg
                     if (egg != null) {
-                        val integratedId = PetImages.getIntegratedFromEgg(egg, growthStage = 1)
-                        if (integratedId != null) {
-                            Image(
-                                painter = painterResource(id = integratedId),
-                                contentDescription = "Nytt djur",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(160.dp),
-                                contentScale = ContentScale.Fit,
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
+                        PetVisual(
+                            petType = PetImages.petTypeForEgg(egg),
+                            growthStage = 1,
+                            contentDescription = "Nytt djur",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp),
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                     Text(
                         text = "Vad ska ditt djur heta?",

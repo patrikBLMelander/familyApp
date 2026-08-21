@@ -1,6 +1,5 @@
 package se.kidquest.app.dashboard
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,16 +38,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.PetResponse
 import se.kidquest.app.network.XpProgressResponse
-import se.kidquest.app.pet.PetImages
 import se.kidquest.app.pet.PetNameUtils
+import se.kidquest.app.pet.PetVisual
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
@@ -182,8 +179,6 @@ private fun PetCard(
     val xpInLevel = xp?.xpInCurrentLevel ?: 0
     val progress = (xpInLevel.toFloat() / range).coerceIn(0f, 1f)
 
-    val integratedId = PetImages.getIntegratedPetDrawable(pet.petType, pet.growthStage)
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -195,16 +190,14 @@ private fun PetCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (integratedId != null) {
-                Image(
-                    painter = painterResource(id = integratedId),
-                    contentDescription = petName,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp),
-                    contentScale = ContentScale.Fit,
-                )
-            }
+            PetVisual(
+                petType = pet.petType,
+                growthStage = pet.growthStage,
+                contentDescription = petName,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp),
+            )
 
             Text(
                 text = petName,

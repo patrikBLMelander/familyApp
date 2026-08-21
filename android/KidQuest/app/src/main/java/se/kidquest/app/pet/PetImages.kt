@@ -1,248 +1,92 @@
 package se.kidquest.app.pet
 
-import se.kidquest.app.R
+import android.content.Context
+import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Resolves pet artwork by resource name rather than a hand-written R.drawable table.
+ *
+ * Adding a species means dropping `<species>_stage1..5.png` and
+ * `<species>_egg_stage1..5.png` into res/drawable and adding one line to EGG_TO_PET.
+ *
+ * The integrated variant (pet with a background baked in) is gone. Pets are drawn as
+ * transparent standalone art over a seasonal background, matching the web app since
+ * d190a65 — see PetVisual.
+ *
+ * Because lookups are by name, res/raw/keep.xml lists these drawables so resource
+ * shrinking cannot remove them once R8 is enabled.
+ */
 object PetImages {
 
-    private fun eggToPetType(key: String): String? =
-        when (key) {
-            // Egg type IDs from backend (EGG_TO_PET_MAP)
-            "blue_egg" -> "dragon"
-            "green_egg" -> "cat"
-            "red_egg" -> "dog"
-            "yellow_egg" -> "bird"
-            "purple_egg" -> "rabbit"
-            "orange_egg" -> "bear"
-            "brown_egg" -> "snake"
-            "black_egg" -> "panda"
-            "gray_egg" -> "slot"
-            "teal_egg" -> "hydra"
-            "pink_egg" -> "unicorn"
-            "cyan_egg" -> "kapybara"
+    /** Mirrors EGG_TO_PET_MAP in the backend's PetService. */
+    private val EGG_TO_PET = mapOf(
+        "blue_egg" to "dragon",
+        "green_egg" to "cat",
+        "red_egg" to "dog",
+        "yellow_egg" to "bird",
+        "purple_egg" to "rabbit",
+        "orange_egg" to "bear",
+        "brown_egg" to "snake",
+        "black_egg" to "panda",
+        "gray_egg" to "slot",
+        "teal_egg" to "hydra",
+        "pink_egg" to "unicorn",
+        "cyan_egg" to "kapybara",
+        "white_egg" to "shark",
+        "golden_egg" to "lion",
+    )
 
-            // Fallbacks if backend ever returns petType instead of eggType
-            "dragon" -> "dragon"
-            "cat" -> "cat"
-            "dog" -> "dog"
-            "bird" -> "bird"
-            "rabbit" -> "rabbit"
-            "bear" -> "bear"
-            "snake" -> "snake"
-            "panda" -> "panda"
-            "slot" -> "slot"
-            "hydra" -> "hydra"
-            "unicorn" -> "unicorn"
-            "kapybara" -> "kapybara"
-            else -> null
-        }
+    private const val MIN_STAGE = 1
+    private const val MAX_STAGE = 5
 
-    fun getEggDrawable(eggType: String?): Int? {
+    /** Resource ids never change at runtime, and getIdentifier is too slow to recompose against. */
+    private val idCache = ConcurrentHashMap<String, Int>()
+
+    private fun Context.drawableId(name: String): Int =
+        idCache.getOrPut(name) { resources.getIdentifier(name, "drawable", packageName) }
+
+    /** "dragon" for "blue_egg". Also accepts a petType directly, since the API returns both. */
+    fun petTypeForEgg(eggType: String?): String? {
         val key = eggType?.lowercase() ?: return null
-        return when (eggToPetType(key)) {
-            "dragon" -> R.drawable.dragon_egg_stage1
-            "cat" -> R.drawable.cat_egg_stage1
-            "dog" -> R.drawable.dog_egg_stage1
-            "bird" -> R.drawable.bird_egg_stage1
-            "rabbit" -> R.drawable.rabbit_egg_stage1
-            "bear" -> R.drawable.bear_egg_stage1
-            "snake" -> R.drawable.snake_egg_stage1
-            "panda" -> R.drawable.panda_egg_stage1
-            "slot" -> R.drawable.slot_egg_stage1
-            "hydra" -> R.drawable.hydra_egg_stage1
-            "unicorn" -> R.drawable.unicorn_egg_stage1
-            "kapybara" -> R.drawable.kapybara_egg_stage1
-            else -> null
-        }
+        EGG_TO_PET[key]?.let { return it }
+        return key.takeIf { it in EGG_TO_PET.values }
     }
 
-    fun getIntegratedFromEgg(eggType: String?, growthStage: Int = 1): Int? {
-        val key = eggType?.lowercase() ?: return null
-        val petType = eggToPetType(key) ?: return null
-        return getIntegratedPetDrawable(petType, growthStage)
+    fun eggDrawable(context: Context, eggType: String?, stage: Int = MIN_STAGE): Int? {
+        val petType = petTypeForEgg(eggType) ?: return null
+        val safeStage = stage.coerceIn(MIN_STAGE, MAX_STAGE)
+        return context.drawableId("${petType}_egg_stage$safeStage").takeIf { it != 0 }
     }
 
-    fun getEggStageDrawable(eggType: String?, stage: Int): Int? {
-        val key = eggType?.lowercase() ?: return null
-        val petType = eggToPetType(key) ?: return null
-        val s = stage.coerceIn(1, 5)
-        return when (petType) {
-            "dragon" -> when (s) {
-                1 -> R.drawable.dragon_egg_stage1
-                2 -> R.drawable.dragon_egg_stage2
-                3 -> R.drawable.dragon_egg_stage3
-                4 -> R.drawable.dragon_egg_stage4
-                else -> R.drawable.dragon_egg_stage5
-            }
-            "cat" -> when (s) {
-                1 -> R.drawable.cat_egg_stage1
-                2 -> R.drawable.cat_egg_stage2
-                3 -> R.drawable.cat_egg_stage3
-                4 -> R.drawable.cat_egg_stage4
-                else -> R.drawable.cat_egg_stage5
-            }
-            "dog" -> when (s) {
-                1 -> R.drawable.dog_egg_stage1
-                2 -> R.drawable.dog_egg_stage2
-                3 -> R.drawable.dog_egg_stage3
-                4 -> R.drawable.dog_egg_stage4
-                else -> R.drawable.dog_egg_stage5
-            }
-            "bird" -> when (s) {
-                1 -> R.drawable.bird_egg_stage1
-                2 -> R.drawable.bird_egg_stage2
-                3 -> R.drawable.bird_egg_stage3
-                4 -> R.drawable.bird_egg_stage4
-                else -> R.drawable.bird_egg_stage5
-            }
-            "rabbit" -> when (s) {
-                1 -> R.drawable.rabbit_egg_stage1
-                2 -> R.drawable.rabbit_egg_stage2
-                3 -> R.drawable.rabbit_egg_stage3
-                4 -> R.drawable.rabbit_egg_stage4
-                else -> R.drawable.rabbit_egg_stage5
-            }
-            "bear" -> when (s) {
-                1 -> R.drawable.bear_egg_stage1
-                2 -> R.drawable.bear_egg_stage2
-                3 -> R.drawable.bear_egg_stage3
-                4 -> R.drawable.bear_egg_stage4
-                else -> R.drawable.bear_egg_stage5
-            }
-            "snake" -> when (s) {
-                1 -> R.drawable.snake_egg_stage1
-                2 -> R.drawable.snake_egg_stage2
-                3 -> R.drawable.snake_egg_stage3
-                4 -> R.drawable.snake_egg_stage4
-                else -> R.drawable.snake_egg_stage5
-            }
-            "panda" -> when (s) {
-                1 -> R.drawable.panda_egg_stage1
-                2 -> R.drawable.panda_egg_stage2
-                3 -> R.drawable.panda_egg_stage3
-                4 -> R.drawable.panda_egg_stage4
-                else -> R.drawable.panda_egg_stage5
-            }
-            "slot" -> when (s) {
-                1 -> R.drawable.slot_egg_stage1
-                2 -> R.drawable.slot_egg_stage2
-                3 -> R.drawable.slot_egg_stage3
-                4 -> R.drawable.slot_egg_stage4
-                else -> R.drawable.slot_egg_stage5
-            }
-            "hydra" -> when (s) {
-                1 -> R.drawable.hydra_egg_stage1
-                2 -> R.drawable.hydra_egg_stage2
-                3 -> R.drawable.hydra_egg_stage3
-                4 -> R.drawable.hydra_egg_stage4
-                else -> R.drawable.hydra_egg_stage5
-            }
-            "unicorn" -> when (s) {
-                1 -> R.drawable.unicorn_egg_stage1
-                2 -> R.drawable.unicorn_egg_stage2
-                3 -> R.drawable.unicorn_egg_stage3
-                4 -> R.drawable.unicorn_egg_stage4
-                else -> R.drawable.unicorn_egg_stage5
-            }
-            "kapybara" -> when (s) {
-                1 -> R.drawable.kapybara_egg_stage1
-                2 -> R.drawable.kapybara_egg_stage2
-                3 -> R.drawable.kapybara_egg_stage3
-                4 -> R.drawable.kapybara_egg_stage4
-                else -> R.drawable.kapybara_egg_stage5
-            }
-            else -> null
+    /**
+     * Standalone transparent pet art.
+     *
+     * Falls back to the nearest lower stage when one is missing, so a gap in the art
+     * shows the previous stage instead of an empty screen. unicorn_stage5 relies on
+     * this today — it does not exist in the source art.
+     */
+    fun petDrawable(context: Context, petType: String?, growthStage: Int): Int? {
+        val species = petType?.lowercase() ?: return null
+        for (stage in growthStage.coerceIn(MIN_STAGE, MAX_STAGE) downTo MIN_STAGE) {
+            val id = context.drawableId("${species}_stage$stage")
+            if (id != 0) return id
         }
+        return null
     }
 
-    fun getIntegratedPetDrawable(petType: String?, growthStage: Int): Int? {
-        val stage = growthStage.coerceIn(1, 5)
-        return when (petType?.lowercase()) {
-            "dragon" -> when (stage) {
-                1 -> R.drawable.dragon_integrated_stage1
-                2 -> R.drawable.dragon_integrated_stage2
-                3 -> R.drawable.dragon_integrated_stage3
-                4 -> R.drawable.dragon_integrated_stage4
-                else -> R.drawable.dragon_integrated_stage5
-            }
-            "cat" -> when (stage) {
-                1 -> R.drawable.cat_integrated_stage1
-                2 -> R.drawable.cat_integrated_stage2
-                3 -> R.drawable.cat_integrated_stage3
-                4 -> R.drawable.cat_integrated_stage4
-                else -> R.drawable.cat_integrated_stage5
-            }
-            "dog" -> when (stage) {
-                1 -> R.drawable.dog_integrated_stage1
-                2 -> R.drawable.dog_integrated_stage2
-                3 -> R.drawable.dog_integrated_stage3
-                4 -> R.drawable.dog_integrated_stage4
-                else -> R.drawable.dog_integrated_stage5
-            }
-            "bird" -> when (stage) {
-                1 -> R.drawable.bird_integrated_stage1
-                2 -> R.drawable.bird_integrated_stage2
-                3 -> R.drawable.bird_integrated_stage3
-                4 -> R.drawable.bird_integrated_stage4
-                else -> R.drawable.bird_integrated_stage5
-            }
-            "rabbit" -> when (stage) {
-                1 -> R.drawable.rabbit_integrated_stage1
-                2 -> R.drawable.rabbit_integrated_stage2
-                3 -> R.drawable.rabbit_integrated_stage3
-                4 -> R.drawable.rabbit_integrated_stage4
-                else -> R.drawable.rabbit_integrated_stage5
-            }
-            "bear" -> when (stage) {
-                1 -> R.drawable.bear_integrated_stage1
-                2 -> R.drawable.bear_integrated_stage2
-                3 -> R.drawable.bear_integrated_stage3
-                4 -> R.drawable.bear_integrated_stage4
-                else -> R.drawable.bear_integrated_stage5
-            }
-            "snake" -> when (stage) {
-                1 -> R.drawable.snake_integrated_stage1
-                2 -> R.drawable.snake_integrated_stage2
-                3 -> R.drawable.snake_integrated_stage3
-                4 -> R.drawable.snake_integrated_stage4
-                else -> R.drawable.snake_integrated_stage5
-            }
-            "panda" -> when (stage) {
-                1 -> R.drawable.panda_integrated_stage1
-                2 -> R.drawable.panda_integrated_stage2
-                3 -> R.drawable.panda_integrated_stage3
-                4 -> R.drawable.panda_integrated_stage4
-                else -> R.drawable.panda_integrated_stage5
-            }
-            "slot" -> when (stage) {
-                1 -> R.drawable.slot_integrated_stage1
-                2 -> R.drawable.slot_integrated_stage2
-                3 -> R.drawable.slot_integrated_stage3
-                4 -> R.drawable.slot_integrated_stage4
-                else -> R.drawable.slot_integrated_stage5
-            }
-            "hydra" -> when (stage) {
-                1 -> R.drawable.hydra_integrated_stage1
-                2 -> R.drawable.hydra_integrated_stage2
-                3 -> R.drawable.hydra_integrated_stage3
-                4 -> R.drawable.hydra_integrated_stage4
-                else -> R.drawable.hydra_integrated_stage5
-            }
-            "unicorn" -> when (stage) {
-                1 -> R.drawable.unicorn_integrated_stage1
-                2 -> R.drawable.unicorn_integrated_stage2
-                3 -> R.drawable.unicorn_integrated_stage3
-                4 -> R.drawable.unicorn_integrated_stage4
-                else -> R.drawable.unicorn_integrated_stage5
-            }
-            "kapybara" -> when (stage) {
-                1 -> R.drawable.kapybara_integrated_stage1
-                2 -> R.drawable.kapybara_integrated_stage2
-                3 -> R.drawable.kapybara_integrated_stage3
-                4 -> R.drawable.kapybara_integrated_stage4
-                else -> R.drawable.kapybara_integrated_stage5
-            }
-            else -> null
+    fun petDrawableFromEgg(context: Context, eggType: String?, growthStage: Int): Int? =
+        petDrawable(context, petTypeForEgg(eggType), growthStage)
+
+    /** Mar–May spring, Jun–Aug summer, Sep–Nov autumn, otherwise winter — as on web. */
+    fun currentSeason(): String =
+        when (Calendar.getInstance().get(Calendar.MONTH) + 1) {
+            in 3..5 -> "spring"
+            in 6..8 -> "summer"
+            in 9..11 -> "autumn"
+            else -> "winter"
         }
-    }
+
+    fun seasonalBackgroundDrawable(context: Context, season: String = currentSeason()): Int? =
+        context.drawableId("season_$season").takeIf { it != 0 }
 }
-

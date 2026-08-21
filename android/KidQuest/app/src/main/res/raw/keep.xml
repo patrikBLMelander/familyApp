@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PetImages resolves pet artwork by resource name via getIdentifier, so the
+  resource shrinker cannot see these references and would strip them once
+  R8 / shrinkResources is enabled. Keep them explicitly.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/*_stage*,@drawable/season_*" />
