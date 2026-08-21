@@ -1,23 +1,12 @@
 {
-  "images" : [
+  "images": [
     {
-      "filename" : "onboarding_card_rewards_savings.png",
-      "idiom" : "universal",
-      "scale" : "1x"
-    },
-    {
-      "filename" : "onboarding_card_rewards_savings 1.png",
-      "idiom" : "universal",
-      "scale" : "2x"
-    },
-    {
-      "filename" : "onboarding_card_rewards_savings 2.png",
-      "idiom" : "universal",
-      "scale" : "3x"
+      "filename": "onboarding_card_rewards_savings.png",
+      "idiom": "universal"
     }
   ],
-  "info" : {
-    "author" : "xcode",
-    "version" : 1
+  "info": {
+    "author": "xcode",
+    "version": 1
   }
 }
