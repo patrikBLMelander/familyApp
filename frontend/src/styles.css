@@ -1826,9 +1826,13 @@ body {
 }
 
 .welcome-card-img {
-  width: 56px;
-  height: 56px;
-  object-fit: contain;
+  /* Wide illustrations, not icons: a 56px square letterboxed them into a third
+     of their own frame. Span the card and crop to a header strip. */
+  width: 100%;
+  aspect-ratio: 1.83 / 1;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
 }
 
 .welcome-card-title {

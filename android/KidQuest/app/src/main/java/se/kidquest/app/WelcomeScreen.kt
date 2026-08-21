@@ -3,8 +3,11 @@ package se.kidquest.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,6 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -92,12 +96,18 @@ fun WelcomeScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // IntrinsicSize.Max plus fillMaxHeight on each card keeps the three the same
+        // height; the subtitles differ in length and looked ragged otherwise.
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Max),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ValueCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
                 imageRes = R.drawable.onboarding_card_pet_xp,
                 title = "Hemligt ägg varje månad",
                 subtitle = "Barnen får ett nytt ägg med ett djur i – en överraskning vilket djur det blir.",
@@ -106,7 +116,9 @@ fun WelcomeScreen(
                 textSecondary = textSecondary,
             )
             ValueCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
                 imageRes = R.drawable.onboarding_card_family_overview,
                 title = "Uppdrag matar djuret",
                 subtitle = "Under månaden gör barnet uppgifter i vardagen för att mata och levla upp djuret.",
@@ -115,7 +127,9 @@ fun WelcomeScreen(
                 textSecondary = textSecondary,
             )
             ValueCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
                 imageRes = R.drawable.onboarding_card_rewards_savings,
                 title = "Belöningar som motiverar",
                 subtitle = "Koppla uppdrag till veckopeng eller små mål – om du vill.",
@@ -184,11 +198,17 @@ private fun ValueCard(
             modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // These are wide illustrations (800x436), not icons. A square box with
+            // Fit letterboxed them into a third of their own frame, so let them
+            // span the card and crop to a header strip instead.
             androidx.compose.foundation.Image(
                 painter = painterResource(imageRes),
                 contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.83f)
+                    .clip(RoundedCornerShape(10.dp)),
+                contentScale = ContentScale.Crop,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(

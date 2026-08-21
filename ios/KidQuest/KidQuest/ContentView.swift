@@ -1108,10 +1108,16 @@ private struct ValueCard: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(imageName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 64, height: 64)
+            // Wide illustrations (1.83), not icons. A square frame with scaledToFit
+            // letterboxed them, so span the card and crop to a header strip.
+            Color.clear
+                .aspectRatio(1.83, contentMode: .fit)
+                .overlay(
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFill()
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10))
 
             Text(title)
                 .font(.subheadline.weight(.semibold))
