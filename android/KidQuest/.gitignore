@@ -14,3 +14,7 @@
 .cxx
 local.properties
 app/release/
+# Release signing - never commit these. keystore.properties.example is the template.
+keystore.properties
+*.jks
+*.keystore
