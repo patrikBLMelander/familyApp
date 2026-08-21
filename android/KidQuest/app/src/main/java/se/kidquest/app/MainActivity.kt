@@ -1,5 +1,6 @@
 package se.kidquest.app
 
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -38,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -54,6 +56,7 @@ import se.kidquest.app.dashboard.ChildPetScreen
 import se.kidquest.app.dashboard.ChildTasksScreen
 import se.kidquest.app.dashboard.ChildWalletScreen
 import se.kidquest.app.dashboard.FamilyTasksScreen
+import se.kidquest.app.pet.PetGalleryScreen
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
 import kotlinx.coroutines.launch
@@ -70,6 +73,7 @@ private sealed class AppScreen {
     data class ChildWallet(val childId: String, val childName: String, val isOwnWallet: Boolean) : AppScreen()
     data class ChildTasks(val childId: String, val childName: String) : AppScreen()
     data object FamilyTasks : AppScreen()
+    data object PetGallery : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -123,6 +127,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding),
                             onLoginSuccess = { currentScreen = AppScreen.Home },
                             onChildInviteLogin = { currentScreen = AppScreen.ChildInviteLogin },
+                            onOpenPetGallery = { currentScreen = AppScreen.PetGallery },
                         )
                         AppScreen.Home -> AdultDashboardScreen(
                             modifier = Modifier.padding(innerPadding),
@@ -157,6 +162,10 @@ class MainActivity : ComponentActivity() {
                         )
                         AppScreen.FamilyTasks -> FamilyTasksScreen(
                             onBack = { currentScreen = AppScreen.Home },
+                        )
+                        AppScreen.PetGallery -> PetGalleryScreen(
+                            modifier = Modifier.padding(innerPadding),
+                            onBack = { currentScreen = AppScreen.Auth },
                         )
                         AppScreen.ChildInviteLogin -> ChildInviteLoginScreen(
                             modifier = Modifier.padding(innerPadding),
@@ -236,8 +245,11 @@ fun AuthScreen(
     modifier: Modifier = Modifier,
     onLoginSuccess: () -> Unit = {},
     onChildInviteLogin: () -> Unit = {},
+    onOpenPetGallery: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val isDebuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     val emailState = remember { mutableStateOf("") }
     val passwordState = remember { mutableStateOf("") }
@@ -375,6 +387,12 @@ fun AuthScreen(
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(onClick = onChildInviteLogin) {
             Text("Jag är barn och har en kod", color = buttonOnColor)
+        }
+        if (isDebuggable) {
+            Spacer(modifier = Modifier.height(16.dp))
+            TextButton(onClick = onOpenPetGallery) {
+                Text("Dev: bildgalleri", color = textSecondary)
+            }
         }
         Spacer(modifier = Modifier.height(24.dp))
     }
