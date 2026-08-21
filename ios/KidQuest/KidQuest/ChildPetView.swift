@@ -101,18 +101,9 @@ struct ChildPetView: View {
         let totalXp = xp?.currentXp ?? 0
 
         return VStack(spacing: 12) {
-            if let imageName = PetImagesIOS.integratedImageName(for: pet.petType, growthStage: pet.growthStage),
-               let uiImage = UIImage(named: imageName) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 240)
-            } else {
-                Text("🐾")
-                    .font(.system(size: 80))
-                    .frame(height: 240)
-            }
+            PetVisual(petType: pet.petType, growthStage: pet.growthStage)
+                .frame(maxWidth: .infinity)
+                .frame(height: 240)
 
             Text(petName)
                 .font(.title2.weight(.bold))

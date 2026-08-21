@@ -225,17 +225,9 @@ struct ChildDashboardView: View {
 
                 // Bild + XP-cirkel
                 VStack(spacing: 8) {
-                    if let imageName = PetImagesIOS.integratedImageName(for: pet.petType, growthStage: pet.growthStage),
-                       let uiImage = UIImage(named: imageName) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 220)
-                    } else {
-                        Text("🐾")
-                            .font(.system(size: 80))
-                    }
+                    PetVisual(petType: pet.petType, growthStage: pet.growthStage)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 220)
 
                     ZStack {
                         Circle()
