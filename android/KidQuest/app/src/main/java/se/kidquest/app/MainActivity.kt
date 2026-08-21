@@ -59,6 +59,8 @@ import se.kidquest.app.dashboard.FamilyTasksScreen
 import se.kidquest.app.pet.PetGalleryScreen
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 private sealed class AppScreen {
@@ -93,7 +95,45 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     TokenStore.load()
-                    currentScreen = if (TokenStore.getToken() != null) AppScreen.Home else AppScreen.Welcome
+                    // A device token alone does not say who it belongs to. Routing on
+                    // its presence alone sent children straight into the adult
+                    // dashboard, where they could add and delete tasks and open the
+                    // family wallet.
+                    var session = TokenStore.getSession()
+
+                    if (session != null && session.isIncomplete) {
+                        // Paired before the role was stored locally: resolve it once
+                        // rather than making the family re-pair the device.
+                        session = runCatching {
+                            withContext(Dispatchers.IO) {
+                                ApiClient.familyMembersApi.getMemberByDeviceToken(session!!.deviceToken)
+                            }
+                        }.getOrNull()?.let { member ->
+                            TokenStore.setSession(
+                                deviceToken = session!!.deviceToken,
+                                memberId = member.id,
+                                memberName = member.name,
+                                role = member.role,
+                            )
+                            TokenStore.getSession()
+                        }
+                    }
+
+                    currentScreen = when {
+                        session == null -> AppScreen.Welcome
+                        // Still unknown after the lookup: the token is stale or the
+                        // member is gone. Sending them to the adult view would be the
+                        // original bug, so start over instead.
+                        session.isIncomplete -> {
+                            TokenStore.clearToken()
+                            AppScreen.Welcome
+                        }
+                        session.isChild -> AppScreen.ChildDashboard(
+                            childId = session.memberId!!,
+                            childName = session.memberName ?: "Barn",
+                        )
+                        else -> AppScreen.Home
+                    }
                 }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -352,7 +392,12 @@ fun AuthScreen(
                                         password = passwordState.value,
                                     ),
                                 )
-                                TokenStore.setToken(response.deviceToken)
+                                TokenStore.setSession(
+                                    deviceToken = response.deviceToken,
+                                    memberId = response.member.id,
+                                    memberName = response.member.name,
+                                    role = response.member.role,
+                                )
                                 onLoginSuccess()
                             } catch (e: Exception) {
                                 statusState.value = "Fel: ${e.message}"
@@ -551,7 +596,12 @@ fun RegisterScreen(
                                         password = passwordState.value,
                                     ),
                                 )
-                                TokenStore.setToken(response.deviceToken)
+                                TokenStore.setSession(
+                                    deviceToken = response.deviceToken,
+                                    memberId = response.admin.id,
+                                    memberName = response.admin.name,
+                                    role = response.admin.role,
+                                )
                                 onRegisterSuccess()
                             } catch (e: Exception) {
                                 statusState.value = "Fel: ${e.message}"

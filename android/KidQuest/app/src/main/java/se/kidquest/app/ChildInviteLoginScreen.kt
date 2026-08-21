@@ -75,7 +75,12 @@ fun ChildInviteLoginScreen(
                         ),
                     )
                 }
-                TokenStore.setToken(deviceToken)
+                TokenStore.setSession(
+                    deviceToken = deviceToken,
+                    memberId = member.id,
+                    memberName = member.name,
+                    role = member.role,
+                )
                 onLoginAsChild(member.id, member.name)
             } catch (e: Exception) {
                 status = e.message ?: "Kunde inte koppla enheten. Kontrollera koden."

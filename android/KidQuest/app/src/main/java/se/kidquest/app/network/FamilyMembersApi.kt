@@ -20,6 +20,15 @@ data class LinkDeviceByTokenRequest(
 )
 
 interface FamilyMembersApi {
+    // Resolves who a stored token belongs to. Only needed for sessions written
+    // before the role was persisted locally; new logins never call it.
+    // TODO: replace with a header-based /family-members/me so the token stops
+    // travelling in a URL path, where proxies log it.
+    @GET("family-members/by-device-token/{deviceToken}")
+    suspend fun getMemberByDeviceToken(
+        @Path("deviceToken") deviceToken: String,
+    ): FamilyMemberResponse
+
     @GET("family-members")
     suspend fun getAllMembers(): List<FamilyMemberResponse>
 
