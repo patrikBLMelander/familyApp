@@ -14,6 +14,7 @@ private val KEY_DEVICE_TOKEN = stringPreferencesKey("device_token")
 private val KEY_MEMBER_ID = stringPreferencesKey("member_id")
 private val KEY_MEMBER_NAME = stringPreferencesKey("member_name")
 private val KEY_MEMBER_ROLE = stringPreferencesKey("member_role")
+private val KEY_FAMILY_ID = stringPreferencesKey("family_id")
 
 /**
  * Who is signed in on this device.
@@ -28,6 +29,7 @@ data class Session(
     val memberId: String?,
     val memberName: String?,
     val role: String?,
+    val familyId: String?,
 ) {
     val isChild: Boolean get() = role?.uppercase() == "CHILD"
 
@@ -59,6 +61,7 @@ object TokenStore {
                     memberId = prefs[KEY_MEMBER_ID],
                     memberName = prefs[KEY_MEMBER_NAME],
                     role = prefs[KEY_MEMBER_ROLE],
+                    familyId = prefs[KEY_FAMILY_ID],
                 )
             }
         }
@@ -73,6 +76,7 @@ object TokenStore {
         memberId: String?,
         memberName: String?,
         role: String?,
+        familyId: String? = null,
     ) {
         appContext?.let { ctx ->
             ctx.dataStore.edit { prefs ->
@@ -80,13 +84,14 @@ object TokenStore {
                 if (memberId != null) prefs[KEY_MEMBER_ID] = memberId else prefs.remove(KEY_MEMBER_ID)
                 if (memberName != null) prefs[KEY_MEMBER_NAME] = memberName else prefs.remove(KEY_MEMBER_NAME)
                 if (role != null) prefs[KEY_MEMBER_ROLE] = role else prefs.remove(KEY_MEMBER_ROLE)
+                if (familyId != null) prefs[KEY_FAMILY_ID] = familyId else prefs.remove(KEY_FAMILY_ID)
             }
         }
-        current = Session(deviceToken, memberId, memberName, role)
+        current = Session(deviceToken, memberId, memberName, role, familyId)
     }
 
     /** Kept for the token-only call sites; drops any stale identity with it. */
-    suspend fun setToken(token: String) = setSession(token, null, null, null)
+    suspend fun setToken(token: String) = setSession(token, null, null, null, null)
 
     suspend fun clearToken() {
         appContext?.let { ctx ->
@@ -95,6 +100,7 @@ object TokenStore {
                 prefs.remove(KEY_MEMBER_ID)
                 prefs.remove(KEY_MEMBER_NAME)
                 prefs.remove(KEY_MEMBER_ROLE)
+                prefs.remove(KEY_FAMILY_ID)
             }
         }
         current = null

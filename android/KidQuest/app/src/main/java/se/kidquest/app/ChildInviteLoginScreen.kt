@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.LinkDeviceByTokenRequest
+import se.kidquest.app.billing.Billing
 import se.kidquest.app.session.TokenStore
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
@@ -80,7 +81,9 @@ fun ChildInviteLoginScreen(
                     memberId = member.id,
                     memberName = member.name,
                     role = member.role,
+                    familyId = member.familyId,
                 )
+                Billing.identify(member.familyId)
                 onLoginAsChild(member.id, member.name)
             } catch (e: Exception) {
                 status = e.message ?: "Kunde inte koppla enheten. Kontrollera koden."

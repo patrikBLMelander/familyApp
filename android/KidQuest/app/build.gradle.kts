@@ -107,6 +107,10 @@ dependencies {
     implementation(libs.moshi.kotlin)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.zxing.android.embedded)
+    // Brings in Google Play Billing, which is also what puts
+    // com.android.vending.BILLING in the merged manifest -- Play refuses to let you
+    // create subscription products until it sees that in an uploaded build.
+    implementation(libs.revenuecat.purchases)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

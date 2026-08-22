@@ -18,6 +18,8 @@ data class FamilyMemberResponse(
     val deviceToken: String?,
     val email: String?,
     val role: String,
+    /** Purchases are identified by family, not by member. Nullable for safety. */
+    val familyId: String? = null,
 )
 
 data class FamilyRegistrationResponse(

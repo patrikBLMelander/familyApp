@@ -90,7 +90,10 @@ public class FamilyController {
                 member.name(),
                 member.deviceToken(),
                 member.email(),
-                member.role()
+                member.role(),
+                // Clients need this to identify the family to the purchase provider:
+                // entitlement is bought once per household, not per member.
+                member.familyId() != null ? member.familyId().toString() : null
         );
     }
 
@@ -133,7 +136,8 @@ public class FamilyController {
             String name,
             String deviceToken,
             String email,
-            com.familyapp.domain.familymember.FamilyMember.Role role
+            com.familyapp.domain.familymember.FamilyMember.Role role,
+            String familyId
     ) {
     }
 

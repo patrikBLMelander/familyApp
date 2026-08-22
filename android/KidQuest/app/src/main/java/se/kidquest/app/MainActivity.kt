@@ -54,6 +54,7 @@ import se.kidquest.app.dashboard.ChildPetScreen
 import se.kidquest.app.dashboard.ChildTasksScreen
 import se.kidquest.app.dashboard.ChildWalletScreen
 import se.kidquest.app.dashboard.FamilyTasksScreen
+import se.kidquest.app.billing.Billing
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
 import kotlinx.coroutines.withContext
@@ -115,6 +116,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    Billing.identify(session?.familyId)
+
                     currentScreen = when {
                         session == null -> AppScreen.Welcome
                         // Still unknown after the lookup: the token is stale or the
@@ -122,6 +125,7 @@ class MainActivity : ComponentActivity() {
                         // original bug, so start over instead.
                         session.isIncomplete -> {
                             TokenStore.clearToken()
+                                    Billing.forget()
                             AppScreen.Welcome
                         }
                         session.isChild -> AppScreen.ChildDashboard(
@@ -172,6 +176,7 @@ class MainActivity : ComponentActivity() {
                             onLogout = {
                                 scope.launch {
                                     TokenStore.clearToken()
+                                    Billing.forget()
                                     currentScreen = AppScreen.Auth
                                 }
                             },
@@ -211,6 +216,7 @@ class MainActivity : ComponentActivity() {
                             onBack = {
                                 scope.launch {
                                     TokenStore.clearToken()
+                                    Billing.forget()
                                     currentScreen = AppScreen.Auth
                                 }
                             },
@@ -385,7 +391,9 @@ fun AuthScreen(
                                     memberId = response.member.id,
                                     memberName = response.member.name,
                                     role = response.member.role,
+                                    familyId = response.member.familyId,
                                 )
+                                Billing.identify(response.member.familyId)
                                 onLoginSuccess()
                             } catch (e: Exception) {
                                 statusState.value = "Fel: ${e.message}"
@@ -583,7 +591,9 @@ fun RegisterScreen(
                                     memberId = response.admin.id,
                                     memberName = response.admin.name,
                                     role = response.admin.role,
+                                    familyId = response.family.id,
                                 )
+                                Billing.identify(response.family.id)
                                 onRegisterSuccess()
                             } catch (e: Exception) {
                                 statusState.value = "Fel: ${e.message}"
