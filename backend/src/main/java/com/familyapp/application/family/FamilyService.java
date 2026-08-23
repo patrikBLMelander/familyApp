@@ -43,13 +43,19 @@ public class FamilyService {
     public FamilyRegistrationResult registerFamily(String familyName, String adminName, String adminEmail, String password) {
         var now = OffsetDateTime.now();
         
-        // Validate password
+        // Normalise before validating or hashing. Login compares the trimmed input, so
+        // storing a hash of an untrimmed password made the account permanently
+        // unreachable -- and soft keyboards and password managers append trailing
+        // spaces readily. Length is checked on the trimmed form for the same reason.
         if (password == null || password.trim().isEmpty()) {
             throw new IllegalArgumentException("Password is required");
         }
-        if (password.length() < 6) {
+        String normalizedPassword = password.trim();
+        if (normalizedPassword.length() < 6) {
             throw new IllegalArgumentException("Password must be at least 6 characters long");
         }
+        String normalizedEmail = adminEmail == null ? null
+                : adminEmail.trim().toLowerCase(java.util.Locale.ROOT);
         
         // Create family
         var familyEntity = new FamilyEntity();
@@ -63,14 +69,14 @@ public class FamilyService {
         var adminEntity = new FamilyMemberEntity();
         adminEntity.setId(UUID.randomUUID());
         adminEntity.setName(adminName);
-        adminEntity.setEmail(adminEmail);
+        adminEntity.setEmail(normalizedEmail);
         adminEntity.setRole(Role.PARENT.name());
         adminEntity.setFamily(savedFamily);
         adminEntity.setCreatedAt(now);
         adminEntity.setUpdatedAt(now);
         
         // Hash password
-        String hashedPassword = passwordEncoder.encode(password);
+        String hashedPassword = passwordEncoder.encode(normalizedPassword);
         adminEntity.setPasswordHash(hashedPassword);
         
         // Generate unique device token for admin
@@ -201,8 +207,10 @@ public class FamilyService {
             throw new IllegalArgumentException("Password is required");
         }
         
-        // Normalize input (trim whitespace)
-        String normalizedEmail = email.trim();
+        // Lowercase explicitly rather than relying on the database collation happening
+        // to be case-insensitive. It is today, which is the only reason a capitalised
+        // address resolves at all; a collation change would silently break those logins.
+        String normalizedEmail = email.trim().toLowerCase(java.util.Locale.ROOT);
         String normalizedPassword = password.trim();
         
         // Find member by email (not cached - always fresh from database)
@@ -226,6 +234,19 @@ public class FamilyService {
         // BCrypt hashes always start with $2a$, $2b$, or $2y$
         // Use normalized password (trimmed) to avoid whitespace issues
         boolean passwordMatches = passwordEncoder.matches(normalizedPassword, passwordHash);
+
+        // Accounts created before registration trimmed the password hold a hash of the
+        // untrimmed string, so the trimmed input can never match and the account is
+        // unreachable. Accept the raw form too. Only attempted when the input actually
+        // contained whitespace, so a normal login still costs exactly one BCrypt.
+        if (!passwordMatches && !normalizedPassword.equals(password)
+                && passwordEncoder.matches(password, passwordHash)) {
+            passwordMatches = true;
+            log.warn("Login for {} matched only the untrimmed password; the stored hash "
+                    + "predates write-side trimming. Rehashing on next password change.",
+                    normalizedEmail);
+        }
+
         if (!passwordMatches) {
             // Log for debugging (without exposing sensitive data)
             if (passwordHash != null && passwordHash.length() > 0) {

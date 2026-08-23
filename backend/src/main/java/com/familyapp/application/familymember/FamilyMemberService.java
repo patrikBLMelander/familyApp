@@ -234,15 +234,18 @@ public class FamilyMemberService {
                 throw new IllegalArgumentException("Invalid email format");
             }
             
-            // Check if email is already in use by another member
-            String trimmedEmail = email.trim();
+            // Lowercased so the duplicate check and the stored value agree with login,
+            // which also lowercases. See FamilyService.loginByEmailAndPassword.
+            String trimmedEmail = email.trim().toLowerCase(java.util.Locale.ROOT);
             var existingMember = repository.findByEmail(trimmedEmail);
             if (existingMember.isPresent() && !existingMember.get().getId().equals(memberId)) {
                 throw new IllegalArgumentException("Email is already in use by another account");
             }
         }
         
-        entity.setEmail(email != null && !email.trim().isEmpty() ? email.trim() : null);
+        entity.setEmail(email != null && !email.trim().isEmpty()
+                ? email.trim().toLowerCase(java.util.Locale.ROOT)
+                : null);
         entity.setUpdatedAt(OffsetDateTime.now());
         
         try {
@@ -315,8 +318,8 @@ public class FamilyMemberService {
             throw new IllegalArgumentException("Password must be at least 6 characters long");
         }
         
-        // Hash and set password
-        String hashedPassword = passwordEncoder.encode(newPassword);
+        // Trimmed, to match what login compares against. See FamilyService.
+        String hashedPassword = passwordEncoder.encode(newPassword.trim());
         entity.setPasswordHash(hashedPassword);
         entity.setUpdatedAt(OffsetDateTime.now());
         
