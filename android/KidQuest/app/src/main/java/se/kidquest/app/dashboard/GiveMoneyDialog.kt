@@ -28,11 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import se.kidquest.app.network.AddAllowanceRequest
-import se.kidquest.app.network.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import se.kidquest.app.network.AddAllowanceRequest
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
 
 private data class Suggestion(val label: String, val amount: Int, val description: String)
 
@@ -164,7 +165,7 @@ fun GiveMoneyDialog(
                             if (response.isSuccessful) onSuccess()
                             else error = "Kunde inte ge pengar"
                         } catch (e: Exception) {
-                            error = e.message ?: "Kunde inte ge pengar"
+                            error = ApiErrors.message(e, "Kunde inte ge pengar")
                         } finally {
                             loading = false
                         }

@@ -19,9 +19,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.calendar.CalendarRepository
-import se.kidquest.app.network.CalendarTaskWithCompletion
 import kotlinx.coroutines.launch
+import se.kidquest.app.calendar.CalendarRepository
+import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.CalendarTaskWithCompletion
 
 @Composable
 fun EditTaskDialog(
@@ -79,7 +80,7 @@ fun EditTaskDialog(
                             )
                             onUpdated(title, xpMultiplier)
                         } catch (e: Exception) {
-                            error = e.message ?: "Kunde inte uppdatera uppgiften"
+                            error = ApiErrors.message(e, "Kunde inte uppdatera uppgiften")
                         } finally {
                             loading = false
                         }

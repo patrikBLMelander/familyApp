@@ -20,13 +20,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.network.AllocateToGoalsRequest
-import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.SavingsGoalAllocationRequest
-import se.kidquest.app.network.SavingsGoalResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import se.kidquest.app.network.AllocateToGoalsRequest
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.SavingsGoalAllocationRequest
+import se.kidquest.app.network.SavingsGoalResponse
 
 @Composable
 fun AllocateToGoalsDialog(
@@ -50,7 +51,7 @@ fun AllocateToGoalsDialog(
                     .filter { it.isActive && !it.isCompleted }
             }
         } catch (e: Exception) {
-            error = e.message ?: "Kunde inte ladda sparmål"
+            error = ApiErrors.message(e, "Kunde inte ladda sparmål")
         } finally {
             loadingData = false
         }
@@ -147,7 +148,7 @@ fun AllocateToGoalsDialog(
                             }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = e.message ?: "Kunde inte fördela pengar"
+                            error = ApiErrors.message(e, "Kunde inte fördela pengar")
                         } finally {
                             loading = false
                         }

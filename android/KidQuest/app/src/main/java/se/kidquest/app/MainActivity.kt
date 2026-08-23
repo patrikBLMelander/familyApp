@@ -42,11 +42,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
-import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.EmailLoginRequest
-import se.kidquest.app.network.RegisterFamilyRequest
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import se.kidquest.app.billing.Billing
 import se.kidquest.app.dashboard.AddFamilyMemberDialog
 import se.kidquest.app.dashboard.AdultDashboardScreen
 import se.kidquest.app.dashboard.ChildDashboardScreen
@@ -54,12 +55,12 @@ import se.kidquest.app.dashboard.ChildPetScreen
 import se.kidquest.app.dashboard.ChildTasksScreen
 import se.kidquest.app.dashboard.ChildWalletScreen
 import se.kidquest.app.dashboard.FamilyTasksScreen
-import se.kidquest.app.billing.Billing
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.EmailLoginRequest
+import se.kidquest.app.network.RegisterFamilyRequest
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 private sealed class AppScreen {
     data object Loading : AppScreen()
@@ -396,7 +397,7 @@ fun AuthScreen(
                                 Billing.identify(response.member.familyId)
                                 onLoginSuccess()
                             } catch (e: Exception) {
-                                statusState.value = "Fel: ${e.message}"
+                                statusState.value = ApiErrors.message(e, "Kunde inte logga in.")
                             } finally {
                                 loadingState.value = false
                             }
@@ -596,7 +597,7 @@ fun RegisterScreen(
                                 Billing.identify(response.family.id)
                                 onRegisterSuccess()
                             } catch (e: Exception) {
-                                statusState.value = "Fel: ${e.message}"
+                                statusState.value = ApiErrors.message(e, "Kunde inte skapa kontot.")
                             } finally {
                                 loadingState.value = false
                             }

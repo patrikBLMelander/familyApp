@@ -55,6 +55,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlinx.coroutines.launch
 import se.kidquest.app.chore.DailyChoreRepository
+import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 
 private val CHILD_WEEKDAY_ABBREVS = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
@@ -93,7 +94,7 @@ fun ChildTasksScreen(
         try {
             tasks = DailyChoreRepository.fetchChoresForToday(childId)
         } catch (e: Exception) {
-            error = e.message ?: "Kunde inte ladda uppgifter"
+            error = ApiErrors.message(e, "Kunde inte ladda uppgifter")
         } finally {
             loading = false
         }
@@ -394,7 +395,7 @@ fun ChildTasksScreen(
                                 refreshKey++
                             } catch (e: Exception) {
                                 tasks = previous
-                                toggleError = e.message ?: "Kunde inte ta bort sysslan."
+                                toggleError = ApiErrors.message(e, "Kunde inte ta bort sysslan.")
                             }
                         }
                     },

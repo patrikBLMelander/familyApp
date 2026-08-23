@@ -21,9 +21,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.chore.DailyChoreRepository
-import kotlinx.coroutines.launch
 import java.time.LocalDate
+import kotlinx.coroutines.launch
+import se.kidquest.app.chore.DailyChoreRepository
+import se.kidquest.app.network.ApiErrors
 
 @Composable
 fun AddSingleTaskDialog(
@@ -86,7 +87,7 @@ fun AddSingleTaskDialog(
                             )
                             onSuccess()
                         } catch (e: Exception) {
-                            error = e.message ?: "Kunde inte skapa uppgiften"
+                            error = ApiErrors.message(e, "Kunde inte skapa uppgiften")
                         } finally {
                             loading = false
                         }

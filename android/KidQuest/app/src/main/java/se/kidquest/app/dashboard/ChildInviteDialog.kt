@@ -25,12 +25,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.FamilyMemberResponse
 import com.google.zxing.BarcodeFormat
 import com.journeyapps.barcodescanner.BarcodeEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.FamilyMemberResponse
 
 @Composable
 fun ChildInviteDialog(
@@ -47,7 +48,7 @@ fun ChildInviteDialog(
             val response = ApiClient.familyMembersApi.generateInviteToken(child.id)
             inviteToken = response.token
         } catch (e: Exception) {
-            error = e.message ?: "Kunde inte generera inbjudningskod"
+            error = ApiErrors.message(e, "Kunde inte generera inbjudningskod")
         }
     }
 

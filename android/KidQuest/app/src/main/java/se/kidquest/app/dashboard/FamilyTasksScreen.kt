@@ -49,16 +49,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import se.kidquest.app.chore.DailyChoreRepository
-import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.DailyChoreWithCompletionResponse
-import se.kidquest.app.network.FamilyMemberResponse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import se.kidquest.app.chore.DailyChoreRepository
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.DailyChoreWithCompletionResponse
+import se.kidquest.app.network.FamilyMemberResponse
 
 private data class MemberWithChores(
     val member: FamilyMemberResponse,
@@ -101,7 +102,7 @@ fun FamilyTasksScreen(onBack: () -> Unit) {
                 }.map { it.await() }
             }
         } catch (e: Exception) {
-            error = e.message ?: "Kunde inte ladda uppgifter"
+            error = ApiErrors.message(e, "Kunde inte ladda uppgifter")
         } finally {
             loading = false
         }

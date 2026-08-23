@@ -39,16 +39,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.LinkDeviceByTokenRequest
-import se.kidquest.app.billing.Billing
-import se.kidquest.app.session.TokenStore
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.UUID
+import se.kidquest.app.billing.Billing
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.LinkDeviceByTokenRequest
+import se.kidquest.app.session.TokenStore
 
 @Composable
 fun ChildInviteLoginScreen(
@@ -86,7 +87,7 @@ fun ChildInviteLoginScreen(
                 Billing.identify(member.familyId)
                 onLoginAsChild(member.id, member.name)
             } catch (e: Exception) {
-                status = e.message ?: "Kunde inte koppla enheten. Kontrollera koden."
+                status = ApiErrors.message(e, "Kunde inte koppla enheten. Kontrollera koden.")
             } finally {
                 loading = false
             }

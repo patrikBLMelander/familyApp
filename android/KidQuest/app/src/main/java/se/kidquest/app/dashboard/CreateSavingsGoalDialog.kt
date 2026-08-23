@@ -17,11 +17,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.CreateSavingsGoalRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.CreateSavingsGoalRequest
 
 @Composable
 fun CreateSavingsGoalDialog(
@@ -100,7 +101,7 @@ fun CreateSavingsGoalDialog(
                             }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = e.message ?: "Kunde inte skapa sparmål"
+                            error = ApiErrors.message(e, "Kunde inte skapa sparmål")
                         } finally {
                             loading = false
                         }

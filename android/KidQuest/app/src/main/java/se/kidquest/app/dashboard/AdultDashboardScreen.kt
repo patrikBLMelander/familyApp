@@ -60,6 +60,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.FamilyMemberResponse
 import se.kidquest.app.network.UpdateFamilyMemberRequest
 import se.kidquest.app.session.TokenStore
@@ -130,7 +131,7 @@ fun AdultDashboardScreen(
                 }.mapNotNull { it.await() }.toMap()
             }
         } catch (e: Exception) {
-            error = e.message ?: "Kunde inte ladda familjemedlemmar"
+            error = ApiErrors.message(e, "Kunde inte ladda familjemedlemmar")
         } finally {
             loading = false
         }
@@ -685,7 +686,7 @@ private fun RenameMemberDialog(
                             }
                             onRenamed()
                         } catch (e: Exception) {
-                            error = e.message ?: "Kunde inte byta namn."
+                            error = ApiErrors.message(e, "Kunde inte byta namn.")
                         } finally {
                             saving = false
                         }
@@ -762,7 +763,7 @@ private fun DeleteMemberDialog(
                             }
                             onDeleted()
                         } catch (e: Exception) {
-                            error = e.message ?: "Kunde inte ta bort medlemmen."
+                            error = ApiErrors.message(e, "Kunde inte ta bort medlemmen.")
                         } finally {
                             deleting = false
                         }

@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.CreateFamilyMemberRequest
 
 @Composable
@@ -162,7 +163,7 @@ fun AddFamilyMemberDialog(
                             }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = e.message ?: "Kunde inte lägga till"
+                            error = ApiErrors.message(e, "Kunde inte lägga till")
                         } finally {
                             loading = false
                         }

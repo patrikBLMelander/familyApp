@@ -40,15 +40,16 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import se.kidquest.app.network.ApiClient
-import se.kidquest.app.network.SavingsGoalResponse
-import se.kidquest.app.network.WalletBalanceResponse
-import se.kidquest.app.network.WalletTransactionResponse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.SavingsGoalResponse
+import se.kidquest.app.network.WalletBalanceResponse
+import se.kidquest.app.network.WalletTransactionResponse
 
 private val textPrimary = Color(0xFF1C1917)
 private val textSecondary = Color(0xFF57534E)
@@ -102,7 +103,7 @@ fun ChildWalletScreen(
                 petType = if (petResp?.isSuccessful == true) petResp.body()?.petType else null
             }
         } catch (e: Exception) {
-            error = e.message ?: "Kunde inte ladda"
+            error = ApiErrors.message(e, "Kunde inte ladda")
         } finally {
             loading = false
         }
