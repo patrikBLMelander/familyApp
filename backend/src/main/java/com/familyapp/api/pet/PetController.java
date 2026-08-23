@@ -116,20 +116,7 @@ public class PetController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Verify the requester has access to this member's data (same family)
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                var member = memberService.getMemberById(memberId);
-                
-                // Check if same family
-                if (!requester.familyId().equals(member.familyId())) {
-                    throw new IllegalArgumentException("Access denied");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
-        }
+        requireSameFamily(deviceToken, memberId);
 
         var pet = petService.getCurrentPet(memberId).orElse(null);
         if (pet == null) {
@@ -143,20 +130,7 @@ public class PetController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Verify the requester has access to this member's data (same family)
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                var member = memberService.getMemberById(memberId);
-                
-                // Check if same family
-                if (!requester.familyId().equals(member.familyId())) {
-                    throw new IllegalArgumentException("Access denied");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
-        }
+        requireSameFamily(deviceToken, memberId);
 
         return petService.getPetHistory(memberId).stream()
                 .map(this::toHistoryResponse)
@@ -201,6 +175,93 @@ public class PetController {
         
         // Award XP for the actual amount fed
         petService.feedPet(memberId, actualFedAmount);
+    }
+
+    // --- Authorisation helpers ---
+
+    /**
+     * Resolves the caller. The token is mandatory: several member-scoped endpoints used
+     * to run their same-family check only when a token happened to be present, which
+     * meant calling them with no header returned another family's data.
+     */
+    private com.familyapp.domain.familymember.FamilyMember requireRequester(String deviceToken) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        return memberService.getMemberByDeviceToken(deviceToken);
+    }
+
+    /** Any member of the same family may read another member's pet data. */
+    private void requireSameFamily(String deviceToken, UUID memberId) {
+        var requester = requireRequester(deviceToken);
+        var member = memberService.getMemberById(memberId);
+        if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
+            throw new IllegalArgumentException("Access denied");
+        }
+    }
+
+    /**
+     * Only a parent may act *as* another member -- feeding a pet, spending collected
+     * food. A child must not be able to feed a sibling's pet, and nobody outside the
+     * family gets near it.
+     */
+    private void requireParentOf(String deviceToken, UUID memberId) {
+        var requester = requireRequester(deviceToken);
+        var member = memberService.getMemberById(memberId);
+        if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
+            throw new IllegalArgumentException("Access denied");
+        }
+        if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
+            throw new IllegalArgumentException("Only a parent can act for another member");
+        }
+    }
+
+    /**
+     * Feeds another member's pet, for a child using a parent's phone.
+     *
+     * Delegates to exactly the same services as the token-derived /feed, so the rule
+     * from 7fda81d -- a chore cannot be un-completed once its food has been fed -- holds
+     * identically. A parallel feed path here would quietly become an XP duplication bug.
+     */
+    @PostMapping("/members/{memberId}/feed")
+    public void feedMemberPet(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody FeedPetRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+
+        if (request.xpAmount() == null || request.xpAmount() <= 0) {
+            throw new IllegalArgumentException("XP amount must be positive");
+        }
+
+        int actualFedAmount = foodService.markFoodAsFed(memberId, request.xpAmount());
+        if (actualFedAmount == 0) {
+            throw new IllegalArgumentException("No unfed food available");
+        }
+        petService.feedPet(memberId, actualFedAmount);
+    }
+
+    @GetMapping("/members/{memberId}/collected-food")
+    public CollectedFoodResponse getMemberCollectedFood(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireSameFamily(deviceToken, memberId);
+        return new CollectedFoodResponse(
+                foodService.getUnfedFood(memberId).stream().map(this::toFoodResponse).toList(),
+                foodService.getUnfedFoodCount(memberId)
+        );
+    }
+
+    @GetMapping("/members/{memberId}/last-fed-date")
+    public LastFedDateResponse getMemberLastFedDate(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireSameFamily(deviceToken, memberId);
+        var lastFedAt = foodService.getLastFedAt(memberId);
+        return new LastFedDateResponse(lastFedAt != null ? lastFedAt.toString() : null);
     }
 
     @GetMapping("/collected-food")

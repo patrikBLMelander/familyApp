@@ -77,6 +77,7 @@ fun AdultDashboardScreen(
     onChildPet: (childId: String, childName: String) -> Unit = { _, _ -> },
     onChildWallet: (childId: String, childName: String) -> Unit = { _, _ -> },
     onChildTasks: (childId: String, childName: String) -> Unit = { _, _ -> },
+    onChildView: (childId: String, childName: String) -> Unit = { _, _ -> },
     onFamilyTasks: () -> Unit = {},
 ) {
     var children by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
@@ -354,6 +355,7 @@ fun AdultDashboardScreen(
                             onPetClick = { onChildPet(child.id, child.name) },
                             onWalletClick = { onChildWallet(child.id, child.name) },
                             onTasksClick = { onChildTasks(child.id, child.name) },
+                            onChildViewClick = { onChildView(child.id, child.name) },
                             onRenameClick = { memberPendingRename = child },
                             onDeleteClick = { memberPendingDelete = child },
                             onInviteClick = { inviteChild = child },
@@ -494,6 +496,7 @@ private fun ChildCard(
     onWalletClick: () -> Unit,
     onTasksClick: () -> Unit,
     onInviteClick: () -> Unit,
+    onChildViewClick: () -> Unit = {},
     onRenameClick: () -> Unit = {},
     onDeleteClick: () -> Unit = {},
 ) {
@@ -532,6 +535,13 @@ private fun ChildCard(
                         expanded = menuOpen,
                         onDismissRequest = { menuOpen = false },
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Visa som barn") },
+                            onClick = {
+                                menuOpen = false
+                                onChildViewClick()
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text("Byt namn") },
                             onClick = {

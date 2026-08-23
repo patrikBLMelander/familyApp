@@ -86,12 +86,26 @@ import se.kidquest.app.pet.PetVisual
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+/**
+ * The child's own view.
+ *
+ * Reached two ways, and the difference is only which endpoints it calls. A child on
+ * their own phone is authenticated as themselves, so the self-scoped endpoints apply.
+ * A parent viewing or helping is authenticated as the parent, so every call has to
+ * name the child explicitly -- otherwise "feed" would pour the food into the parent's
+ * own pet, which is what /pets/feed does when it resolves the member from the token.
+ *
+ * @param actingAsParent true when a parent is looking at, or acting for, this child.
+ */
 fun ChildDashboardScreen(
     childName: String,
     childId: String,
     onBack: () -> Unit,
     onOpenTasks: () -> Unit,
     onOpenWallet: () -> Unit,
+    actingAsParent: Boolean = false,
+    onExitChildView: (() -> Unit)? = null,
+    onSwitchChild: (() -> Unit)? = null,
 ) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -123,10 +137,30 @@ fun ChildDashboardScreen(
         petLoadFailed = false
         try {
             coroutineScope {
-                val petDeferred = async { kotlin.runCatching { ApiClient.petsApi.getCurrentPet() } }
-                val xpDeferred = async { kotlin.runCatching { ApiClient.xpApi.getCurrentProgress() }.getOrNull() }
-                val walletDeferred = async { kotlin.runCatching { ApiClient.walletApi.getWalletBalance() }.getOrNull() }
-                val foodDeferred = async { kotlin.runCatching { ApiClient.petsApi.getCollectedFood() }.getOrNull() }
+                val petDeferred = async {
+                    kotlin.runCatching {
+                        if (actingAsParent) ApiClient.petsApi.getMemberPet(childId)
+                        else ApiClient.petsApi.getCurrentPet()
+                    }
+                }
+                val xpDeferred = async {
+                    kotlin.runCatching {
+                        if (actingAsParent) ApiClient.xpApi.getMemberXpProgress(childId)
+                        else ApiClient.xpApi.getCurrentProgress()
+                    }.getOrNull()
+                }
+                val walletDeferred = async {
+                    kotlin.runCatching {
+                        if (actingAsParent) ApiClient.walletApi.getMemberBalance(childId)
+                        else ApiClient.walletApi.getWalletBalance()
+                    }.getOrNull()
+                }
+                val foodDeferred = async {
+                    kotlin.runCatching {
+                        if (actingAsParent) ApiClient.petsApi.getMemberCollectedFood(childId)
+                        else ApiClient.petsApi.getCollectedFood()
+                    }.getOrNull()
+                }
                 val tasksDeferred = async { DailyChoreRepository.fetchChoresForToday(childId) }
 
                 val petResult = petDeferred.await()
@@ -255,6 +289,41 @@ fun ChildDashboardScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
+            if (actingAsParent) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Du ser $childName" + "s vy",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF78350F),
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (onSwitchChild != null) {
+                            TextButton(onClick = onSwitchChild) {
+                                Text("Byt barn", color = Color(0xFF78350F))
+                            }
+                        }
+                        if (onExitChildView != null) {
+                            TextButton(onClick = onExitChildView) {
+                                Text("Tillbaka", color = Color(0xFF78350F))
+                            }
+                        }
+                    }
+                }
+            }
+
             if (error != null) {
                 Text(text = error!!, color = MaterialTheme.colorScheme.error)
                 return@Scaffold
@@ -523,7 +592,11 @@ fun ChildDashboardScreen(
                                 coroutineScope.launch {
                                     try {
                                         withContext(Dispatchers.IO) {
-                                            ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = 1))
+                                            if (actingAsParent) {
+                                                ApiClient.petsApi.feedMemberPet(childId, FeedPetRequest(xpAmount = 1))
+                                            } else {
+                                                ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = 1))
+                                            }
                                         }
                                             lastFedDate = todayString
                                         refreshKey++
@@ -544,7 +617,11 @@ fun ChildDashboardScreen(
                                 coroutineScope.launch {
                                     try {
                                         withContext(Dispatchers.IO) {
-                                            ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = collectedFoodCount))
+                                            if (actingAsParent) {
+                                                ApiClient.petsApi.feedMemberPet(childId, FeedPetRequest(xpAmount = collectedFoodCount))
+                                            } else {
+                                                ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = collectedFoodCount))
+                                            }
                                         }
                                         lastFedDate = todayString
                                         refreshKey++

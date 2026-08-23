@@ -70,6 +70,13 @@ private sealed class AppScreen {
     data object Home : AppScreen()
     data object ChildInviteLogin : AppScreen()
     data class ChildDashboard(val childId: String, val childName: String) : AppScreen()
+
+    /**
+     * A parent looking at, or acting for, a child. Separate from ChildDashboard so the
+     * screen knows to call the member-scoped endpoints: authenticated as the parent,
+     * "feed" has to name the child or it feeds the parent's own pet.
+     */
+    data class ChildViewAsParent(val childId: String, val childName: String) : AppScreen()
     data class ChildPet(val childId: String, val childName: String) : AppScreen()
     data class ChildWallet(val childId: String, val childName: String, val isOwnWallet: Boolean) : AppScreen()
     data class ChildTasks(val childId: String, val childName: String) : AppScreen()
@@ -197,6 +204,9 @@ class MainActivity : ComponentActivity() {
                                 returnToChildDashboard = null
                                 currentScreen = AppScreen.ChildTasks(id, name)
                             },
+                            onChildView = { id, name ->
+                                currentScreen = AppScreen.ChildViewAsParent(id, name)
+                            },
                             onFamilyTasks = {
                                 currentScreen = AppScreen.FamilyTasks
                             },
@@ -228,6 +238,24 @@ class MainActivity : ComponentActivity() {
                             onOpenWallet = {
                                 returnToChildDashboard = screen.childId to screen.childName
                                 currentScreen = AppScreen.ChildWallet(screen.childId, screen.childName, isOwnWallet = true)
+                            },
+                        )
+                        is AppScreen.ChildViewAsParent -> ChildDashboardScreen(
+                            childName = screen.childName,
+                            childId = screen.childId,
+                            actingAsParent = true,
+                            // No token juggling: the parent stays signed in throughout,
+                            // which is the entire point of this route.
+                            onExitChildView = { currentScreen = AppScreen.Home },
+                            onSwitchChild = { currentScreen = AppScreen.Home },
+                            onBack = { currentScreen = AppScreen.Home },
+                            onOpenTasks = {
+                                returnToChildDashboard = screen.childId to screen.childName
+                                currentScreen = AppScreen.ChildTasks(screen.childId, screen.childName)
+                            },
+                            onOpenWallet = {
+                                returnToChildDashboard = screen.childId to screen.childName
+                                currentScreen = AppScreen.ChildWallet(screen.childId, screen.childName, isOwnWallet = false)
                             },
                         )
                         is AppScreen.ChildPet -> ChildPetScreen(

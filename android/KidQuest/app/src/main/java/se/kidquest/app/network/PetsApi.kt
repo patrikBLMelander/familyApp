@@ -37,6 +37,10 @@ data class CollectedFoodResponse(
     val totalCount: Int,
 )
 
+data class LastFedDateResponse(
+    val lastFedDate: String?,
+)
+
 data class FeedPetRequest(
     val xpAmount: Int,
 )
@@ -59,4 +63,23 @@ interface PetsApi {
 
     @POST("pets/feed")
     suspend fun feedPet(@Body body: FeedPetRequest): Response<Unit>
+
+    // --- Acting for another member, for a child on a parent's phone. Authorised
+    // server-side as a parent of the same family; see PetController.requireParentOf.
+
+    @POST("pets/members/{memberId}/feed")
+    suspend fun feedMemberPet(
+        @Path("memberId") memberId: String,
+        @Body body: FeedPetRequest,
+    ): Response<Unit>
+
+    @GET("pets/members/{memberId}/collected-food")
+    suspend fun getMemberCollectedFood(
+        @Path("memberId") memberId: String,
+    ): CollectedFoodResponse
+
+    @GET("pets/members/{memberId}/last-fed-date")
+    suspend fun getMemberLastFedDate(
+        @Path("memberId") memberId: String,
+    ): LastFedDateResponse
 }
