@@ -15,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -374,28 +375,34 @@ public class FamilyMemberService {
      * @param memberId The member to generate token for
      * @return The new invite token
      */
+    /** How long an invite stays usable. Long enough to scan a screen or text a code. */
+    private static final Duration INVITE_VALIDITY = Duration.ofHours(1);
+
+    /**
+     * Issues an invite code for a member.
+     *
+     * Writes only invite_token. This used to overwrite device_token, which meant
+     * issuing a code logged the member's phone out -- and because the Android invite
+     * dialog generates one as soon as it opens, a parent simply looking at a child's
+     * QR code broke that child's session.
+     *
+     * Reissuing replaces any previous code, so only the newest one works.
+     */
     public String generateInviteToken(UUID memberId) {
         var entity = repository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
-        
-        // Get old token to evict from cache
-        String oldToken = entity.getDeviceToken();
-        
-        // Generate a unique token (UUID as string)
+
         String token = UUID.randomUUID().toString();
-        entity.setDeviceToken(token);
+        entity.setInviteToken(token);
+        entity.setInviteExpiresAt(OffsetDateTime.now().plus(INVITE_VALIDITY));
         entity.setUpdatedAt(OffsetDateTime.now());
         repository.save(entity);
-        
-        var member = toDomain(entity);
-        
-        // Evict old device token from cache (targeted eviction)
-        cacheService.evictDeviceToken(oldToken);
-        
-        // Cache updated member and new token
-        cacheService.putMember(memberId, member);
-        cacheService.putDeviceToken(token, member);
-        
+
+        // The member's own cache entry is now stale, but its device token is untouched,
+        // so the deviceTokens cache stays valid -- which is the whole point.
+        cacheService.putMember(memberId, toDomain(entity));
+
+        log.debug("Issued invite for member {} valid until {}", memberId, entity.getInviteExpiresAt());
         return token;
     }
 
@@ -454,11 +461,32 @@ public class FamilyMemberService {
      * @param deviceToken The device token to link
      * @return Updated member (cached)
      */
+    /**
+     * Binds a device to the member an invite belongs to.
+     *
+     * Looks up by invite_token only. It used to search device_token, which made every
+     * valid device token double as an invite: knowing a child's token was enough to
+     * attach another device to that child's account.
+     *
+     * The invite survives until it expires rather than being consumed, so a child who
+     * reinstalls can pair again without a parent having to issue a new code first.
+     */
     public FamilyMember linkDeviceByInviteToken(String inviteToken, String deviceToken) {
-        // Find member by invite token (which is stored as deviceToken)
-        var entity = repository.findByDeviceToken(inviteToken)
+        if (inviteToken == null || inviteToken.isBlank()) {
+            throw new IllegalArgumentException("Invalid invite token");
+        }
+        if (deviceToken == null || deviceToken.isBlank()) {
+            throw new IllegalArgumentException("Device token cannot be null or empty");
+        }
+
+        var entity = repository.findByInviteToken(inviteToken.trim())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid invite token"));
-        
+
+        var expiresAt = entity.getInviteExpiresAt();
+        if (expiresAt == null || expiresAt.isBefore(OffsetDateTime.now())) {
+            throw new IllegalArgumentException("Invite token has expired");
+        }
+
         // Check if deviceToken is already used by another member
         repository.findByDeviceToken(deviceToken).ifPresent(existing -> {
             if (!existing.getId().equals(entity.getId())) {

@@ -44,7 +44,9 @@ object ApiErrors {
         "Family member not found for device token" to
             "Inloggningen gäller inte längre. Be en förälder visa en ny kod.",
         "Invalid invite token" to
-            "Koden är inte längre giltig. Be en förälder visa en ny kod.",
+            "Koden stämmer inte. Be en förälder visa en ny kod.",
+        "Invite token has expired" to
+            "Koden har gått ut. Be en förälder visa en ny kod.",
         "Device token already in use" to
             "Den här telefonen är redan kopplad till någon annan i familjen.",
         "Pet already selected for this month" to

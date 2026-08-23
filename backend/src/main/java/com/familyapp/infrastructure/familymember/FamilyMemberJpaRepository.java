@@ -11,6 +11,9 @@ import java.util.UUID;
 public interface FamilyMemberJpaRepository extends JpaRepository<FamilyMemberEntity, UUID> {
     Optional<FamilyMemberEntity> findByDeviceToken(String deviceToken);
     Optional<FamilyMemberEntity> findByEmail(String email);
+
+    /** Invites live in their own column; a device token is never an invite. */
+    Optional<FamilyMemberEntity> findByInviteToken(String inviteToken);
     List<FamilyMemberEntity> findByRole(String role);
     
     /**

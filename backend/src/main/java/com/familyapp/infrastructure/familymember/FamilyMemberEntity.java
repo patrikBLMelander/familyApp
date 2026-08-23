@@ -34,6 +34,16 @@ public class FamilyMemberEntity {
     @Column(name = "email")
     private String email;
 
+    /**
+     * An outstanding invite code. Deliberately separate from deviceToken: they shared
+     * a column, so issuing a code logged the paired device out.
+     */
+    @Column(name = "invite_token", unique = true)
+    private String inviteToken;
+
+    @Column(name = "invite_expires_at")
+    private java.time.OffsetDateTime inviteExpiresAt;
+
     @Column(name = "password_hash")
     private String passwordHash;
 
@@ -83,6 +93,22 @@ public class FamilyMemberEntity {
 
     public void setDeviceToken(String deviceToken) {
         this.deviceToken = deviceToken;
+    }
+
+    public String getInviteToken() {
+        return inviteToken;
+    }
+
+    public void setInviteToken(String inviteToken) {
+        this.inviteToken = inviteToken;
+    }
+
+    public java.time.OffsetDateTime getInviteExpiresAt() {
+        return inviteExpiresAt;
+    }
+
+    public void setInviteExpiresAt(java.time.OffsetDateTime inviteExpiresAt) {
+        this.inviteExpiresAt = inviteExpiresAt;
     }
 
     public String getEmail() {
