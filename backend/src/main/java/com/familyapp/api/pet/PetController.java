@@ -217,6 +217,28 @@ public class PetController {
     }
 
     /**
+     * Picks the monthly egg on another member's behalf.
+     *
+     * Without this, a parent choosing an egg in the child view created a pet for
+     * *themselves*: select-egg resolves the member from the device token, the same trap
+     * as feeding.
+     */
+    @PostMapping("/members/{memberId}/select-egg")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PetResponse selectEggForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody SelectEggRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+
+        if (request.eggType() == null || request.eggType().isEmpty()) {
+            throw new IllegalArgumentException("Egg type is required");
+        }
+        return toResponse(petService.selectEgg(memberId, request.eggType(), request.name()));
+    }
+
+    /**
      * Feeds another member's pet, for a child using a parent's phone.
      *
      * Delegates to exactly the same services as the token-derived /feed, so the rule

@@ -1,6 +1,7 @@
 package se.kidquest.app.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -29,6 +31,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,9 +58,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,6 +72,7 @@ import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.FamilyMemberResponse
 import se.kidquest.app.network.UpdateFamilyMemberRequest
 import se.kidquest.app.network.UpdatePasswordRequest
+import se.kidquest.app.session.PrefsStore
 import se.kidquest.app.session.TokenStore
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,6 +97,16 @@ fun AdultDashboardScreen(
     var memberPendingRename by remember { mutableStateOf<FamilyMemberResponse?>(null) }
     var memberPendingDelete by remember { mutableStateOf<FamilyMemberResponse?>(null) }
     var memberPendingPassword by remember { mutableStateOf<FamilyMemberResponse?>(null) }
+    // Every row's done-state comes from real family data below. Only the dismissal is
+    // stored, so the card survives a reinstall, shows as complete for a family who set
+    // up on web, and comes back if a parent later deletes their only child.
+    val dashboardScope = rememberCoroutineScope()
+    var anyChildHasChores by remember { mutableStateOf(false) }
+    var onboardingDismissed by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        onboardingDismissed = PrefsStore.isOnboardingDismissed()
+    }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var inviteChild by remember { mutableStateOf<FamilyMemberResponse?>(null) }
@@ -106,6 +122,11 @@ fun AdultDashboardScreen(
             val all = ApiClient.familyMembersApi.getAllMembers()
             children = all.filter { it.role == "CHILD" || it.role == "ASSISTANT" }
             adults = all.filter { it.role == "PARENT" }
+            anyChildHasChores = coroutineScope {
+                children.map { child ->
+                    async { kotlin.runCatching { DailyChoreRepository.hasAnyChore(child.id) }.getOrDefault(false) }
+                }.awaitAll().any { it }
+            }
             childSummaries = coroutineScope {
                 children.map { child ->
                     async {
@@ -307,6 +328,32 @@ fun AdultDashboardScreen(
                         Icon(Icons.Default.Pets, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.size(8.dp))
                         Text("Familjens uppgifter idag")
+                    }
+                }
+
+                if (!onboardingDismissed) {
+                    item {
+                        GetStartedCard(
+                            hasChild = children.isNotEmpty(),
+                            hasChores = anyChildHasChores,
+                            hasPairedDevice = children.any { it.hasPairedDevice },
+                            hasPet = childSummaries.values.any { it.hasPet },
+                            cardPastel = cardPastel,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary,
+                            onAddChild = onAddFamilyMember,
+                            onAddChores = {
+                                children.firstOrNull()?.let { onChildTasks(it.id, it.name) }
+                            },
+                            onPairDevice = { children.firstOrNull()?.let { inviteChild = it } },
+                            onSeePet = {
+                                children.firstOrNull()?.let { onChildPet(it.id, it.name) }
+                            },
+                            onDismiss = {
+                                onboardingDismissed = true
+                                dashboardScope.launch { PrefsStore.setOnboardingDismissed(true) }
+                            },
+                        )
                     }
                 }
 
@@ -1022,4 +1069,171 @@ private fun ChangePasswordDialog(
             TextButton(onClick = onDismiss, enabled = !saving) { Text("Avbryt") }
         },
     )
+}
+
+
+/**
+ * The get-started card.
+ *
+ * A checklist that opens the real dialogs, not a tour. Coach marks would need anchor
+ * coordinates that break under rotation, large fonts and tablets, and would have to be
+ * maintained twice -- once in Compose and once in SwiftUI. A card that launches dialogs
+ * the app already ships has no positioning logic at all.
+ *
+ * Nothing here is a step counter. Each row's state is read from the family itself, so
+ * the card cannot disagree with reality.
+ */
+@Composable
+private fun GetStartedCard(
+    hasChild: Boolean,
+    hasChores: Boolean,
+    hasPairedDevice: Boolean,
+    hasPet: Boolean,
+    cardPastel: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    onAddChild: () -> Unit,
+    onAddChores: () -> Unit,
+    onPairDevice: () -> Unit,
+    onSeePet: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // Pairing is skippable on purpose: plenty of younger children have no phone, and a
+    // checklist that cannot be completed is worse than none. It is not counted here.
+    val required = listOf(hasChild, hasChores)
+    val doneCount = required.count { it } + listOf(hasPairedDevice, hasPet).count { it }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = cardPastel),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Kom igång",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary,
+                    )
+                    Text(
+                        text = "$doneCount av 4 klara",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary,
+                    )
+                }
+                TextButton(onClick = onDismiss) { Text("Dölj") }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            GetStartedRow(
+                done = hasChild,
+                title = "Lägg till ett barn",
+                subtitle = "Inget fungerar förrän det finns ett barn i familjen.",
+                actionLabel = "Lägg till",
+                onClick = onAddChild,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+            )
+            GetStartedRow(
+                done = hasChores,
+                // Enabled only once a child exists, since the chores belong to one.
+                enabled = hasChild,
+                title = "Lägg till dagliga sysslor",
+                subtitle = "Välj ålder när du lägger till barnet och du får förslag direkt.",
+                actionLabel = "Lägg till",
+                onClick = onAddChores,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+            )
+            GetStartedRow(
+                done = hasPairedDevice,
+                enabled = hasChild,
+                title = "Koppla barnets telefon",
+                subtitle = "Hoppa över det här om barnet inte har någon egen telefon — du kan visa barnets vy från ditt eget konto.",
+                actionLabel = "Visa kod",
+                onClick = onPairDevice,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+            )
+            GetStartedRow(
+                done = hasPet,
+                enabled = hasChild,
+                title = "Välj ett ägg",
+                subtitle = "Barnet får ett djur att ta hand om — det är hela poängen.",
+                actionLabel = "Öppna",
+                onClick = onSeePet,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                isLast = true,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GetStartedRow(
+    done: Boolean,
+    title: String,
+    subtitle: String,
+    actionLabel: String,
+    onClick: () -> Unit,
+    textPrimary: Color,
+    textSecondary: Color,
+    enabled: Boolean = true,
+    isLast: Boolean = false,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp, end = 12.dp)
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(if (done) Color(0xFF4ADE80) else Color.Transparent)
+                .border(
+                    width = 2.dp,
+                    color = if (done) Color(0xFF4ADE80) else Color(0xFFCBD5E1),
+                    shape = CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (done) {
+                Text("✓", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (done) FontWeight.Normal else FontWeight.Medium,
+                color = if (done) textSecondary else textPrimary,
+            )
+            if (!done) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = textSecondary,
+                )
+            }
+        }
+        if (!done) {
+            TextButton(onClick = onClick, enabled = enabled) { Text(actionLabel) }
+        }
+    }
+    if (!isLast) {
+        HorizontalDivider(color = textSecondary.copy(alpha = 0.15f))
+    }
 }

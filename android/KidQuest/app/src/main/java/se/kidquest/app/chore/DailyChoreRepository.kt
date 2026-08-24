@@ -23,6 +23,11 @@ object DailyChoreRepository {
             )
         }
 
+    /** Whether the member has any chore configured at all, on any weekday. */
+    suspend fun hasAnyChore(memberId: String): Boolean = withContext(Dispatchers.IO) {
+        ApiClient.dailyChoreApi.getAllChores(memberId).isNotEmpty()
+    }
+
     suspend fun fetchChoresForToday(memberId: String): List<DailyChoreWithCompletionResponse> =
         fetchChoresForDate(memberId, LocalDate.now())
 

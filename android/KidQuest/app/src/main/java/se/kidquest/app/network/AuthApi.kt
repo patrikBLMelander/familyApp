@@ -20,6 +20,8 @@ data class FamilyMemberResponse(
     val role: String,
     /** Purchases are identified by family, not by member. Nullable for safety. */
     val familyId: String? = null,
+    /** Whether a device is paired, without exposing the token that would let you be them. */
+    val hasPairedDevice: Boolean = false,
 )
 
 data class FamilyRegistrationResponse(

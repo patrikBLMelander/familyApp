@@ -194,6 +194,7 @@ public class FamilyMemberController {
                 member.email(),
                 member.role(),
                 member.familyId() != null ? member.familyId().toString() : null,
+                member.deviceToken() != null && !member.deviceToken().isEmpty(),
                 member.menstrualCycleEnabled() != null ? member.menstrualCycleEnabled() : false,
                 member.menstrualCyclePrivate() != null ? member.menstrualCyclePrivate() : true,
                 member.petEnabled() != null ? member.petEnabled() : false
@@ -242,6 +243,12 @@ public class FamilyMemberController {
             String email,
             Role role,
             String familyId,
+            /**
+             * Whether the member has a device paired, without handing out the token
+             * that would let the caller become them. Clients only ever needed the
+             * fact: web renders it as "Kopplad" / "Ej kopplad".
+             */
+            boolean hasPairedDevice,
             Boolean menstrualCycleEnabled,
             Boolean menstrualCyclePrivate,
             Boolean petEnabled

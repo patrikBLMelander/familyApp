@@ -44,6 +44,16 @@ data class CreateDailyChoreRequest(
 
 interface DailyChoreApi {
 
+    /**
+     * Every chore for a member, not just today's. "Has this child any chores at all"
+     * cannot be answered from the for-date call: a chore scheduled only at weekends
+     * looks like none on a Tuesday.
+     */
+    @GET("daily-chores/members/{memberId}")
+    suspend fun getAllChores(
+        @Path("memberId") memberId: String,
+    ): List<DailyChoreResponse>
+
     @GET("daily-chores/members/{memberId}/for-date")
     suspend fun getChoresForDate(
         @Path("memberId") memberId: String,

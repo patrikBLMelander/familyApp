@@ -793,6 +793,8 @@ fun ChildDashboardScreen(
 
     if (showSelectEggDialog) {
         SelectEggDialog(
+            actingAsParent = actingAsParent,
+            childId = childId,
             onDismiss = { showSelectEggDialog = false },
             onEggSelected = { updatedPet ->
                 pet = updatedPet
@@ -839,6 +841,10 @@ fun ChildDashboardScreen(
 private fun SelectEggDialog(
     onDismiss: () -> Unit,
     onEggSelected: (PetResponse) -> Unit,
+    // Whose egg this is. Without it a parent choosing in the child view creates a pet
+    // for themselves, because select-egg resolves the member from the device token.
+    actingAsParent: Boolean = false,
+    childId: String = "",
 ) {
     var eggTypes by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedEgg by remember { mutableStateOf<String?>(null) }
@@ -1043,7 +1049,15 @@ private fun SelectEggDialog(
                     scope.launch {
                         try {
                             val pet = withContext(Dispatchers.IO) {
-                                ApiClient.petsApi.selectEgg(
+                                if (actingAsParent) {
+                                    ApiClient.petsApi.selectEggForMember(
+                                        memberId = childId,
+                                        body = SelectEggRequest(
+                                            eggType = egg,
+                                            name = name.ifBlank { null },
+                                        ),
+                                    )
+                                } else ApiClient.petsApi.selectEgg(
                                     SelectEggRequest(
                                         eggType = egg,
                                         name = name.ifBlank { null },

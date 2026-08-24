@@ -59,6 +59,7 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.EmailLoginRequest
 import se.kidquest.app.network.RegisterFamilyRequest
+import se.kidquest.app.session.PrefsStore
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
 
@@ -87,6 +88,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         TokenStore.init(applicationContext)
+        PrefsStore.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             KidQuestTheme {

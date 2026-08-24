@@ -67,6 +67,12 @@ interface PetsApi {
     // --- Acting for another member, for a child on a parent's phone. Authorised
     // server-side as a parent of the same family; see PetController.requireParentOf.
 
+    @POST("pets/members/{memberId}/select-egg")
+    suspend fun selectEggForMember(
+        @Path("memberId") memberId: String,
+        @Body body: SelectEggRequest,
+    ): PetResponse
+
     @POST("pets/members/{memberId}/feed")
     suspend fun feedMemberPet(
         @Path("memberId") memberId: String,
