@@ -50,6 +50,18 @@ public class FamilyMemberController {
                 .toList();
     }
 
+    /**
+     * Resolves the caller. Mandatory for every mutating endpoint: these used to pass a
+     * null requester when no token was supplied, and the service then skipped its
+     * authorisation check entirely.
+     */
+    private UUID requireRequesterId(String deviceToken) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        return service.getMemberByDeviceToken(deviceToken).id();
+    }
+
     @GetMapping("/by-device-token/{deviceToken}")
     public FamilyMemberResponse getMemberByDeviceToken(@PathVariable("deviceToken") String deviceToken) {
         var member = service.getMemberByDeviceToken(deviceToken);
@@ -62,16 +74,20 @@ public class FamilyMemberController {
             @RequestBody CreateFamilyMemberRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        UUID familyId = null;
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var member = service.getMemberByDeviceToken(deviceToken);
-                familyId = member.familyId();
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
-            }
+        // Without a token this created a member belonging to no family at all -- junk
+        // rows from an unauthenticated caller. And adding family members is a parent's
+        // job; a child should not be able to.
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
         }
-        var member = service.createMember(request.name(), request.role(), familyId);
+        var requester = service.getMemberByDeviceToken(deviceToken);
+        if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
+            throw new IllegalArgumentException("Only a parent can add family members");
+        }
+        if (requester.familyId() == null) {
+            throw new IllegalArgumentException("Requester does not belong to a family");
+        }
+        var member = service.createMember(request.name(), request.role(), requester.familyId());
         return toResponse(member);
     }
 
@@ -81,7 +97,7 @@ public class FamilyMemberController {
             @RequestBody UpdateFamilyMemberRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        var member = service.updateMember(memberId, request.name());
+        var member = service.updateMember(memberId, request.name(), requireRequesterId(deviceToken));
         return toResponse(member);
     }
 
@@ -91,15 +107,7 @@ public class FamilyMemberController {
             @RequestBody UpdatePasswordRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        UUID requesterId = null;
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = service.getMemberByDeviceToken(deviceToken);
-                requesterId = requester.id();
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
-            }
-        }
+        UUID requesterId = requireRequesterId(deviceToken);
         
         var member = service.updatePassword(memberId, request.password(), requesterId);
         return toResponse(member);
@@ -111,15 +119,7 @@ public class FamilyMemberController {
             @RequestBody UpdateEmailRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        UUID requesterId = null;
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = service.getMemberByDeviceToken(deviceToken);
-                requesterId = requester.id();
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
-            }
-        }
+        UUID requesterId = requireRequesterId(deviceToken);
         
         var member = service.updateEmail(memberId, request.email(), requesterId);
         return toResponse(member);
@@ -131,15 +131,7 @@ public class FamilyMemberController {
             @RequestBody UpdateMenstrualCycleSettingsRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        UUID requesterId = null;
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = service.getMemberByDeviceToken(deviceToken);
-                requesterId = requester.id();
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
-            }
-        }
+        UUID requesterId = requireRequesterId(deviceToken);
         
         var member = service.updateMenstrualCycleSettings(
                 memberId,
@@ -156,15 +148,7 @@ public class FamilyMemberController {
             @RequestBody UpdatePetSettingsRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        UUID requesterId = null;
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = service.getMemberByDeviceToken(deviceToken);
-                requesterId = requester.id();
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
-            }
-        }
+        UUID requesterId = requireRequesterId(deviceToken);
         
         var member = service.updatePetSettings(
                 memberId,
@@ -176,13 +160,19 @@ public class FamilyMemberController {
 
     @DeleteMapping("/{memberId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteMember(@PathVariable("memberId") UUID memberId) {
-        service.deleteMember(memberId);
+    public void deleteMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        service.deleteMember(memberId, requireRequesterId(deviceToken));
     }
 
     @PostMapping("/{memberId}/generate-invite")
-    public InviteTokenResponse generateInviteToken(@PathVariable("memberId") UUID memberId) {
-        String token = service.generateInviteToken(memberId);
+    public InviteTokenResponse generateInviteToken(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        String token = service.generateInviteToken(memberId, requireRequesterId(deviceToken));
         return new InviteTokenResponse(token);
     }
 

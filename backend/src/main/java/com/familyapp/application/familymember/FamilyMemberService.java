@@ -119,6 +119,40 @@ public class FamilyMemberService {
      * @param familyId The family ID
      * @return The created member
      */
+    /**
+     * Asserts that the caller may administer the target member: a parent of the same
+     * family, or the member themselves.
+     *
+     * Every mutating endpoint on family members must pass through here. They used to
+     * guard with `if (requesterId != null)`, and the controllers passed null when no
+     * device token was supplied -- so an unauthenticated caller skipped the check
+     * entirely. That made it possible to set any parent's password, mint an invite for
+     * any child and then pair as them, and delete any member outright.
+     */
+    private FamilyMemberEntity requireAdministrableBy(UUID memberId, UUID requesterId) {
+        if (requesterId == null) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        var entity = repository.findById(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+        var requester = repository.findById(requesterId)
+                .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
+
+        var targetFamily = entity.getFamily();
+        var requesterFamily = requester.getFamily();
+        if (targetFamily == null || requesterFamily == null
+                || !targetFamily.getId().equals(requesterFamily.getId())) {
+            throw new IllegalArgumentException("Cannot administer a member of a different family");
+        }
+
+        boolean isParent = Role.PARENT.name().equals(requester.getRole());
+        boolean isSelf = requester.getId().equals(memberId);
+        if (!isParent && !isSelf) {
+            throw new IllegalArgumentException("Only a parent can administer another member");
+        }
+        return entity;
+    }
+
     public FamilyMember createMember(String name, Role role, UUID familyId) {
         var now = OffsetDateTime.now();
         var entity = new FamilyMemberEntity();
@@ -166,7 +200,8 @@ public class FamilyMemberService {
      * @return Updated member (cached)
      */
     @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
-    public FamilyMember updateMember(UUID memberId, String name) {
+    public FamilyMember updateMember(UUID memberId, String name, UUID requesterId) {
+        requireAdministrableBy(memberId, requesterId);
         var entity = repository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
         
@@ -208,26 +243,9 @@ public class FamilyMemberService {
             throw new IllegalArgumentException("Email can only be set for parent or assistant users");
         }
         
-        // Validate that requester is in the same family and has permission
-        if (requesterId != null) {
-            var requester = repository.findById(requesterId)
-                    .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
-            
-            // Requester must be in the same family
-            if (entity.getFamily() == null || requester.getFamily() == null ||
-                !entity.getFamily().getId().equals(requester.getFamily().getId())) {
-                throw new IllegalArgumentException("Cannot update email for member in different family");
-            }
-            
-            // Requester must be PARENT, or ASSISTANT updating their own email
-            boolean isParent = Role.PARENT.name().equals(requester.getRole());
-            boolean isAssistantUpdatingSelf = Role.ASSISTANT.name().equals(requester.getRole()) && 
-                                             requester.getId().equals(memberId);
-            
-            if (!isParent && !isAssistantUpdatingSelf) {
-                throw new IllegalArgumentException("Only parents can update email for others, or assistants can update their own");
-            }
-        }
+        // Mandatory: see requireAdministrableBy. This used to be skipped entirely
+        // when no device token was supplied.
+        requireAdministrableBy(memberId, requesterId);
         
         // Validate email format (basic check)
         if (email != null && !email.trim().isEmpty()) {
@@ -290,26 +308,9 @@ public class FamilyMemberService {
             throw new IllegalArgumentException("Password can only be set for parent or assistant users");
         }
         
-        // Validate that requester is in the same family and has permission
-        if (requesterId != null) {
-            var requester = repository.findById(requesterId)
-                    .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
-            
-            // Requester must be in the same family
-            if (entity.getFamily() == null || requester.getFamily() == null ||
-                !entity.getFamily().getId().equals(requester.getFamily().getId())) {
-                throw new IllegalArgumentException("Cannot update password for member in different family");
-            }
-            
-            // Requester must be PARENT, or ASSISTANT updating their own password
-            boolean isParent = Role.PARENT.name().equals(requester.getRole());
-            boolean isAssistantUpdatingSelf = Role.ASSISTANT.name().equals(requester.getRole()) && 
-                                             requester.getId().equals(memberId);
-            
-            if (!isParent && !isAssistantUpdatingSelf) {
-                throw new IllegalArgumentException("Only parents can update passwords for others, or assistants can update their own");
-            }
-        }
+        // Mandatory: see requireAdministrableBy. This used to be skipped entirely
+        // when no device token was supplied.
+        requireAdministrableBy(memberId, requesterId);
         
         // Validate password
         if (newPassword == null || newPassword.trim().isEmpty()) {
@@ -343,7 +344,17 @@ public class FamilyMemberService {
      * 
      * @param memberId The member to delete
      */
-    public void deleteMember(UUID memberId) {
+    public void deleteMember(UUID memberId, UUID requesterId) {
+        var target = requireAdministrableBy(memberId, requesterId);
+        // Removing yourself from the device you are holding is never the intent, and
+        // there is no way back from it.
+        if (memberId.equals(requesterId)) {
+            throw new IllegalArgumentException("You cannot remove yourself");
+        }
+        deleteMemberInternal(target.getId());
+    }
+
+    private void deleteMemberInternal(UUID memberId) {
         // Prevent deletion of admin user
         UUID adminId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         if (adminId.equals(memberId)) {
@@ -388,9 +399,10 @@ public class FamilyMemberService {
      *
      * Reissuing replaces any previous code, so only the newest one works.
      */
-    public String generateInviteToken(UUID memberId) {
-        var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+    public String generateInviteToken(UUID memberId, UUID requesterId) {
+        // Without this, anyone could mint a code for someone else's child and pair
+        // their own device as that child.
+        var entity = requireAdministrableBy(memberId, requesterId);
 
         String token = UUID.randomUUID().toString();
         entity.setInviteToken(token);
@@ -540,26 +552,9 @@ public class FamilyMemberService {
             throw new IllegalArgumentException("Menstrual cycle tracking can only be enabled for parent or assistant users");
         }
         
-        // Validate that requester is in the same family and has permission
-        if (requesterId != null) {
-            var requester = repository.findById(requesterId)
-                    .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
-            
-            // Requester must be in the same family
-            if (entity.getFamily() == null || requester.getFamily() == null ||
-                !entity.getFamily().getId().equals(requester.getFamily().getId())) {
-                throw new IllegalArgumentException("Cannot update menstrual cycle settings for member in different family");
-            }
-            
-            // Requester must be PARENT, or ASSISTANT updating their own settings
-            boolean isParent = Role.PARENT.name().equals(requester.getRole());
-            boolean isAssistantUpdatingSelf = Role.ASSISTANT.name().equals(requester.getRole()) && 
-                                             requester.getId().equals(memberId);
-            
-            if (!isParent && !isAssistantUpdatingSelf) {
-                throw new IllegalArgumentException("Only parents can update menstrual cycle settings for others, or assistants can update their own");
-            }
-        }
+        // Mandatory: see requireAdministrableBy. This used to be skipped entirely
+        // when no device token was supplied.
+        requireAdministrableBy(memberId, requesterId);
         
         entity.setMenstrualCycleEnabled(enabled != null ? enabled : false);
         entity.setMenstrualCyclePrivate(isPrivate != null ? isPrivate : true);
@@ -598,25 +593,9 @@ public class FamilyMemberService {
             throw new IllegalArgumentException("Pets can only be enabled for parent users");
         }
         
-        // Validate that requester is in the same family and has permission
-        if (requesterId != null) {
-            var requester = repository.findById(requesterId)
-                    .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
-            
-            // Requester must be in the same family
-            if (entity.getFamily() == null || requester.getFamily() == null ||
-                !entity.getFamily().getId().equals(requester.getFamily().getId())) {
-                throw new IllegalArgumentException("Cannot update pet settings for member in different family");
-            }
-            
-            // Requester must be PARENT, or updating their own settings
-            boolean isParent = Role.PARENT.name().equals(requester.getRole());
-            boolean isUpdatingSelf = requester.getId().equals(memberId);
-            
-            if (!isParent && !isUpdatingSelf) {
-                throw new IllegalArgumentException("Only parents can update pet settings");
-            }
-        }
+        // Mandatory: see requireAdministrableBy. This used to be skipped entirely
+        // when no device token was supplied.
+        requireAdministrableBy(memberId, requesterId);
         
         entity.setPetEnabled(enabled != null ? enabled : false);
         entity.setUpdatedAt(OffsetDateTime.now());
