@@ -82,6 +82,7 @@ import se.kidquest.app.network.XpProgressResponse
 import se.kidquest.app.pet.PetFoodUtils
 import se.kidquest.app.pet.PetImages
 import se.kidquest.app.pet.PetNameUtils
+import se.kidquest.app.pet.PetTheme
 import se.kidquest.app.pet.PetVisual
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -219,38 +220,13 @@ fun ChildDashboardScreen(
         }
     }
 
-    val backgroundBrush = when (pet?.petType?.lowercase()) {
-        "dragon" -> Brush.verticalGradient(listOf(Color(0xFF4C1D95), Color(0xFF1E293B)))
-        "cat" -> Brush.verticalGradient(listOf(Color(0xFFFDE68A), Color(0xFFF97316)))
-        "dog" -> Brush.verticalGradient(listOf(Color(0xFFBBF7D0), Color(0xFF22C55E)))
-        "bird" -> Brush.verticalGradient(listOf(Color(0xFFBFDBFE), Color(0xFF2563EB)))
-        "rabbit" -> Brush.verticalGradient(listOf(Color(0xFFFCE7F3), Color(0xFFEC4899)))
-        "bear" -> Brush.verticalGradient(listOf(Color(0xFFFEF3C7), Color(0xFF92400E)))
-        "snake" -> Brush.verticalGradient(listOf(Color(0xFFDCFCE7), Color(0xFF15803D)))
-        "panda" -> Brush.verticalGradient(listOf(Color(0xFFE5E7EB), Color(0xFF111827)))
-        "slot" -> Brush.verticalGradient(listOf(Color(0xFFE5E7EB), Color(0xFF6B7280)))
-        "hydra" -> Brush.verticalGradient(listOf(Color(0xFFC4B5FD), Color(0xFF4C1D95)))
-        "unicorn" -> Brush.verticalGradient(listOf(Color(0xFFFDE68A), Color(0xFFF9A8D4)))
-        "kapybara" -> Brush.verticalGradient(listOf(Color(0xFFDCFCE7), Color(0xFF22C55E)))
-        else -> Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE))) // ljus pastell när inget djur valt
-    }
-
-    // Kortfärger i djurets tema – ljusa toner så korten syns tydligt men känns sammanhängande
-    val (cardColor, cardColorInner) = when (pet?.petType?.lowercase()) {
-        "dragon" -> Color(0xFFEDE9FE) to Color(0xFFDDD6FE)   // ljus lila
-        "cat" -> Color(0xFFFFFBEB) to Color(0xFFFEF3C7)     // ljus amber
-        "dog" -> Color(0xFFDCFCE7) to Color(0xFFBBF7D0)     // ljus grön
-        "bird" -> Color(0xFFEFF6FF) to Color(0xFFDBEAFE)   // ljus blå
-        "rabbit" -> Color(0xFFFDF2F8) to Color(0xFFFCE7F3)  // ljus rosa
-        "bear" -> Color(0xFFFFFBEB) to Color(0xFFFEF3C7)   // ljus amber
-        "snake" -> Color(0xFFDCFCE7) to Color(0xFFBBF7D0)   // ljus grön
-        "panda" -> Color(0xFFF3F4F6) to Color(0xFFE5E7EB)   // ljus grå
-        "slot" -> Color(0xFFF3F4F6) to Color(0xFFE5E7EB)
-        "hydra" -> Color(0xFFEDE9FE) to Color(0xFFDDD6FE)
-        "unicorn" -> Color(0xFFFDF2F8) to Color(0xFFFCE7F3)
-        "kapybara" -> Color(0xFFDCFCE7) to Color(0xFFBBF7D0)
-        else -> MaterialTheme.colorScheme.surface to MaterialTheme.colorScheme.surfaceVariant
-    }
+    // Every species colour lives in PetTheme, shared with the parent dashboard. It
+    // used to be spelled out here as two `when` blocks, which is how shark and lion
+    // ended up missing from both and falling through to the neutral pastel.
+    val petPalette = PetTheme.forPet(pet?.petType)
+    val backgroundBrush = PetTheme.background(pet?.petType)
+    val cardColor = petPalette.cardTint
+    val cardColorInner = petPalette.cardTintInner
 
     // Textfärger på kort – mörka så att texten alltid är läsbar mot ljusa kort
     val cardTextPrimary = Color(0xFF1C1917)

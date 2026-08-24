@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -69,6 +70,8 @@ fun petScaleFor(petType: String?, growthStage: Int): Float {
  * background is cropped to fill, the pet is fitted inside it.
  *
  * @param scale fraction of the box the pet occupies; see PET_SCALE_OVERRIDES.
+ * @param petPadding inset around the scaled art. The default suits a large frame;
+ *   a small portrait needs less or the animal all but disappears.
  * @param alignment where the pet sits once scaled. Bottom reads as standing on the
  *   ground, which suits a landscape background; Center keeps it floating mid-frame.
  */
@@ -82,6 +85,7 @@ fun PetVisual(
     cornerRadius: Int = 16,
     scale: Float = petScaleFor(petType, growthStage),
     alignment: Alignment = Alignment.Center,
+    petPadding: Dp = 8.dp,
 ) {
     val context = LocalContext.current
     val petId = PetImages.petDrawable(context, petType, growthStage)
@@ -105,7 +109,7 @@ fun PetVisual(
                 contentDescription = contentDescription,
                 modifier = Modifier
                     .fillMaxSize(scale.coerceIn(0.1f, 1f))
-                    .padding(8.dp),
+                    .padding(petPadding),
                 contentScale = ContentScale.Fit,
             )
         } else {

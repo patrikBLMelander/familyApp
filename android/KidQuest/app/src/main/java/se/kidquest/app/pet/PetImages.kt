@@ -37,6 +37,34 @@ object PetImages {
         "golden_egg" to "lion",
     )
 
+    /**
+     * Swedish species names, for the places that name the animal in prose rather than
+     * drawing it — the parent dashboard's child cards, mainly.
+     *
+     * "slot" is the codebase's spelling of sloth, kept because it is the egg mapping
+     * the backend and the art already use.
+     */
+    private val SPECIES_NAMES_SV = mapOf(
+        "dragon" to "Drake",
+        "cat" to "Katt",
+        "dog" to "Hund",
+        "bird" to "Fågel",
+        "rabbit" to "Kanin",
+        "bear" to "Björn",
+        "snake" to "Orm",
+        "panda" to "Panda",
+        "slot" to "Sengångare",
+        "hydra" to "Hydra",
+        "unicorn" to "Enhörning",
+        "kapybara" to "Kapybara",
+        "shark" to "Haj",
+        "lion" to "Lejon",
+    )
+
+    /** Null for an unknown species, so the caller can decide what to say instead. */
+    fun speciesName(petType: String?): String? =
+        petTypeForEgg(petType)?.let { SPECIES_NAMES_SV[it] }
+
     private const val MIN_STAGE = 1
     private const val MAX_STAGE = 5
 
