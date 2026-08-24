@@ -346,8 +346,12 @@ fun AdultDashboardScreen(
                                 children.firstOrNull()?.let { onChildTasks(it.id, it.name) }
                             },
                             onPairDevice = { children.firstOrNull()?.let { inviteChild = it } },
+                            // The child view, not the pet screen. The pet screen is
+                            // read-only for a parent -- it says the child has not chosen
+                            // an egg and offers no way to do it. The child view is where
+                            // the egg picker lives.
                             onSeePet = {
-                                children.firstOrNull()?.let { onChildPet(it.id, it.name) }
+                                children.firstOrNull()?.let { onChildView(it.id, it.name) }
                             },
                             onDismiss = {
                                 onboardingDismissed = true

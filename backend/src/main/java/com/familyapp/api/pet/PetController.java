@@ -111,18 +111,23 @@ public class PetController {
         return petService.getAvailableEggTypes();
     }
 
+    /**
+     * 404 when the member has no pet this month, matching /pets/current.
+     *
+     * This returned 200 with an empty body, which no client could make sense of:
+     * Android could not parse it and reported "could not fetch your animal" instead of
+     * offering the egg picker, and web already had a 404 branch that never ran.
+     */
     @GetMapping("/members/{memberId}/current")
-    public PetResponse getMemberPet(
+    public ResponseEntity<PetResponse> getMemberPet(
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         requireSameFamily(deviceToken, memberId);
 
-        var pet = petService.getCurrentPet(memberId).orElse(null);
-        if (pet == null) {
-            return null;
-        }
-        return toResponse(pet);
+        return petService.getCurrentPet(memberId)
+                .map(pet -> ResponseEntity.ok(toResponse(pet)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
 
     @GetMapping("/members/{memberId}/history")
