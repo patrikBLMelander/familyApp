@@ -17,6 +17,10 @@ data class UpdateFamilyMemberRequest(
     val name: String,
 )
 
+data class UpdatePasswordRequest(
+    val password: String,
+)
+
 data class InviteTokenResponse(
     val token: String,
 )
@@ -46,6 +50,20 @@ interface FamilyMembersApi {
     suspend fun updateMember(
         @Path("memberId") memberId: String,
         @Body body: UpdateFamilyMemberRequest,
+    ): FamilyMemberResponse
+
+    /**
+     * Sets a member's password. A parent may do this for any adult in the family,
+     * which is the whole recovery path when someone is locked out -- there is no
+     * email reset yet.
+     *
+     * Does not invalidate existing sessions: whoever is locked out has none, and
+     * signing the other parent's phone out would be gratuitous.
+     */
+    @PATCH("family-members/{memberId}/password")
+    suspend fun updatePassword(
+        @Path("memberId") memberId: String,
+        @Body body: UpdatePasswordRequest,
     ): FamilyMemberResponse
 
     /**

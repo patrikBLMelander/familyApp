@@ -457,20 +457,17 @@ public class CalendarController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Validate token and verify member belongs to same family
-        UUID requesterFamilyId = null;
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                requesterFamilyId = requester.familyId();
-                var targetMember = memberService.getMemberById(memberId);
-                if (!requesterFamilyId.equals(targetMember.familyId())) {
-                    throw new IllegalArgumentException("Access denied: Member is not in the same family");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
+        // Mandatory: this used to be conditional on a token being present, so an
+        // unauthenticated caller could read any member's task completions.
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
         }
+        var requester = memberService.getMemberByDeviceToken(deviceToken);
+        var targetMember = memberService.getMemberById(memberId);
+        if (requester.familyId() == null || !requester.familyId().equals(targetMember.familyId())) {
+            throw new IllegalArgumentException("Access denied");
+        }
+
         
         var completions = service.getTaskCompletionsForMember(memberId);
         return completions.stream()

@@ -27,6 +27,23 @@ public class XpController {
         this.foodService = foodService;
     }
 
+    /**
+     * Asserts the caller is in the same family as the member being read.
+     *
+     * This used to be conditional on a token being present, so an unauthenticated
+     * caller skipped it and could read any member's XP.
+     */
+    private void requireSameFamily(String deviceToken, java.util.UUID memberId) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        var requester = memberService.getMemberByDeviceToken(deviceToken);
+        var member = memberService.getMemberById(memberId);
+        if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
+            throw new IllegalArgumentException("Access denied");
+        }
+    }
+
     @GetMapping("/current")
     public ResponseEntity<XpProgressResponse> getCurrentProgress(
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
@@ -77,20 +94,7 @@ public class XpController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Verify the requester has access to this member's data (same family)
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                var member = memberService.getMemberById(memberId);
-                
-                // Check if same family
-                if (!requester.familyId().equals(member.familyId())) {
-                    throw new IllegalArgumentException("Access denied");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
-        }
+        requireSameFamily(deviceToken, memberId);
 
         // Return null if no progress exists (frontend handles this gracefully)
         return xpService.getCurrentProgress(memberId)
@@ -103,20 +107,7 @@ public class XpController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Verify the requester has access to this member's data (same family)
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                var member = memberService.getMemberById(memberId);
-                
-                // Check if same family
-                if (!requester.familyId().equals(member.familyId())) {
-                    throw new IllegalArgumentException("Access denied");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
-        }
+        requireSameFamily(deviceToken, memberId);
 
         return xpService.getHistory(memberId).stream()
                 .map(this::toHistoryResponse)

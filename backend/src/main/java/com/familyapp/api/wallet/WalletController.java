@@ -143,8 +143,11 @@ public class WalletController {
      */
     @PostMapping("/notifications/{notificationId}/mark-shown")
     public ResponseEntity<Void> markNotificationAsShown(
-            @PathVariable("notificationId") UUID notificationId
+            @PathVariable("notificationId") UUID notificationId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        // Took no token at all, so anyone could dismiss anyone's notifications.
+        requireWalletAccess(deviceToken, walletService.getNotificationOwnerId(notificationId));
         walletService.markNotificationAsShown(notificationId);
         return ResponseEntity.ok().build();
     }
@@ -238,20 +241,7 @@ public class WalletController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Verify the requester has access to this member's data (same family)
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                var member = memberService.getMemberById(memberId);
-                
-                // Check if same family
-                if (!requester.familyId().equals(member.familyId())) {
-                    throw new IllegalArgumentException("Access denied");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
-        }
+        requireWalletAccess(deviceToken, memberId);
 
         var wallet = walletService.getBalance(memberId);
         return new WalletBalanceResponse(wallet.id(), wallet.memberId(), wallet.balance());
@@ -265,20 +255,7 @@ public class WalletController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Verify the requester has access to this member's data (same family)
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                var member = memberService.getMemberById(memberId);
-                
-                // Check if same family
-                if (!requester.familyId().equals(member.familyId())) {
-                    throw new IllegalArgumentException("Access denied");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
-        }
+        requireWalletAccess(deviceToken, memberId);
 
         return walletService.getActiveSavingsGoals(memberId).stream()
                 .map(this::toResponse)
@@ -294,20 +271,7 @@ public class WalletController {
             @RequestParam(value = "limit", defaultValue = "20") int limit,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Verify the requester has access to this member's data (same family)
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                var member = memberService.getMemberById(memberId);
-                
-                // Check if same family
-                if (!requester.familyId().equals(member.familyId())) {
-                    throw new IllegalArgumentException("Access denied");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
-        }
+        requireWalletAccess(deviceToken, memberId);
 
         return walletService.getTransactionHistory(memberId, limit).stream()
                 .map(this::toResponse)
@@ -323,18 +287,7 @@ public class WalletController {
             @RequestBody RecordExpenseRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        // Verify requester is in the same family as the target member
-        if (deviceToken != null && !deviceToken.isEmpty()) {
-            try {
-                var requester = memberService.getMemberByDeviceToken(deviceToken);
-                var member = memberService.getMemberById(memberId);
-                if (!requester.familyId().equals(member.familyId())) {
-                    throw new IllegalArgumentException("Access denied");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
-            }
-        }
+        requireWalletAccess(deviceToken, memberId);
 
         List<WalletService.SavingsGoalAllocation> allocations = null;
         if (request.savingsGoalAllocations() != null && !request.savingsGoalAllocations().isEmpty()) {
@@ -354,6 +307,30 @@ public class WalletController {
     }
 
     // Helper methods
+    /**
+     * Asserts the caller may see or touch this member's wallet: the member themselves,
+     * or a parent of the same family.
+     *
+     * These endpoints used to guard with `if (deviceToken != null ...)` and no else, so
+     * an unauthenticated caller skipped the check and could read a child's balance and
+     * full transaction history, or record an expense against their wallet.
+     */
+    private void requireWalletAccess(String deviceToken, UUID memberId) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        var requester = memberService.getMemberByDeviceToken(deviceToken);
+        var member = memberService.getMemberById(memberId);
+        if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
+            throw new IllegalArgumentException("Access denied");
+        }
+        boolean isSelf = requester.id().equals(memberId);
+        boolean isParent = requester.role() == com.familyapp.domain.familymember.FamilyMember.Role.PARENT;
+        if (!isSelf && !isParent) {
+            throw new IllegalArgumentException("Access denied");
+        }
+    }
+
     private UUID getMemberIdFromToken(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
             throw new IllegalArgumentException("Device token is required");

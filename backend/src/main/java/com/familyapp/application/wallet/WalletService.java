@@ -452,6 +452,14 @@ public class WalletService {
                 .collect(Collectors.toList());
     }
 
+    /** Who a notification belongs to, so callers can check before marking it shown. */
+    @Transactional(readOnly = true)
+    public UUID getNotificationOwnerId(UUID notificationId) {
+        return notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new IllegalArgumentException("Notifikation hittades inte: " + notificationId))
+                .getMember().getId();
+    }
+
     /**
      * Mark notification as shown
      */

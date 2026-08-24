@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
@@ -51,6 +52,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +66,7 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.FamilyMemberResponse
 import se.kidquest.app.network.UpdateFamilyMemberRequest
+import se.kidquest.app.network.UpdatePasswordRequest
 import se.kidquest.app.session.TokenStore
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,6 +90,7 @@ fun AdultDashboardScreen(
     var localRefresh by remember { mutableStateOf(0) }
     var memberPendingRename by remember { mutableStateOf<FamilyMemberResponse?>(null) }
     var memberPendingDelete by remember { mutableStateOf<FamilyMemberResponse?>(null) }
+    var memberPendingPassword by remember { mutableStateOf<FamilyMemberResponse?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var inviteChild by remember { mutableStateOf<FamilyMemberResponse?>(null) }
@@ -383,6 +388,7 @@ fun AdultDashboardScreen(
                             buttonPastel = buttonPastel,
                             buttonOnPastel = buttonOnPastel,
                             onRenameClick = { memberPendingRename = adult },
+                            onPasswordClick = { memberPendingPassword = adult },
                             onDeleteClick = { memberPendingDelete = adult },
                             onInviteClick = { inviteChild = adult },
                         )
@@ -400,6 +406,15 @@ fun AdultDashboardScreen(
                         memberPendingRename = null
                         localRefresh++
                     },
+                )
+            }
+
+            memberPendingPassword?.let { member ->
+                ChangePasswordDialog(
+                    member = member,
+                    isSelf = member.id == currentMemberId,
+                    onDismiss = { memberPendingPassword = null },
+                    onChanged = { memberPendingPassword = null },
                 )
             }
 
@@ -813,6 +828,7 @@ private fun AdultCard(
     onRenameClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onInviteClick: () -> Unit,
+    onPasswordClick: () -> Unit = {},
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -861,6 +877,13 @@ private fun AdultCard(
                                 onRenameClick()
                             },
                         )
+                        DropdownMenuItem(
+                            text = { Text(if (isCurrentUser) "Byt lösenord" else "Sätt nytt lösenord") },
+                            onClick = {
+                                menuOpen = false
+                                onPasswordClick()
+                            },
+                        )
                         if (!isCurrentUser) {
                             DropdownMenuItem(
                                 text = { Text("Ta bort", color = Color(0xFFC53030)) },
@@ -888,4 +911,115 @@ private fun AdultCard(
             }
         }
     }
+}
+
+
+/**
+ * Sets a member's password.
+ *
+ * This is the entire account recovery story until email reset exists: a parent who
+ * cannot log in has no other route back, and the alternative is editing the database
+ * by hand. So the other parent does it for them.
+ *
+ * Existing sessions are left alone. Whoever is locked out has none, and signing the
+ * other parent's phone out would achieve nothing.
+ */
+@Composable
+private fun ChangePasswordDialog(
+    member: FamilyMemberResponse,
+    isSelf: Boolean,
+    onDismiss: () -> Unit,
+    onChanged: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // Trimmed here as well as server-side, so the length shown to the user is the
+    // length that gets hashed. See FamilyService.
+    val trimmed = password.trim()
+    val tooShort = trimmed.length < 6
+    val mismatch = confirm.isNotEmpty() && confirm.trim() != trimmed
+    val canSave = !saving && !tooShort && !mismatch && confirm.isNotEmpty()
+
+    AlertDialog(
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = { Text(if (isSelf) "Byt ditt lösenord" else "Nytt lösenord för ${member.name}") },
+        text = {
+            Column {
+                if (!isSelf) {
+                    Text(
+                        text = "${member.name} kan logga in med det nya lösenordet direkt. " +
+                            "Kom överens om vad det ska vara och låt hen byta det sedan.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it; error = null },
+                    label = { Text("Nytt lösenord") },
+                    singleLine = true,
+                    enabled = !saving,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = confirm,
+                    onValueChange = { confirm = it; error = null },
+                    label = { Text("Upprepa lösenordet") },
+                    singleLine = true,
+                    enabled = !saving,
+                    isError = mismatch,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                val hint = when {
+                    mismatch -> "Lösenorden är inte lika."
+                    password.isNotEmpty() && tooShort -> "Minst 6 tecken."
+                    else -> null
+                }
+                hint?.let {
+                    Text(text = it, style = MaterialTheme.typography.bodySmall, color = Color(0xFFC53030))
+                }
+                error?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = canSave,
+                onClick = {
+                    saving = true
+                    error = null
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                ApiClient.familyMembersApi.updatePassword(
+                                    memberId = member.id,
+                                    body = UpdatePasswordRequest(password = trimmed),
+                                )
+                            }
+                            onChanged()
+                        } catch (e: Exception) {
+                            error = ApiErrors.message(e, "Kunde inte spara lösenordet.")
+                        } finally {
+                            saving = false
+                        }
+                    }
+                },
+            ) {
+                Text(if (saving) "Sparar…" else "Spara")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !saving) { Text("Avbryt") }
+        },
+    )
 }
