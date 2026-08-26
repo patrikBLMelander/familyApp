@@ -14,7 +14,7 @@ okhttp = "4.12.0"
 moshi = "1.15.1"
 datastore = "1.1.1"
 zxing = "4.3.0"
-revenuecat = "8.20.0"
+revenuecat = "10.18.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
