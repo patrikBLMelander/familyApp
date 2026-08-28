@@ -1,5 +1,6 @@
 package com.familyapp.api.chore;
 
+import com.familyapp.application.subscription.EntitlementGuard;
 import com.familyapp.application.chore.DailyChoreService;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.domain.chore.DailyChore;
@@ -18,10 +19,16 @@ public class DailyChoreController {
 
     private final DailyChoreService choreService;
     private final FamilyMemberService memberService;
+    private final EntitlementGuard entitlementGuard;
 
-    public DailyChoreController(DailyChoreService choreService, FamilyMemberService memberService) {
+    public DailyChoreController(
+            DailyChoreService choreService,
+            FamilyMemberService memberService,
+            EntitlementGuard entitlementGuard
+    ) {
         this.choreService = choreService;
         this.memberService = memberService;
+        this.entitlementGuard = entitlementGuard;
     }
 
     @GetMapping("/members/{memberId}")
@@ -55,6 +62,7 @@ public class DailyChoreController {
             @RequestBody CreateDailyChoreRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        entitlementGuard.requireEntitled(deviceToken);
         UUID requesterId = getMemberIdFromToken(deviceToken);
         DailyChore chore = choreService.createChore(
                 requesterId, request.memberId(), request.title(), request.weekdays(), request.xpPoints()
@@ -68,6 +76,7 @@ public class DailyChoreController {
             @PathVariable("choreId") UUID choreId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        entitlementGuard.requireEntitled(deviceToken);
         UUID requesterId = getMemberIdFromToken(deviceToken);
         choreService.deleteChore(requesterId, choreId);
     }

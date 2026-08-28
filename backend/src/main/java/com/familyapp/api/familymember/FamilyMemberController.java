@@ -1,5 +1,6 @@
 package com.familyapp.api.familymember;
 
+import com.familyapp.application.subscription.EntitlementGuard;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.domain.familymember.FamilyMember;
 import com.familyapp.domain.familymember.FamilyMember.Role;
@@ -15,9 +16,11 @@ import java.util.UUID;
 public class FamilyMemberController {
 
     private final FamilyMemberService service;
+    private final EntitlementGuard entitlementGuard;
 
-    public FamilyMemberController(FamilyMemberService service) {
+    public FamilyMemberController(FamilyMemberService service, EntitlementGuard entitlementGuard) {
         this.service = service;
+        this.entitlementGuard = entitlementGuard;
     }
 
     @GetMapping
@@ -87,6 +90,7 @@ public class FamilyMemberController {
         if (requester.familyId() == null) {
             throw new IllegalArgumentException("Requester does not belong to a family");
         }
+        entitlementGuard.requireEntitled(deviceToken);
         var member = service.createMember(request.name(), request.role(), requester.familyId());
         return toResponse(member);
     }
@@ -97,6 +101,7 @@ public class FamilyMemberController {
             @RequestBody UpdateFamilyMemberRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        entitlementGuard.requireEntitled(deviceToken);
         var member = service.updateMember(memberId, request.name(), requireRequesterId(deviceToken));
         return toResponse(member);
     }
@@ -147,6 +152,7 @@ public class FamilyMemberController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        entitlementGuard.requireEntitled(deviceToken);
         service.deleteMember(memberId, requireRequesterId(deviceToken));
     }
 
@@ -155,6 +161,7 @@ public class FamilyMemberController {
             @PathVariable("memberId") UUID memberId,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        entitlementGuard.requireEntitled(deviceToken);
         String token = service.generateInviteToken(memberId, requireRequesterId(deviceToken));
         return new InviteTokenResponse(token);
     }

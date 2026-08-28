@@ -53,6 +53,9 @@ object ApiErrors {
             "Ett djur är redan valt den här månaden.",
         "No unfed food available" to
             "Det finns ingen mat att ge just nu.",
+        "Subscription required for this action" to
+            "Provperioden har gått ut. Barnens sysslor och djur fungerar som vanligt, " +
+                "men för att lägga till eller ändra behöver familjen en prenumeration.",
     )
 
     /**
@@ -73,6 +76,10 @@ object ApiErrors {
             // "our fault", which a bare status code does not.
             return when (throwable.code()) {
                 401, 403 -> "Du har inte behörighet till det här."
+                // The server refused for non-payment rather than for permissions. The
+                // dashboard's banner is already on screen and leads to the paywall, so
+                // this only has to explain, not navigate.
+                402 -> "Provperioden har gått ut. Förnya för att lägga till eller ändra."
                 404 -> fallback
                 in 500..599 -> "Något gick fel hos servern. Försök igen om en stund."
                 else -> fallback

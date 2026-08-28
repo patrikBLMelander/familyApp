@@ -1,5 +1,6 @@
 package com.familyapp.api.wallet;
 
+import com.familyapp.application.subscription.EntitlementGuard;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.wallet.WalletService;
 import com.familyapp.domain.wallet.*;
@@ -17,10 +18,16 @@ public class WalletController {
 
     private final WalletService walletService;
     private final FamilyMemberService memberService;
+    private final EntitlementGuard entitlementGuard;
 
-    public WalletController(WalletService walletService, FamilyMemberService memberService) {
+    public WalletController(
+            WalletService walletService,
+            FamilyMemberService memberService,
+            EntitlementGuard entitlementGuard
+    ) {
         this.walletService = walletService;
         this.memberService = memberService;
+        this.entitlementGuard = entitlementGuard;
     }
 
     /**
@@ -43,6 +50,7 @@ public class WalletController {
             @RequestBody AddAllowanceRequest request,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
+        entitlementGuard.requireEntitled(deviceToken);
         UUID giverMemberId = getMemberIdFromToken(deviceToken);
         
         List<WalletService.SavingsGoalAllocation> allocations = null;
@@ -288,6 +296,7 @@ public class WalletController {
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         requireWalletAccess(deviceToken, memberId);
+        entitlementGuard.requireEntitled(deviceToken);
 
         List<WalletService.SavingsGoalAllocation> allocations = null;
         if (request.savingsGoalAllocations() != null && !request.savingsGoalAllocations().isEmpty()) {
