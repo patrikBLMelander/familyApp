@@ -47,4 +47,12 @@ logging:
     org.hibernate: WARN  # Reduce Hibernate noise
     org.springframework.transaction: DEBUG  # See transaction boundaries
 
-
+kidquest:
+  subscription:
+    # The value RevenueCat sends verbatim as the Authorization header. Unset means the
+    # webhook refuses every call, which is the safe failure: no purchase gets through,
+    # rather than anyone being able to grant themselves one.
+    webhook-secret: ${KIDQUEST_SUBSCRIPTION_WEBHOOK_SECRET:}
+    # Sandbox purchases apply to entitlement, so a Play licence tester can exercise the
+    # whole chain. Turn this off before launch.
+    accept-sandbox: ${KIDQUEST_SUBSCRIPTION_ACCEPT_SANDBOX:true}
