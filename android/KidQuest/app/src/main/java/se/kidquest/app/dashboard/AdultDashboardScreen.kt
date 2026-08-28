@@ -90,6 +90,7 @@ import se.kidquest.app.network.FamilyMemberResponse
 import se.kidquest.app.network.SubscriptionStatusResponse
 import se.kidquest.app.network.UpdateFamilyMemberRequest
 import se.kidquest.app.network.UpdatePasswordRequest
+import se.kidquest.app.billing.BillingConfig
 import se.kidquest.app.pet.PetImages
 import se.kidquest.app.pet.PetTheme
 import se.kidquest.app.pet.PetVisual
@@ -110,6 +111,7 @@ fun AdultDashboardScreen(
     onChildTasks: (childId: String, childName: String) -> Unit = { _, _ -> },
     onChildView: (childId: String, childName: String) -> Unit = { _, _ -> },
     onFamilyTasks: () -> Unit = {},
+    onOpenPaywall: () -> Unit = {},
 ) {
     var children by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
     // refreshKey comes from the caller; this covers reloads the screen triggers
@@ -295,7 +297,13 @@ fun AdultDashboardScreen(
             ) {
                 subscription?.let { sub ->
                     item {
-                        SubscriptionBanner(status = sub, textSecondary = textSecondary)
+                        SubscriptionBanner(
+                            status = sub,
+                            textSecondary = textSecondary,
+                            // Only a route worth offering once there is something on the
+                            // other end of it. No key, no paywall, no dead tap.
+                            onClick = if (BillingConfig.isConfigured) onOpenPaywall else null,
+                        )
                     }
                 }
 
@@ -1938,6 +1946,7 @@ private const val TRIAL_NAG_DAYS = 30L
 private fun SubscriptionBanner(
     status: SubscriptionStatusResponse,
     textSecondary: Color,
+    onClick: (() -> Unit)? = null,
 ) {
     // A comped family is never nagged, whatever the trial clock says -- they were
     // given free access on purpose.
@@ -1973,6 +1982,7 @@ private fun SubscriptionBanner(
             .padding(top = 8.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (urgent) Color(0xFFFEF2F2) else Color(0xFFFFF7ED))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -1985,7 +1995,7 @@ private fun SubscriptionBanner(
                 .size(17.dp),
         )
         Spacer(modifier = Modifier.size(9.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = headline,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1997,6 +2007,17 @@ private fun SubscriptionBanner(
                 text = detail,
                 style = MaterialTheme.typography.bodySmall,
                 color = textSecondary,
+            )
+        }
+        if (onClick != null) {
+            Spacer(modifier = Modifier.size(8.dp))
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = if (urgent) Color(0xFF991B1B) else Color(0xFFB45309),
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(17.dp),
             )
         }
     }

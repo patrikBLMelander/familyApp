@@ -59,6 +59,7 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.EmailLoginRequest
 import se.kidquest.app.network.RegisterFamilyRequest
+import se.kidquest.app.paywall.PaywallScreen
 import se.kidquest.app.session.PrefsStore
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
@@ -82,6 +83,7 @@ private sealed class AppScreen {
     data class ChildWallet(val childId: String, val childName: String, val isOwnWallet: Boolean) : AppScreen()
     data class ChildTasks(val childId: String, val childName: String) : AppScreen()
     data object FamilyTasks : AppScreen()
+    data object Paywall : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -212,9 +214,22 @@ class MainActivity : ComponentActivity() {
                             onFamilyTasks = {
                                 currentScreen = AppScreen.FamilyTasks
                             },
+                            onOpenPaywall = { currentScreen = AppScreen.Paywall },
                         )
                         AppScreen.FamilyTasks -> FamilyTasksScreen(
                             onBack = { currentScreen = AppScreen.Home },
+                        )
+                        AppScreen.Paywall -> PaywallScreen(
+                            modifier = Modifier.padding(innerPadding),
+                            onDismiss = { currentScreen = AppScreen.Home },
+                            onPurchased = {
+                                // Entitlement is the server's answer, and it arrives by
+                                // webhook rather than from the SDK. Refreshing is the most
+                                // that can be done here; if RevenueCat has not delivered
+                                // yet the banner lingers for a moment, which is honest.
+                                dashboardRefreshKey++
+                                currentScreen = AppScreen.Home
+                            },
                         )
                         AppScreen.ChildInviteLogin -> ChildInviteLoginScreen(
                             modifier = Modifier.padding(innerPadding),
