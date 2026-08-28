@@ -22,7 +22,7 @@ class PetAuthorisationTest {
 
     private FamilyMember member(FamilyMember.Role role, UUID familyId) {
         return new FamilyMember(UUID.randomUUID(), "n", "tok", null, role, familyId,
-                null, null, null, null, null);
+                null, null, null);
     }
 
     /** Mirrors PetController.requireSameFamily. */
