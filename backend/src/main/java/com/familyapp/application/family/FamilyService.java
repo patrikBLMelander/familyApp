@@ -333,8 +333,6 @@ public class FamilyService {
                 entity.getEmail(),
                 role,
                 entity.getFamily() != null ? entity.getFamily().getId() : null,
-                entity.getMenstrualCycleEnabled() != null ? entity.getMenstrualCycleEnabled() : false,
-                entity.getMenstrualCyclePrivate() != null ? entity.getMenstrualCyclePrivate() : true,
                 entity.getPetEnabled() != null ? entity.getPetEnabled() : false,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()

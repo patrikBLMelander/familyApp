@@ -125,23 +125,6 @@ public class FamilyMemberController {
         return toResponse(member);
     }
 
-    @PatchMapping("/{memberId}/menstrual-cycle-settings")
-    public FamilyMemberResponse updateMenstrualCycleSettings(
-            @PathVariable("memberId") UUID memberId,
-            @RequestBody UpdateMenstrualCycleSettingsRequest request,
-            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
-    ) {
-        UUID requesterId = requireRequesterId(deviceToken);
-        
-        var member = service.updateMenstrualCycleSettings(
-                memberId,
-                request.enabled(),
-                request.isPrivate(),
-                requesterId
-        );
-        return toResponse(member);
-    }
-
     @PatchMapping("/{memberId}/pet-settings")
     public FamilyMemberResponse updatePetSettings(
             @PathVariable("memberId") UUID memberId,
@@ -195,8 +178,6 @@ public class FamilyMemberController {
                 member.role(),
                 member.familyId() != null ? member.familyId().toString() : null,
                 member.deviceToken() != null && !member.deviceToken().isEmpty(),
-                member.menstrualCycleEnabled() != null ? member.menstrualCycleEnabled() : false,
-                member.menstrualCyclePrivate() != null ? member.menstrualCyclePrivate() : true,
                 member.petEnabled() != null ? member.petEnabled() : false
         );
     }
@@ -225,12 +206,6 @@ public class FamilyMemberController {
     ) {
     }
 
-    public record UpdateMenstrualCycleSettingsRequest(
-            Boolean enabled,
-            Boolean isPrivate
-    ) {
-    }
-
     public record UpdatePetSettingsRequest(
             Boolean enabled
     ) {
@@ -249,8 +224,6 @@ public class FamilyMemberController {
              * fact: web renders it as "Kopplad" / "Ej kopplad".
              */
             boolean hasPairedDevice,
-            Boolean menstrualCycleEnabled,
-            Boolean menstrualCyclePrivate,
             Boolean petEnabled
     ) {
     }

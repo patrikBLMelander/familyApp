@@ -50,12 +50,6 @@ public class FamilyMemberEntity {
     @Column(name = "role", nullable = false, length = 20)
     private String role;
 
-    @Column(name = "menstrual_cycle_enabled")
-    private Boolean menstrualCycleEnabled;
-
-    @Column(name = "menstrual_cycle_private")
-    private Boolean menstrualCyclePrivate;
-
     @Column(name = "pet_enabled")
     private Boolean petEnabled;
 
@@ -157,22 +151,6 @@ public class FamilyMemberEntity {
 
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
-    }
-
-    public Boolean getMenstrualCycleEnabled() {
-        return menstrualCycleEnabled;
-    }
-
-    public void setMenstrualCycleEnabled(Boolean menstrualCycleEnabled) {
-        this.menstrualCycleEnabled = menstrualCycleEnabled;
-    }
-
-    public Boolean getMenstrualCyclePrivate() {
-        return menstrualCyclePrivate;
-    }
-
-    public void setMenstrualCyclePrivate(Boolean menstrualCyclePrivate) {
-        this.menstrualCyclePrivate = menstrualCyclePrivate;
     }
 
     public Boolean getPetEnabled() {

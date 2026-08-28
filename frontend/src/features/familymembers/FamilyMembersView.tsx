@@ -12,7 +12,6 @@ import {
   FamilyMemberRole,
   updatePetSettings,
 } from "../../shared/api/familyMembers";
-import { updateMenstrualCycleSettings } from "../../shared/api/menstrualCycle";
 import { createDailyChore } from "../../shared/api/dailyChores";
 import { GiveAllowanceDialog } from "../wallet/GiveAllowanceDialog";
 import { AGE_GROUPS, TASK_SUGGESTIONS, AgeGroup } from "./taskSuggestions";
@@ -239,19 +238,6 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
     }
   };
 
-  const handleToggleMenstrualCycle = async (member: FamilyMemberResponse, enabled: boolean) => {
-    // Optimistic update
-    setMembers(prev => prev.map(m => m.id === member.id ? { ...m, menstrualCycleEnabled: enabled } : m));
-    localStorage.setItem("menstrualCycleEnabled", String(enabled));
-    try {
-      await updateMenstrualCycleSettings(member.id, enabled, member.menstrualCyclePrivate !== false);
-    } catch (e) {
-      // Revert on error
-      setMembers(prev => prev.map(m => m.id === member.id ? { ...m, menstrualCycleEnabled: !enabled } : m));
-      localStorage.setItem("menstrualCycleEnabled", String(!enabled));
-      setError("Kunde inte uppdatera menscykel-inställningar.");
-    }
-  };
 
   const handleTogglePet = async (member: FamilyMemberResponse, enabled: boolean) => {
     // Optimistic update
@@ -544,16 +530,6 @@ export function FamilyMembersView({ onNavigate }: FamilyMembersViewProps) {
                   {/* Toggles (PARENT/ASSISTANT only) */}
                   {canEditCredentials && (
                     <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                      <label className="toggle-switch-label">
-                        <input
-                          type="checkbox"
-                          className="toggle-switch-input"
-                          checked={member.menstrualCycleEnabled || false}
-                          onChange={(e) => void handleToggleMenstrualCycle(member, e.target.checked)}
-                        />
-                        <span className="toggle-switch-track" />
-                        🩸 Menscykel
-                      </label>
                       {member.role === "PARENT" && (
                         <label className="toggle-switch-label">
                           <input

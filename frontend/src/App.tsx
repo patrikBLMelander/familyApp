@@ -13,7 +13,6 @@ import { ChildrenXpView } from "./features/xp/ChildrenXpView";
 import { EggSelectionView } from "./features/pet/EggSelectionView";
 import { PetTestView } from "./features/pet/PetTestView";
 import { ChildPetHistoryView } from "./features/pet/ChildPetHistoryView";
-import { MenstrualCycleView } from "./features/menstrualcycle/MenstrualCycleView";
 import { WalletDetailView } from "./features/wallet/WalletDetailView";
 import { ChildrenWalletView } from "./features/wallet/ChildrenWalletView";
 import { PrivacyPolicyView } from "./features/legal/PrivacyPolicyView";
@@ -28,7 +27,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet" | "privacy" | "terms" | "childview" | "familytasks";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "wallet" | "childrenwallet" | "privacy" | "terms" | "childview" | "familytasks";
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -39,9 +38,6 @@ const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
 export function App() {
   console.log("=== FamilyApp Frontend Starting - XP System: 24 XP per level (5 levels) ===");
   const [currentView, setCurrentView] = useState<ViewKey>("login");
-  const [menstrualCycleEnabled, setMenstrualCycleEnabled] = useState(
-    () => localStorage.getItem("menstrualCycleEnabled") === "true"
-  );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [family, setFamily] = useState<FamilyResponse | null>(null);
   const { isChild, childMember, loading: childLoading } = useIsChild();
@@ -125,10 +121,8 @@ export function App() {
     void checkPet();
   }, [isChild, childLoading, isAuthenticated]);
 
-  // Re-read menstrualCycleEnabled from localStorage whenever view changes
   // (settings are saved in FamilyMembersView)
   useEffect(() => {
-    setMenstrualCycleEnabled(localStorage.getItem("menstrualCycleEnabled") === "true");
   }, [currentView]);
 
   // Navigate to correct view based on pet status when child logs in
@@ -247,7 +241,7 @@ export function App() {
       
       // ASSISTANT can see calendar and todos, CHILD cannot
       if (isAssistant && currentView === "schedule") {
-        return <CalendarView onNavigate={handleNavigate} showMenstrualCycle={false} onNavigateMenstrualCycle={() => handleNavigate("menstrualcycle")} />;
+        return <CalendarView onNavigate={handleNavigate} />;
       }
       if (isAssistant && currentView === "todos") {
         return <TodoListsView onNavigate={handleNavigate} />;
@@ -295,7 +289,7 @@ export function App() {
       case "familymembers":
         return <FamilyMembersView onNavigate={handleNavigate} />;
       case "schedule":
-        return <CalendarView onNavigate={handleNavigate} showMenstrualCycle={menstrualCycleEnabled} onNavigateMenstrualCycle={() => handleNavigate("menstrualcycle")} />;
+        return <CalendarView onNavigate={handleNavigate} />;
       case "chores":
         return <AdultChoresView onNavigate={handleNavigate} />;
       case "familytasks":
@@ -306,8 +300,6 @@ export function App() {
         return <ChildrenXpView onNavigate={handleNavigate} />;
       case "childrenwallet":
         return <ChildrenWalletView onNavigate={handleNavigate} />;
-      case "menstrualcycle":
-        return <MenstrualCycleView onNavigate={handleNavigate} />;
       case "eggselection":
         return <EggSelectionView onEggSelected={handleEggSelected} />;
       case "childview":

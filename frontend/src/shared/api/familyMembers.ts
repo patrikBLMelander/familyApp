@@ -9,8 +9,6 @@ export type FamilyMemberResponse = {
   email: string | null;
   role: FamilyMemberRole;
   familyId?: string;
-  menstrualCycleEnabled?: boolean;
-  menstrualCyclePrivate?: boolean;
   petEnabled?: boolean;
 };
 

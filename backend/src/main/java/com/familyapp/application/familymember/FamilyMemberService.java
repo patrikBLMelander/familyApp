@@ -528,48 +528,6 @@ public class FamilyMemberService {
     }
 
     /**
-     * Updates menstrual cycle settings for a member.
-     * 
-     * Cache behavior:
-     * - Updates "members" cache with new member data (via @CachePut)
-     * - Evicts "familyMembers" cache for this member's family
-     * 
-     * @param memberId The member to update
-     * @param enabled Whether menstrual cycle tracking is enabled
-     * @param isPrivate Whether the data is private (true) or shared with other adults (false)
-     * @param requesterId The requester ID (for permission check)
-     * @return Updated member (cached)
-     */
-    @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
-    public FamilyMember updateMenstrualCycleSettings(UUID memberId, Boolean enabled, Boolean isPrivate, UUID requesterId) {
-        var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
-        
-        UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
-        
-        // Only allow menstrual cycle settings for PARENT or ASSISTANT role
-        if (!Role.PARENT.name().equals(entity.getRole()) && !Role.ASSISTANT.name().equals(entity.getRole())) {
-            throw new IllegalArgumentException("Menstrual cycle tracking can only be enabled for parent or assistant users");
-        }
-        
-        // Mandatory: see requireAdministrableBy. This used to be skipped entirely
-        // when no device token was supplied.
-        requireAdministrableBy(memberId, requesterId);
-        
-        entity.setMenstrualCycleEnabled(enabled != null ? enabled : false);
-        entity.setMenstrualCyclePrivate(isPrivate != null ? isPrivate : true);
-        entity.setUpdatedAt(OffsetDateTime.now());
-        
-        var saved = repository.save(entity);
-        var result = toDomain(saved);
-        
-        // Evict familyMembers cache for this specific family (targeted eviction)
-        cacheService.evictFamilyMembers(familyId);
-        
-        return result;
-    }
-
-    /**
      * Updates pet settings for a member.
      * 
      * Cache behavior:
@@ -635,8 +593,6 @@ public class FamilyMemberService {
                 entity.getEmail(),
                 role,
                 entity.getFamily() != null ? entity.getFamily().getId() : null,
-                entity.getMenstrualCycleEnabled() != null ? entity.getMenstrualCycleEnabled() : false,
-                entity.getMenstrualCyclePrivate() != null ? entity.getMenstrualCyclePrivate() : true,
                 entity.getPetEnabled() != null ? entity.getPetEnabled() : false,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()

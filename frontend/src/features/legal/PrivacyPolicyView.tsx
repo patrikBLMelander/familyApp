@@ -9,16 +9,13 @@ import { LegalPage, LegalHeading, LegalContact } from "./LegalPage";
  * picker in "lägg till barn" only chooses which default chores to create -- it is never
  * stored. Saying that plainly is worth more than any promise about careful handling.
  *
- * Two things the previous version left out and needed: the menstrual cycle feature,
- * which is health data and therefore a special category under GDPR, and the payment
- * processors that a subscription brings with it.
+ * The other thing the previous version left out: the payment processors a subscription
+ * brings with it.
  *
- * The cycle feature exists only in the web app -- there is no menstrual code in
- * android/ or ios/. It is covered here because the web app is live and the table can
- * hold rows today, not because it is part of the product's future. When the web app is
- * retired in favour of the two mobile apps, delete the menstrual_cycle rows and the
- * table along with it, and only then remove this section. Dropping the section while
- * the data still exists would make this document untrue.
+ * There is deliberately nothing here about menstrual cycle tracking. That feature was
+ * web-only, and V44 removed both it and its data rather than carry special-category
+ * health data for a feature nobody would reach -- so this document has nothing to
+ * declare about it. The section came out only after the data did.
  */
 export function PrivacyPolicyView() {
   return (
@@ -63,24 +60,6 @@ export function PrivacyPolicyView() {
       <p>
         Sysslor, listor, kalenderhändelser, XP, djur och plånbokstransaktioner sparas för
         att appen ska fungera. Inget av det används till något annat.
-      </p>
-
-      <LegalHeading>Mensspårning (endast webbversionen)</LegalHeading>
-      <p>
-        Webbversionen har en funktion för att följa sin mens. Den finns inte i
-        mobilapparna. Den är <strong>avstängd som standard</strong>, kan bara slås på av en
-        vuxen för sig själv, och är privat som standard — andra i familjen ser den inte.
-      </p>
-      <p>
-        Uppgifter om mens är hälsouppgifter, vilket enligt GDPR är en särskild kategori av
-        personuppgifter. Rättslig grund är ditt uttryckliga samtycke, som du ger genom att
-        själv slå på funktionen. Slår du av den och tar bort dina inlägg finns de inte kvar.
-      </p>
-
-      <LegalHeading>Var lagras uppgifterna</LegalHeading>
-      <p>
-        Familjens uppgifter lagras på servrar i <strong>Amsterdam, Nederländerna</strong> —
-        alltså inom EU.
       </p>
 
       <LegalHeading>Vilka andra får se uppgifterna</LegalHeading>

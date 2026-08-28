@@ -8,8 +8,6 @@ type CalendarHeaderProps = {
   currentUserRole: "CHILD" | "ASSISTANT" | "PARENT" | null;
   showCreateForm: boolean;
   editingEvent: boolean;
-  showMenstrualCycle?: boolean;
-  onNavigateMenstrualCycle?: () => void;
 };
 
 /**
@@ -24,8 +22,6 @@ export function CalendarHeader({
   currentUserRole,
   showCreateForm,
   editingEvent,
-  showMenstrualCycle,
-  onNavigateMenstrualCycle,
 }: CalendarHeaderProps) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
@@ -42,16 +38,6 @@ export function CalendarHeader({
       <h2 className="view-title" style={{ margin: 0, flex: 1 }}>Kalender</h2>
       {!showCreateForm && !editingEvent && (
         <div style={{ display: "flex", gap: "8px" }}>
-          {showMenstrualCycle && onNavigateMenstrualCycle && (
-            <button
-              type="button"
-              className="todo-action-button"
-              onClick={onNavigateMenstrualCycle}
-              style={{ fontSize: "0.85rem", padding: "8px 12px" }}
-            >
-              🩸
-            </button>
-          )}
           {currentUserRole === "PARENT" && (
             <button
               type="button"
