@@ -112,6 +112,7 @@ fun AdultDashboardScreen(
     onChildView: (childId: String, childName: String) -> Unit = { _, _ -> },
     onFamilyTasks: () -> Unit = {},
     onOpenPaywall: () -> Unit = {},
+    onFamilyDeleted: () -> Unit = {},
 ) {
     var children by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
     // refreshKey comes from the caller; this covers reloads the screen triggers
@@ -132,6 +133,7 @@ fun AdultDashboardScreen(
     var checklistExpanded by remember { mutableStateOf<Boolean?>(null) }
     var subscription by remember { mutableStateOf<SubscriptionStatusResponse?>(null) }
     var topMenuOpen by remember { mutableStateOf(false) }
+    var confirmingFamilyDeletion by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         onboardingDismissed = PrefsStore.isOnboardingDismissed()
@@ -256,6 +258,17 @@ fun AdultDashboardScreen(
                                 onClick = {
                                     topMenuOpen = false
                                     onLogout()
+                                },
+                            )
+                            HorizontalDivider()
+                            // Both stores require this to be reachable in the app, and
+                            // Apple enforces it. Last in the menu and in red, because it
+                            // is the one entry here that cannot be undone.
+                            DropdownMenuItem(
+                                text = { Text("Ta bort familjen", color = Color(0xFFC53030)) },
+                                onClick = {
+                                    topMenuOpen = false
+                                    confirmingFamilyDeletion = true
                                 },
                             )
                         }
@@ -507,6 +520,16 @@ fun AdultDashboardScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (confirmingFamilyDeletion) {
+                DeleteFamilyDialog(
+                    onDismiss = { confirmingFamilyDeletion = false },
+                    onDeleted = {
+                        confirmingFamilyDeletion = false
+                        onFamilyDeleted()
+                    },
+                )
+            }
 
             memberPendingRename?.let { member ->
                 RenameMemberDialog(
@@ -2067,4 +2090,108 @@ private fun SubscriptionBannerPreview() {
         SubscriptionBanner(status("GRACE", 0, false), Color(0xFF57534E))
         SubscriptionBanner(status("EXPIRED", 0, false), Color(0xFF57534E))
     }
+}
+
+/** What a parent has to type to confirm. Deliberately not the family's own name. */
+private const val DELETE_FAMILY_CONFIRMATION = "TA BORT"
+
+/**
+ * Deletes the family and everything in it.
+ *
+ * Required in the app by both stores, and the one action here with no way back. So it
+ * says exactly what goes rather than "are you sure", names the other people it affects,
+ * and asks for a typed word rather than a tap — the same bar as removing a single
+ * member, for something far larger.
+ *
+ * The word is fixed rather than the family's name: a family called "Melander" is easy
+ * to type by reflex while reading something else, and the point of the friction is to
+ * interrupt exactly that.
+ *
+ * Not gated by entitlement. A family must always be able to leave, paid up or not.
+ */
+@Composable
+private fun DeleteFamilyDialog(
+    onDismiss: () -> Unit,
+    onDeleted: () -> Unit,
+) {
+    val familyId = remember { TokenStore.getSession()?.familyId }
+    var typed by remember { mutableStateOf("") }
+    var deleting by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val confirmed = typed.trim().equals(DELETE_FAMILY_CONFIRMATION, ignoreCase = true)
+
+    AlertDialog(
+        onDismissRequest = { if (!deleting) onDismiss() },
+        title = { Text("Ta bort familjen?") },
+        text = {
+            Column {
+                Text(
+                    "Det här tar bort hela familjen och allt som hör till den: alla barn " +
+                        "och vuxna, sysslor, XP, djur, plånböcker och sparmål. Även för de " +
+                        "andra i familjen.",
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Det går inte att ångra, och ingenting sparas.",
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Har du en prenumeration behöver du avsluta den separat i Google Play " +
+                        "— den försvinner inte med kontot.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Skriv $DELETE_FAMILY_CONFIRMATION för att bekräfta:",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = { typed = it },
+                    singleLine = true,
+                    enabled = !deleting,
+                )
+                error?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = confirmed && !deleting && familyId != null,
+                onClick = {
+                    deleting = true
+                    error = null
+                    scope.launch {
+                        try {
+                            val id = familyId ?: throw IllegalStateException("Ingen familj i sessionen")
+                            val response = withContext(Dispatchers.IO) {
+                                ApiClient.familyApi.deleteFamily(id)
+                            }
+                            if (!response.isSuccessful) {
+                                throw IllegalStateException("HTTP ${response.code()}")
+                            }
+                            onDeleted()
+                        } catch (e: Exception) {
+                            error = ApiErrors.message(e, "Kunde inte ta bort familjen.")
+                        } finally {
+                            deleting = false
+                        }
+                    }
+                },
+            ) {
+                Text(
+                    text = if (deleting) "Tar bort…" else "Ta bort allt",
+                    color = if (confirmed) Color(0xFFC53030) else Color(0xFF9CA3AF),
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !deleting) { Text("Avbryt") }
+        },
+    )
 }

@@ -215,6 +215,16 @@ class MainActivity : ComponentActivity() {
                                 currentScreen = AppScreen.FamilyTasks
                             },
                             onOpenPaywall = { currentScreen = AppScreen.Paywall },
+                            onFamilyDeleted = {
+                                scope.launch {
+                                    TokenStore.clearToken()
+                                    Billing.forget()
+                                    // Welcome rather than Auth: the account is gone, so
+                                    // a login screen would be inviting them to sign in to
+                                    // something that no longer exists.
+                                    currentScreen = AppScreen.Welcome
+                                }
+                            },
                         )
                         AppScreen.FamilyTasks -> FamilyTasksScreen(
                             onBack = { currentScreen = AppScreen.Home },

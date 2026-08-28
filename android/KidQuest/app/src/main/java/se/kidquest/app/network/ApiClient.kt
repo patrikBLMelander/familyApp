@@ -75,6 +75,10 @@ object ApiClient {
         retrofit.create(XpApi::class.java)
     }
 
+    val familyApi: FamilyApi by lazy {
+        retrofit.create(FamilyApi::class.java)
+    }
+
     val subscriptionApi: SubscriptionApi by lazy {
         retrofit.create(SubscriptionApi::class.java)
     }
