@@ -238,6 +238,19 @@ fun AdultDashboardScreen(
                             expanded = topMenuOpen,
                             onDismissRequest = { topMenuOpen = false },
                         ) {
+                            // The banner only appears in the last 30 days of the trial,
+                            // so without this a parent who decides in week two that they
+                            // want to pay has no way to. It is also the only route to the
+                            // paywall for anyone testing a purchase.
+                            if (BillingConfig.isConfigured) {
+                                DropdownMenuItem(
+                                    text = { Text("Prenumeration") },
+                                    onClick = {
+                                        topMenuOpen = false
+                                        onOpenPaywall()
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Logga ut") },
                                 onClick = {
