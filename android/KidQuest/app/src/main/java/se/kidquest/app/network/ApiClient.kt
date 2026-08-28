@@ -75,6 +75,10 @@ object ApiClient {
         retrofit.create(XpApi::class.java)
     }
 
+    val subscriptionApi: SubscriptionApi by lazy {
+        retrofit.create(SubscriptionApi::class.java)
+    }
+
     val dailyChoreApi: DailyChoreApi by lazy {
         retrofit.create(DailyChoreApi::class.java)
     }

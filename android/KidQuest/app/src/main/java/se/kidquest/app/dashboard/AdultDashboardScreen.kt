@@ -24,9 +24,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.AlertDialog
@@ -85,6 +87,7 @@ import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.FamilyMemberResponse
+import se.kidquest.app.network.SubscriptionStatusResponse
 import se.kidquest.app.network.UpdateFamilyMemberRequest
 import se.kidquest.app.network.UpdatePasswordRequest
 import se.kidquest.app.pet.PetImages
@@ -125,6 +128,7 @@ fun AdultDashboardScreen(
     // data that is not loaded yet. Held here rather than inside the LazyColumn item so
     // scrolling the row out of view does not forget the choice.
     var checklistExpanded by remember { mutableStateOf<Boolean?>(null) }
+    var subscription by remember { mutableStateOf<SubscriptionStatusResponse?>(null) }
     var topMenuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -186,6 +190,13 @@ fun AdultDashboardScreen(
         } finally {
             loading = false
         }
+
+        // Deliberately outside the block above: billing is not worth blanking the
+        // dashboard over. If this fails the banner simply does not appear, and the
+        // server still enforces entitlement on every write.
+        subscription = kotlin.runCatching {
+            ApiClient.subscriptionApi.getStatus().takeIf { it.isSuccessful }?.body()
+        }.getOrNull()
     }
 
     val backgroundBrush = Brush.verticalGradient(
@@ -282,6 +293,12 @@ fun AdultDashboardScreen(
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
+                subscription?.let { sub ->
+                    item {
+                        SubscriptionBanner(status = sub, textSecondary = textSecondary)
+                    }
+                }
+
                 if (children.isNotEmpty()) {
                     item {
                         FamilyTodayCard(
@@ -1901,5 +1918,119 @@ private fun AdultDashboardPreview() {
             onDeleteClick = {},
             onInviteClick = {},
         )
+    }
+}
+
+/** How close to the end of the trial before the dashboard mentions it. */
+private const val TRIAL_NAG_DAYS = 30L
+
+/**
+ * Says something about billing only when there is something worth saying.
+ *
+ * The dashboard was deliberately rebuilt around a single dominant element, so a
+ * permanent billing strip would undo that work. A family comfortably inside their
+ * trial, one that is paying, and one that has been comped all see nothing at all.
+ *
+ * Nothing here decides access. The server does that, and it applies the same answer
+ * to every write regardless of what this banner happens to show.
+ */
+@Composable
+private fun SubscriptionBanner(
+    status: SubscriptionStatusResponse,
+    textSecondary: Color,
+) {
+    // A comped family is never nagged, whatever the trial clock says -- they were
+    // given free access on purpose.
+    if (status.comped) return
+
+    val urgent = status.status == "EXPIRED"
+    val headline: String
+    val detail: String
+
+    when {
+        status.status == "EXPIRED" -> {
+            headline = "Provperioden har gått ut"
+            detail = "Förnya för att lägga till sysslor och familjemedlemmar igen. Barnens sysslor och djur fungerar som vanligt."
+        }
+        status.status == "GRACE" -> {
+            headline = "Betalningen gick inte igenom"
+            detail = "Google försöker igen. Appen fungerar som vanligt under tiden."
+        }
+        status.inTrial && status.trialDaysRemaining <= TRIAL_NAG_DAYS -> {
+            headline = when (status.trialDaysRemaining) {
+                0L -> "Provperioden slutar idag"
+                1L -> "1 dag kvar av provperioden"
+                else -> "${status.trialDaysRemaining} dagar kvar av provperioden"
+            }
+            detail = "Sedan kostar KidQuest 29 kr per månad för hela familjen."
+        }
+        else -> return
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (urgent) Color(0xFFFEF2F2) else Color(0xFFFFF7ED))
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            imageVector = if (urgent) Icons.Default.ErrorOutline else Icons.Default.Schedule,
+            contentDescription = null,
+            tint = if (urgent) Color(0xFF991B1B) else Color(0xFFB45309),
+            modifier = Modifier
+                .padding(top = 1.dp)
+                .size(17.dp),
+        )
+        Spacer(modifier = Modifier.size(9.dp))
+        Column {
+            Text(
+                text = headline,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (urgent) Color(0xFF991B1B) else Color(0xFF92400E),
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = textSecondary,
+            )
+        }
+    }
+}
+
+/**
+ * The banner's three states, since none of them can be reached by running the app:
+ * the trial has months left, nobody is paying yet, and a comped family shows nothing.
+ */
+@Preview(name = "Prenumerationsbanner", widthDp = 390, showBackground = true)
+@Composable
+private fun SubscriptionBannerPreview() {
+    fun status(status: String, days: Long, inTrial: Boolean) = SubscriptionStatusResponse(
+        status = status,
+        entitled = status != "EXPIRED",
+        trialEndsAt = null,
+        trialDaysRemaining = days,
+        inTrial = inTrial,
+        currentPeriodEnd = null,
+        platform = "ANDROID",
+        cancelAtPeriodEnd = false,
+        comped = false,
+    )
+
+    Column(
+        modifier = Modifier
+            .background(Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE))))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        SubscriptionBanner(status("TRIAL", 12, true), Color(0xFF57534E))
+        SubscriptionBanner(status("TRIAL", 1, true), Color(0xFF57534E))
+        SubscriptionBanner(status("TRIAL", 0, true), Color(0xFF57534E))
+        SubscriptionBanner(status("GRACE", 0, false), Color(0xFF57534E))
+        SubscriptionBanner(status("EXPIRED", 0, false), Color(0xFF57534E))
     }
 }
