@@ -15,12 +15,10 @@ package se.kidquest.app.billing
 object BillingConfig {
 
     /**
-     * Empty until the Play-backed key is pasted in. Purchases is only configured when
-     * this is set, so the app builds and runs without it -- which matters right now,
-     * because the only immediate reason for the SDK is to get the billing permission
-     * into a build Play will accept.
+     * The Play-backed key. Safe in source: RevenueCat's Android keys are designed to
+     * ship inside the app binary, and this one grants nothing the app cannot already do.
      */
-    const val REVENUECAT_PUBLIC_KEY = ""
+    const val REVENUECAT_PUBLIC_KEY = "goog_UaVOtPGIgDOIWCPXhpovVWurAKM"
 
     /**
      * The entitlement identifier configured in RevenueCat. Anything the paywall gates

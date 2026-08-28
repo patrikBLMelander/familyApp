@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PurchaseParams
 import com.revenuecat.purchases.Purchases
@@ -102,6 +103,18 @@ fun PaywallScreen(
                 }
             },
         )
+
+        // The SDK's own error can take the best part of a minute. Measured on a device
+        // whose Play services cannot do billing: the offerings request returns 200 in
+        // under a second, then the SDK retries a billing connection that will never
+        // succeed and only calls onError around forty seconds later. Nobody watches a
+        // blank button for forty seconds, so say something after ten. Whichever answer
+        // lands second wins, and both are true.
+        delay(OFFERINGS_TIMEOUT_MS)
+        if (loading) {
+            loading = false
+            message = "Kunde inte hämta priset just nu. Försök igen senare."
+        }
     }
 
     // The store's formatted price, so currency and separators are whatever is correct
@@ -315,6 +328,9 @@ fun PaywallScreen(
         }
     }
 }
+
+/** How long to wait for the store before saying so. */
+private const val OFFERINGS_TIMEOUT_MS = 10_000L
 
 private val TEXT_PRIMARY = Color(0xFF1C1917)
 private val TEXT_SECONDARY = Color(0xFF57534E)
