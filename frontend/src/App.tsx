@@ -17,6 +17,7 @@ import { MenstrualCycleView } from "./features/menstrualcycle/MenstrualCycleView
 import { WalletDetailView } from "./features/wallet/WalletDetailView";
 import { ChildrenWalletView } from "./features/wallet/ChildrenWalletView";
 import { PrivacyPolicyView } from "./features/legal/PrivacyPolicyView";
+import { TermsView } from "./features/legal/TermsView";
 import { ParentChildView } from "./features/dashboard/ParentChildView";
 import { AdultChoresView } from "./features/dashboard/AdultChoresView";
 import { FamilyTasksView } from "./features/dashboard/FamilyTasksView";
@@ -27,7 +28,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet" | "privacy" | "childview" | "familytasks";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "menstrualcycle" | "wallet" | "childrenwallet" | "privacy" | "terms" | "childview" | "familytasks";
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -100,6 +101,8 @@ export function App() {
       setIsAuthenticated(true); // Allow invite view even without token initially
     } else if (path === "/privacy") {
       setCurrentView("privacy");
+    } else if (path === "/villkor") {
+      setCurrentView("terms");
     }
   }, []);
 
@@ -228,6 +231,9 @@ export function App() {
     // Public pages (no auth required)
     if (currentView === "privacy") {
       return <PrivacyPolicyView />;
+    }
+    if (currentView === "terms") {
+      return <TermsView />;
     }
 
     // Show login/register if not authenticated
