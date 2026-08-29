@@ -56,6 +56,7 @@ fun ChildInviteLoginScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onLoginAsChild: (childId: String, childName: String) -> Unit,
+    onLoginAsAdult: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var inviteCode by remember { mutableStateOf("") }
@@ -85,7 +86,16 @@ fun ChildInviteLoginScreen(
                     familyId = member.familyId,
                 )
                 Billing.identify(member.familyId)
-                onLoginAsChild(member.id, member.name)
+                // A code pairs whoever it was issued for, and a second parent is paired
+                // exactly like a child. Sending everyone to the child dashboard put a
+                // parent into their own children's view -- the stored session had the
+                // right role all along, so relaunching corrected it, which is what made
+                // this look like a display glitch rather than routing.
+                if (member.role.equals("CHILD", ignoreCase = true)) {
+                    onLoginAsChild(member.id, member.name)
+                } else {
+                    onLoginAsAdult()
+                }
             } catch (e: Exception) {
                 status = ApiErrors.message(e, "Kunde inte koppla enheten. Kontrollera koden.")
             } finally {
@@ -133,7 +143,7 @@ fun ChildInviteLoginScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Be mamma eller pappa visa koden eller QR-koden – eller skanna här nedan.",
+            text = "Be någon i familjen visa koden eller QR-koden – eller skanna den här nedan.",
             style = MaterialTheme.typography.bodyMedium,
             color = textSecondary,
             textAlign = TextAlign.Center,

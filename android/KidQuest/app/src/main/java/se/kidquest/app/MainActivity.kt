@@ -249,6 +249,7 @@ class MainActivity : ComponentActivity() {
                             onLoginAsChild = { childId, childName ->
                                 currentScreen = AppScreen.ChildDashboard(childId, childName)
                             },
+                            onLoginAsAdult = { currentScreen = AppScreen.Home },
                         )
                         is AppScreen.ChildDashboard -> ChildDashboardScreen(
                             childName = screen.childName,

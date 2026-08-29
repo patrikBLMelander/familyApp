@@ -152,7 +152,7 @@ fun WelcomeScreen(
                 contentColor = buttonOnColor,
             ),
         ) {
-            Text("Jag är förälder")
+            Text("Skapa en ny familj")
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -165,7 +165,7 @@ fun WelcomeScreen(
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = buttonOnColor),
         ) {
-            Text("Jag är barn och har en kod")
+            Text("Jag har en inbjudningskod")
         }
 
         Spacer(modifier = Modifier.height(8.dp))
