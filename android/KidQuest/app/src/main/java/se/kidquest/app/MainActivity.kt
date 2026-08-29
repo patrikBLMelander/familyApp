@@ -55,6 +55,7 @@ import se.kidquest.app.dashboard.ChildDashboardScreen
 import se.kidquest.app.dashboard.ChildPetScreen
 import se.kidquest.app.dashboard.ChildTasksScreen
 import se.kidquest.app.dashboard.ChildWalletScreen
+import se.kidquest.app.dashboard.RecurringAllowanceScreen
 import se.kidquest.app.dashboard.FamilyTasksScreen
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.PasswordResetRequest
@@ -82,8 +83,15 @@ private sealed class AppScreen {
      */
     data class ChildViewAsParent(val childId: String, val childName: String) : AppScreen()
     data class ChildPet(val childId: String, val childName: String) : AppScreen()
-    data class ChildWallet(val childId: String, val childName: String, val isOwnWallet: Boolean) : AppScreen()
+    data class ChildWallet(
+        val childId: String,
+        val childName: String,
+        val isOwnWallet: Boolean,
+        /** Reached from inside the child's own view, where nothing may be changed. */
+        val fromChildView: Boolean = false,
+    ) : AppScreen()
     data class ChildTasks(val childId: String, val childName: String) : AppScreen()
+    data class RecurringAllowance(val childId: String, val childName: String) : AppScreen()
     data object FamilyTasks : AppScreen()
     data object Paywall : AppScreen()
 }
@@ -285,7 +293,12 @@ class MainActivity : ComponentActivity() {
                             },
                             onOpenWallet = {
                                 returnToChildDashboard = screen.childId to screen.childName
-                                currentScreen = AppScreen.ChildWallet(screen.childId, screen.childName, isOwnWallet = false)
+                                currentScreen = AppScreen.ChildWallet(
+                                    screen.childId,
+                                    screen.childName,
+                                    isOwnWallet = false,
+                                    fromChildView = true,
+                                )
                             },
                         )
                         is AppScreen.ChildPet -> ChildPetScreen(
@@ -300,12 +313,32 @@ class MainActivity : ComponentActivity() {
                             childName = screen.childName,
                             childId = screen.childId,
                             isOwnWallet = screen.isOwnWallet,
+                            fromChildView = screen.fromChildView,
                             onBack = {
                                 val toDashboard = returnToChildDashboard
                                 returnToChildDashboard = null
                                 currentScreen = if (toDashboard != null) {
                                     AppScreen.ChildDashboard(toDashboard.first, toDashboard.second)
                                 } else AppScreen.Home
+                            },
+                            onOpenRecurringAllowance = {
+                                currentScreen = AppScreen.RecurringAllowance(
+                                    screen.childId,
+                                    screen.childName,
+                                )
+                            },
+                        )
+                        is AppScreen.RecurringAllowance -> RecurringAllowanceScreen(
+                            childName = screen.childName,
+                            childId = screen.childId,
+                            // Back to the wallet it was opened from, so a parent who
+                            // just set an amount sees the row say so.
+                            onBack = {
+                                currentScreen = AppScreen.ChildWallet(
+                                    screen.childId,
+                                    screen.childName,
+                                    isOwnWallet = false,
+                                )
                             },
                         )
                         is AppScreen.ChildTasks -> ChildTasksScreen(

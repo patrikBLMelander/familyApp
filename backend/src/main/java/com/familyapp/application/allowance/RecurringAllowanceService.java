@@ -136,7 +136,7 @@ public class RecurringAllowanceService {
         entity.setUpdatedAt(OffsetDateTime.now());
 
         var saved = repository.save(entity);
-        log.info("Automatisk peng {} för medlem {}, nästa utbetalning {}",
+        log.info("Automatisk utbetalning {} för medlem {}, nästa utbetalning {}",
                 spec.kind(), memberId, saved.getNextDueOn());
         return saved;
     }
@@ -148,7 +148,7 @@ public class RecurringAllowanceService {
             entity.setActive(false);
             entity.setUpdatedAt(OffsetDateTime.now());
             repository.save(entity);
-            log.info("Automatisk peng avstängd för medlem {}", memberId);
+            log.info("Automatisk utbetalning avstängd för medlem {}", memberId);
         });
     }
 
@@ -187,7 +187,7 @@ public class RecurringAllowanceService {
             // att en förälder som undrar får ett svar i stället för ett hål.
             record(memberId, dueDate, 0, SKIPPED_NO_SUBSCRIPTION, "Ingen aktiv prenumeration");
             advance(schedule, today);
-            log.info("Automatisk peng pausad för medlem {} ({}): ingen prenumeration", memberId, dueDate);
+            log.info("Automatisk utbetalning pausad för medlem {} ({}): ingen prenumeration", memberId, dueDate);
             return;
         }
 
@@ -195,7 +195,7 @@ public class RecurringAllowanceService {
         if (amount == null) {
             // Nivån för månaden som gick gick inte att läsa ännu. Flytta INTE fram
             // datumet -- jobbet kör igen imorgon och hittar den då.
-            log.warn("Automatisk peng uppskjuten för medlem {} ({}): nivån går inte att avgöra ännu",
+            log.warn("Automatisk utbetalning uppskjuten för medlem {} ({}): nivån går inte att avgöra ännu",
                     memberId, dueDate);
             return;
         }
@@ -207,14 +207,14 @@ public class RecurringAllowanceService {
 
         var giver = resolveGiver(schedule, member);
         if (giver == null) {
-            log.error("Automatisk peng för medlem {} saknar vuxen avsändare", memberId);
+            log.error("Automatisk utbetalning för medlem {} saknar vuxen avsändare", memberId);
             return;
         }
 
         walletService.addAllowance(memberId, amount, describe(schedule), giver.getId(), null);
         record(memberId, dueDate, amount, PAID, null);
         advance(schedule, today);
-        log.info("Automatisk peng: {} kr till medlem {} för {}", amount, memberId, dueDate);
+        log.info("Automatisk utbetalning: {} kr till medlem {} för {}", amount, memberId, dueDate);
     }
 
     // ------------------------------------------------------------------------ internt
@@ -307,7 +307,7 @@ public class RecurringAllowanceService {
             next = kind == AllowanceKind.WEEKLY ? next.plusWeeks(1) : next.plusMonths(1);
         }
         if (guard > 1) {
-            log.warn("Automatisk peng för medlem {} hoppade över {} perioder",
+            log.warn("Automatisk utbetalning för medlem {} hoppade över {} perioder",
                     schedule.getMemberId(), guard - 1);
         }
         schedule.setNextDueOn(next);
@@ -389,7 +389,7 @@ public class RecurringAllowanceService {
         var requester = memberRepository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
         if (!Role.PARENT.name().equals(requester.getRole())) {
-            throw new IllegalArgumentException("Endast en förälder kan ändra automatisk peng");
+            throw new IllegalArgumentException("Endast en förälder kan ändra automatisk utbetalning");
         }
         var child = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found"));

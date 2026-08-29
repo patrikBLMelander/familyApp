@@ -1,6 +1,6 @@
 package com.familyapp.domain.allowance;
 
-/** Hur en automatisk peng räknas ut. */
+/** Hur en automatisk utbetalning räknas ut. */
 public enum AllowanceKind {
     /** Samma belopp varje vecka, på en vald veckodag. */
     WEEKLY,

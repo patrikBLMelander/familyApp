@@ -39,13 +39,13 @@ public class RecurringAllowanceScheduler {
         if (due.isEmpty()) {
             return;
         }
-        log.info("Automatisk peng: {} scheman förfallna per {}", due.size(), today);
+        log.info("Automatisk utbetalning: {} scheman förfallna per {}", due.size(), today);
         for (var scheduleId : due) {
             try {
                 service.payOne(scheduleId, today);
             } catch (Exception e) {
                 // Ett barns schema får inte stoppa syskonens.
-                log.error("Automatisk peng misslyckades för schema {}: {}", scheduleId, e.getMessage(), e);
+                log.error("Automatisk utbetalning misslyckades för schema {}: {}", scheduleId, e.getMessage(), e);
             }
         }
     }

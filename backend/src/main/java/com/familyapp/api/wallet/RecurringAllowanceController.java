@@ -20,7 +20,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Automatisk peng för ett barn.
+ * Automatisk utbetalning för ett barn.
  *
  * Endast en förälder i samma familj, kontrollerat i tjänsten. Att raden är dold i
  * barnets vy är en designfråga; det här är spärren.

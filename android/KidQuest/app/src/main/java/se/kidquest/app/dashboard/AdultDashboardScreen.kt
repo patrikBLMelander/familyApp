@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -86,6 +87,7 @@ import kotlinx.coroutines.withContext
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.RecurringAllowanceResponse
 import se.kidquest.app.network.FamilyMemberResponse
 import se.kidquest.app.network.SubscriptionStatusResponse
 import se.kidquest.app.network.UpdateFamilyMemberRequest
@@ -164,9 +166,16 @@ fun AdultDashboardScreen(
                         try {
                             val choresDeferred = async { DailyChoreRepository.fetchChoresForToday(child.id) }
                             val petDeferred = async { kotlin.runCatching { ApiClient.petsApi.getMemberPet(child.id) }.getOrNull() }
+                            val allowanceDeferred = async {
+                                kotlin.runCatching {
+                                    ApiClient.recurringAllowanceApi.get(child.id)
+                                        .takeIf { it.isSuccessful }?.body()
+                                }.getOrNull()
+                            }
 
                             val chores = choresDeferred.await()
                             val petResp = petDeferred.await()
+                            val allowance = allowanceDeferred.await()?.takeIf { it.active }
 
                             val total = chores.size
                             val done = chores.count { it.completed }
@@ -182,6 +191,7 @@ fun AdultDashboardScreen(
                                 petType = pet?.petType,
                                 growthStage = pet?.growthStage ?: 1,
                                 nextTaskTitle = nextTaskTitle,
+                                allowanceNote = allowance?.let { describeAllowance(it) },
                             )
                         } catch (_: Exception) {
                             null
@@ -633,7 +643,31 @@ private data class ChildSummary(
     val petType: String?,
     val growthStage: Int,
     val nextTaskTitle: String?,
+    /** "50 kr varje fredag", or null when no automatic allowance is running. */
+    val allowanceNote: String?,
 )
+
+/**
+ * The standing arrangement in one line, from the parent's side of it.
+ *
+ * The level kind deliberately names no figure: the amount is not decided until the
+ * month ends, and a number here would read as a promise.
+ */
+private fun describeAllowance(schedule: RecurringAllowanceResponse): String {
+    val day = schedule.dayOfMonth ?: 1
+    val ordinal = if (day % 10 in 1..2 && day != 11 && day != 12) "$day:a" else "$day:e"
+    return when (schedule.kind) {
+        "WEEKLY" -> {
+            val weekday = when (schedule.weekday) {
+                1 -> "måndag"; 2 -> "tisdag"; 3 -> "onsdag"; 4 -> "torsdag"
+                5 -> "fredag"; 6 -> "lördag"; else -> "söndag"
+            }
+            "${schedule.amount ?: 0} kr varje $weekday"
+        }
+        "MONTHLY" -> "${schedule.amount ?: 0} kr den $ordinal"
+        else -> "Efter nivå den $ordinal"
+    }
+}
 // A streakDays field used to live here, hardcoded to 0, behind a `> 0` check in the
 // card -- so the streak line it fed could never appear. Dropped rather than kept as
 // dead weight; it comes back the day the backend actually reports a streak.
@@ -886,6 +920,33 @@ private fun ChildCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = textSecondary,
                         )
+                    }
+                    // Setting it up belongs in the wallet. Seeing that it is on belongs
+                    // where a parent already looks every day, so nobody has to remember
+                    // what they chose back in the summer.
+                    summary?.allowanceNote?.let { note ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFFDCFCE7))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = null,
+                                tint = Color(0xFF166534),
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Spacer(modifier = Modifier.size(4.dp))
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF166534),
+                            )
+                        }
                     }
                 }
                 // Kept out of the name row so it stays a full 48.dp touch target
@@ -1846,6 +1907,7 @@ private fun AdultDashboardPreview() {
         petType = "dragon",
         growthStage = 3,
         nextTaskTitle = "Duka bordet",
+        allowanceNote = "Peng efter nivå den 1:a",
     )
     val oskar = ChildSummary(
         memberId = "2",
@@ -1856,6 +1918,7 @@ private fun AdultDashboardPreview() {
         petType = "cat",
         growthStage = 2,
         nextTaskTitle = null,
+        allowanceNote = null,
     )
 
     Column(

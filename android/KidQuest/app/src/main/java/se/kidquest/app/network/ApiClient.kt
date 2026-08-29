@@ -86,5 +86,9 @@ object ApiClient {
     val dailyChoreApi: DailyChoreApi by lazy {
         retrofit.create(DailyChoreApi::class.java)
     }
+
+    val recurringAllowanceApi: RecurringAllowanceApi by lazy {
+        retrofit.create(RecurringAllowanceApi::class.java)
+    }
 }
 

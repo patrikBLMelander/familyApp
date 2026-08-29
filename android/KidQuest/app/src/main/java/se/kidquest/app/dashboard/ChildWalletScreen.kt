@@ -1,6 +1,7 @@
 package se.kidquest.app.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +43,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -47,6 +51,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.RecurringAllowanceResponse
 import se.kidquest.app.network.SavingsGoalResponse
 import se.kidquest.app.network.WalletBalanceResponse
 import se.kidquest.app.network.WalletTransactionResponse
@@ -60,6 +65,9 @@ fun ChildWalletScreen(
     childId: String,
     isOwnWallet: Boolean,
     onBack: () -> Unit,
+    onOpenRecurringAllowance: () -> Unit = {},
+    /** Opened from inside the child's own view rather than from the overview. */
+    fromChildView: Boolean = false,
 ) {
     var balance by remember { mutableStateOf<WalletBalanceResponse?>(null) }
     var transactions by remember { mutableStateOf<List<WalletTransactionResponse>>(emptyList()) }
@@ -72,6 +80,7 @@ fun ChildWalletScreen(
     var showAllocateDialog by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableStateOf(0) }
     var petType by remember { mutableStateOf<String?>(null) }
+    var recurring by remember { mutableStateOf<RecurringAllowanceResponse?>(null) }
 
     LaunchedEffect(childId, isOwnWallet, refreshKey) {
         loading = true
@@ -95,12 +104,22 @@ fun ChildWalletScreen(
                         else ApiClient.petsApi.getMemberPet(childId)
                     }.getOrNull()
                 }
+                // Parent view only. The server refuses a child on this endpoint, so
+                // asking for it in the child's own wallet would fail every time.
+                val recurringDeferred = async {
+                    if (isOwnWallet) null
+                    else kotlin.runCatching {
+                        ApiClient.recurringAllowanceApi.get(childId)
+                            .takeIf { it.isSuccessful }?.body()
+                    }.getOrNull()
+                }
 
                 balance = balanceDeferred.await()
                 transactions = txDeferred.await()
                 savingsGoals = goalsDeferred.await()
                 val petResp = petDeferred.await()
                 petType = if (petResp?.isSuccessful == true) petResp.body()?.petType else null
+                recurring = recurringDeferred.await()
             }
         } catch (e: Exception) {
             error = ApiErrors.message(e, "Kunde inte ladda")
@@ -177,16 +196,11 @@ fun ChildWalletScreen(
                             color = textPrimary,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        if (isOwnWallet) {
-                            Button(
-                                onClick = { showExpenseDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = b.balance > 0,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38A169)),
-                            ) {
-                                Text("Registrera köp")
-                            }
-                        } else {
+                        // Giving money is a decision a parent makes from their own
+                        // side of the app. Recording a purchase is something you do
+                        // standing next to the child, so it belongs on every route in.
+                        val canGiveMoney = !isOwnWallet && !fromChildView
+                        if (canGiveMoney) {
                             Button(
                                 onClick = { showGiveMoneyDialog = true },
                                 modifier = Modifier.fillMaxWidth(),
@@ -195,16 +209,28 @@ fun ChildWalletScreen(
                                 Text("Ge pengar")
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { showExpenseDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = b.balance > 0,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2B6CB0)),
-                            ) {
-                                Text("Registrera köp")
-                            }
+                        }
+                        Button(
+                            onClick = { showExpenseDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = b.balance > 0,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (canGiveMoney) Color(0xFF2B6CB0) else Color(0xFF38A169),
+                            ),
+                        ) {
+                            Text("Registrera köp")
                         }
                     }
+                }
+
+                // Automatic allowance (parent view only). Deliberately not shown to
+                // the child: the amounts are a parent's decision, and a level table
+                // read as a price list is a promise no one made.
+                if (!isOwnWallet) {
+                    RecurringAllowanceRow(
+                        schedule = recurring,
+                        onClick = if (fromChildView) null else onOpenRecurringAllowance,
+                    )
                 }
 
                 // Savings goals (own wallet only)
@@ -327,6 +353,76 @@ private fun WalletCard(content: @Composable ColumnScope.() -> Unit) {
             content = content,
         )
     }
+}
+
+// MARK: - Automatic allowance row
+
+/**
+ * Where the automatic allowance lives: one line in the wallet, because the wallet is
+ * where a parent already goes to think about money.
+ *
+ * The subtitle carries the date rather than the amount. A parent who wants to check
+ * that it is on needs to know when; a parent who wants to change the amount is
+ * tapping through anyway.
+ */
+@Composable
+private fun RecurringAllowanceRow(
+    schedule: RecurringAllowanceResponse?,
+    /** Null inside the child's view: the arrangement is worth seeing, not changing there. */
+    onClick: (() -> Unit)?,
+) {
+    val active = schedule?.active == true
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.82f))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.CalendarMonth,
+            contentDescription = null,
+            tint = if (active) Color(0xFF38A169) else Color(0xFFA8A29E),
+            modifier = Modifier.width(20.dp),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Automatisk utbetalning",
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = textPrimary,
+            )
+            Text(
+                text = describeSchedule(schedule),
+                fontSize = 12.sp,
+                color = if (active) textSecondary else Color(0xFF78716C),
+            )
+        }
+        if (onClick != null) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = Color(0xFFA8A29E),
+                modifier = Modifier.width(16.dp),
+            )
+        }
+    }
+}
+
+private fun describeSchedule(schedule: RecurringAllowanceResponse?): String {
+    if (schedule == null || !schedule.active) return "Inte inställt"
+    val kind = when (schedule.kind) {
+        "WEEKLY" -> "Veckopeng"
+        "MONTHLY" -> "Månadspeng"
+        else -> "Efter nivå"
+    }
+    val due = schedule.nextDueOn
+        ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        ?.format(DateTimeFormatter.ofPattern("d MMMM", Locale("sv", "SE")))
+    return if (due == null) kind else "$kind · nästa $due"
 }
 
 // MARK: - Savings goal row
