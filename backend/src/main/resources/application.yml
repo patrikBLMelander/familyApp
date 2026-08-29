@@ -48,6 +48,17 @@ logging:
     org.springframework.transaction: DEBUG  # See transaction boundaries
 
 kidquest:
+  email:
+    # Resend. Unset means reset e-mails are logged and not sent, which keeps local
+    # development working without credentials -- and is why the service never treats a
+    # successful call as proof that mail arrived.
+    api-key: ${RESEND_API_KEY:}
+    from: ${KIDQUEST_EMAIL_FROM:KidQuest <no-reply@kidquest.se>}
+  password-reset:
+    # Where the emailed link lands. A web page rather than a deep link on purpose: the
+    # person who needs it most is locked out, possibly on a laptop, possibly without the
+    # app installed at all.
+    url-base: ${KIDQUEST_PASSWORD_RESET_URL:https://familyapp-frontend-production.up.railway.app/aterstall-losenord}
   subscription:
     # The value RevenueCat sends verbatim as the Authorization header. Unset means the
     # webhook refuses every call, which is the safe failure: no purchase gets through,

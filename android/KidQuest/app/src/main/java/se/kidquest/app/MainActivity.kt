@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +57,7 @@ import se.kidquest.app.dashboard.ChildTasksScreen
 import se.kidquest.app.dashboard.ChildWalletScreen
 import se.kidquest.app.dashboard.FamilyTasksScreen
 import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.PasswordResetRequest
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.EmailLoginRequest
 import se.kidquest.app.network.RegisterFamilyRequest
@@ -344,6 +346,7 @@ fun AuthScreen(
     val emailState = remember { mutableStateOf("") }
     val passwordState = remember { mutableStateOf("") }
     val statusState = remember { mutableStateOf("Inte inloggad") }
+    val showForgotPassword = remember { mutableStateOf(false) }
     val loadingState = remember { mutableStateOf(false) }
 
     val backgroundBrush = Brush.verticalGradient(
@@ -467,6 +470,24 @@ fun AuthScreen(
                     ),
                 ) {
                     Text(text = if (loadingState.value) "Loggar in..." else "Logga in")
+                }
+
+                // Until this existed, a parent who forgot their password was locked out
+                // for good: another parent could set a new one, which does nothing at
+                // all for a single-parent family.
+                TextButton(
+                    onClick = { showForgotPassword.value = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "Glömt lösenordet?",
+                        color = buttonOnColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                if (showForgotPassword.value) {
+                    ForgotPasswordDialog(onDismiss = { showForgotPassword.value = false })
                 }
                 if (statusState.value != "Loggar in..." && statusState.value != "Inte inloggad") {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -712,4 +733,86 @@ fun GreetingPreview() {
     KidQuestTheme {
         AuthScreen()
     }
+}
+/**
+ * Asks for a reset link.
+ *
+ * Says the same thing whether or not the address has an account, because the server
+ * does. Anything else would turn this dialog into a way of finding out which families
+ * use KidQuest -- and the answer would be a list of parents.
+ */
+@Composable
+private fun ForgotPasswordDialog(onDismiss: () -> Unit) {
+    var email by remember { mutableStateOf("") }
+    var sending by remember { mutableStateOf(false) }
+    var sent by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = { if (!sending) onDismiss() },
+        title = { Text(if (sent) "Kolla din mejl" else "Glömt lösenordet?") },
+        text = {
+            if (sent) {
+                Text(
+                    "Om adressen finns hos oss har vi skickat en länk dit. Den gäller i " +
+                        "en timme. Titta i skräpposten om den inte dyker upp.",
+                )
+            } else {
+                Column {
+                    Text("Skriv din e-postadress så skickar vi en länk för att välja ett nytt lösenord.")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("E-post") },
+                        singleLine = true,
+                        enabled = !sending,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    )
+                    error?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (sent) {
+                TextButton(onClick = onDismiss) { Text("Klart") }
+            } else {
+                TextButton(
+                    enabled = email.isNotBlank() && !sending,
+                    onClick = {
+                        sending = true
+                        error = null
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    ApiClient.authApi.requestPasswordReset(
+                                        PasswordResetRequest(email.trim()),
+                                    )
+                                }
+                                // Deliberately not checking the response body: a failure
+                                // to send must look exactly like a success, or this
+                                // becomes an account-enumeration tool.
+                                sent = true
+                            } catch (e: Exception) {
+                                error = ApiErrors.message(e, "Kunde inte skicka just nu.")
+                            } finally {
+                                sending = false
+                            }
+                        }
+                    },
+                ) {
+                    Text(if (sending) "Skickar…" else "Skicka länk")
+                }
+            }
+        },
+        dismissButton = {
+            if (!sent) {
+                TextButton(onClick = onDismiss, enabled = !sending) { Text("Avbryt") }
+            }
+        },
+    )
 }

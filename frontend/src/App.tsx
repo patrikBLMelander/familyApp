@@ -18,6 +18,7 @@ import { ChildrenWalletView } from "./features/wallet/ChildrenWalletView";
 import { PrivacyPolicyView } from "./features/legal/PrivacyPolicyView";
 import { TermsView } from "./features/legal/TermsView";
 import { DeleteAccountView } from "./features/legal/DeleteAccountView";
+import { ResetPasswordView } from "./features/auth/ResetPasswordView";
 import { ParentChildView } from "./features/dashboard/ParentChildView";
 import { AdultChoresView } from "./features/dashboard/AdultChoresView";
 import { FamilyTasksView } from "./features/dashboard/FamilyTasksView";
@@ -28,7 +29,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "wallet" | "childrenwallet" | "privacy" | "terms" | "deleteaccount" | "childview" | "familytasks";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "wallet" | "childrenwallet" | "privacy" | "terms" | "deleteaccount" | "resetpassword" | "childview" | "familytasks";
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -102,6 +103,8 @@ export function App() {
       setCurrentView("terms");
     } else if (path === "/radera-konto") {
       setCurrentView("deleteaccount");
+    } else if (path === "/aterstall-losenord") {
+      setCurrentView("resetpassword");
     }
   }, []);
 
@@ -234,6 +237,9 @@ export function App() {
     }
     if (currentView === "deleteaccount") {
       return <DeleteAccountView />;
+    }
+    if (currentView === "resetpassword") {
+      return <ResetPasswordView />;
     }
 
     // Show login/register if not authenticated

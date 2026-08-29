@@ -1,5 +1,6 @@
 package se.kidquest.app.network
 
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
 
@@ -47,12 +48,23 @@ data class EmailLoginRequest(
     val password: String,
 )
 
+data class PasswordResetRequest(
+    val email: String,
+)
+
 interface AuthApi {
 
     @POST("families/register")
     suspend fun registerFamily(
         @Body body: RegisterFamilyRequest,
     ): FamilyRegistrationResponse
+
+    /**
+     * Asks for a reset link. Answers 200 whether or not the address has an account --
+     * the server will not say, so neither can this.
+     */
+    @POST("families/password-reset/request")
+    suspend fun requestPasswordReset(@Body request: PasswordResetRequest): Response<Unit>
 
     @POST("families/login-by-email")
     suspend fun loginByEmail(
