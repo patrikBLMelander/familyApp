@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../../shared/config";
+import { KID_QUEST, PublicPage } from "../legal/LegalPage";
 
 /**
  * Where the emailed reset link lands, at /aterstall-losenord?token=…
@@ -61,32 +62,25 @@ export function ResetPasswordView() {
     }
   };
 
-  const wrapper: React.CSSProperties = {
-    maxWidth: 420,
-    margin: "0 auto",
-    padding: "3rem 1.5rem",
-    lineHeight: 1.6,
-    color: "#1C1917",
-    fontFamily: "system-ui, -apple-system, sans-serif",
-  };
-
   if (done) {
     return (
-      <div style={wrapper}>
-        <h1 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Klart!</h1>
-        <p>Ditt lösenord är uppdaterat. Nu kan du logga in i KidQuest med det nya.</p>
-      </div>
+      <PublicPage>
+        <h1 style={{ fontSize: "1.5rem", margin: "0 0 0.5rem" }}>Klart!</h1>
+        <p style={{ color: KID_QUEST.textSecondary, margin: 0 }}>
+          Ditt lösenord är uppdaterat. Nu kan du logga in i KidQuest med det nya.
+        </p>
+      </PublicPage>
     );
   }
 
   return (
-    <div style={wrapper}>
-      <h1 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Välj ett nytt lösenord</h1>
-      <p style={{ color: "#57534E" }}>Minst 6 tecken.</p>
+    <PublicPage>
+      <h1 style={{ fontSize: "1.5rem", margin: "0 0 0.35rem" }}>Välj ett nytt lösenord</h1>
+      <p style={{ color: KID_QUEST.textSecondary, margin: "0 0 1.5rem" }}>Minst 6 tecken.</p>
 
-      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1.5rem" }}>
+      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>Nytt lösenord</span>
+          <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>Nytt lösenord</span>
           <input
             type="password"
             value={password}
@@ -99,7 +93,7 @@ export function ResetPasswordView() {
         </label>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>Upprepa lösenordet</span>
+          <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>Upprepa lösenordet</span>
           <input
             type="password"
             value={repeat}
@@ -111,16 +105,16 @@ export function ResetPasswordView() {
           {mismatch && <small style={{ color: "#991B1B" }}>Lösenorden är inte lika.</small>}
         </label>
 
-        {error && <p style={{ color: "#991B1B", margin: 0 }}>{error}</p>}
+        {error && <p style={{ color: "#991B1B", margin: 0, fontSize: "0.95rem" }}>{error}</p>}
 
         <button
           type="submit"
           disabled={!canSubmit}
           style={{
-            padding: "12px 16px",
-            borderRadius: 12,
+            padding: "14px 16px",
+            borderRadius: 14,
             border: "none",
-            background: canSubmit ? "#0C4A6E" : "#CBD5E1",
+            background: canSubmit ? KID_QUEST.accent : "#D6D3D1",
             color: "#fff",
             fontSize: "1rem",
             fontWeight: 600,
@@ -130,13 +124,15 @@ export function ResetPasswordView() {
           {saving ? "Sparar…" : "Spara lösenordet"}
         </button>
       </form>
-    </div>
+    </PublicPage>
   );
 }
 
 const inputStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #D6D3D1",
+  padding: "12px 14px",
+  borderRadius: 12,
+  border: "1px solid #E7E5E4",
+  background: "#fff",
   fontSize: "1rem",
+  color: KID_QUEST.textPrimary,
 };

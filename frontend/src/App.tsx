@@ -37,9 +37,27 @@ const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
   "cdd48859-74c5-4dee-989f-0b091f62d630", // Localhost
 ];
 
+/**
+ * Which view a URL asks for, or null for "wherever the app would normally start".
+ *
+ * Read during the first render rather than afterwards. Doing this in an effect meant
+ * the app rendered the login screen for one frame before correcting itself, so someone
+ * following a password-reset link saw a login form flash up at the exact moment they
+ * were trying to recover their account.
+ */
+function viewFromPath(): ViewKey | null {
+  const path = window.location.pathname;
+  if (path.startsWith("/invite/")) return "invite";
+  if (path === "/privacy") return "privacy";
+  if (path === "/villkor") return "terms";
+  if (path === "/radera-konto") return "deleteaccount";
+  if (path === "/aterstall-losenord") return "resetpassword";
+  return null;
+}
+
 export function App() {
   console.log("=== FamilyApp Frontend Starting - XP System: 24 XP per level (5 levels) ===");
-  const [currentView, setCurrentView] = useState<ViewKey>("login");
+  const [currentView, setCurrentView] = useState<ViewKey>(() => viewFromPath() ?? "login");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [family, setFamily] = useState<FamilyResponse | null>(null);
   const { isChild, childMember, loading: childLoading } = useIsChild();
@@ -92,19 +110,11 @@ export function App() {
   }, []);
 
   // Check if we're on an invite page or public page
+  // The view itself is already set above. This is only here for the invite flow,
+  // which additionally has to let an unauthenticated visitor through.
   useEffect(() => {
-    const path = window.location.pathname;
-    if (path.startsWith("/invite/")) {
-      setCurrentView("invite");
-      setIsAuthenticated(true); // Allow invite view even without token initially
-    } else if (path === "/privacy") {
-      setCurrentView("privacy");
-    } else if (path === "/villkor") {
-      setCurrentView("terms");
-    } else if (path === "/radera-konto") {
-      setCurrentView("deleteaccount");
-    } else if (path === "/aterstall-losenord") {
-      setCurrentView("resetpassword");
+    if (viewFromPath() === "invite") {
+      setIsAuthenticated(true);
     }
   }, []);
 
