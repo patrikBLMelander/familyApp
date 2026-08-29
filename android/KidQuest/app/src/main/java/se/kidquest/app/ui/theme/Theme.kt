@@ -16,14 +16,19 @@ import se.kidquest.app.theme.SeasonTheme
 /**
  * @param dark null means nobody has chosen yet, so follow the phone. Once a parent
  *   touches the switch in the overflow menu it is their decision and stays theirs.
+ * @param season forces a season instead of today's. For previews only, so the three
+ *   seasons that are not happening right now can be looked at before they arrive on
+ *   their own -- production always passes null.
  */
 @Composable
 fun KidQuestTheme(
     dark: Boolean? = null,
+    season: String? = null,
     content: @Composable () -> Unit,
 ) {
     val isDark = dark ?: isSystemInDarkTheme()
-    val palette = SeasonTheme.current(isDark)
+    val palette =
+        if (season != null) SeasonTheme.paletteFor(season, isDark) else SeasonTheme.current(isDark)
 
     // enableEdgeToEdge() follows the phone, not the switch in our own menu. Without
     // this, a parent who turns dark mode on while the phone stays light gets dark

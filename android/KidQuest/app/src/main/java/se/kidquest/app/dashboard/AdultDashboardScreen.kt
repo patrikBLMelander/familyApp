@@ -109,6 +109,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import se.kidquest.app.theme.LocalSeasonPalette
 import se.kidquest.app.theme.SeasonPalette
+import se.kidquest.app.ui.theme.KidQuestTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -821,6 +822,84 @@ private fun DashboardTopBar(
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * The eight palettes, side by side.
+ *
+ * Seven of them cannot be reached by running the app: the season comes from the clock,
+ * so autumn arrives on 1 September whether or not anyone has looked at it. These exist
+ * so a season can be judged before it happens rather than after a family reports it.
+ */
+@Preview(name = "Vår", widthDp = 820, heightDp = 470, showBackground = true)
+@Composable
+private fun SeasonSpringPreview() = SeasonPair("spring")
+
+@Preview(name = "Sommar", widthDp = 820, heightDp = 470, showBackground = true)
+@Composable
+private fun SeasonSummerPreview() = SeasonPair("summer")
+
+@Preview(name = "Höst", widthDp = 820, heightDp = 470, showBackground = true)
+@Composable
+private fun SeasonAutumnPreview() = SeasonPair("autumn")
+
+@Preview(name = "Vinter", widthDp = 820, heightDp = 470, showBackground = true)
+@Composable
+private fun SeasonWinterPreview() = SeasonPair("winter")
+
+/** Light and dark of one season together, which is the comparison that matters. */
+@Composable
+private fun SeasonPair(season: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        listOf(false, true).forEach { dark ->
+            Box(modifier = Modifier.weight(1f)) {
+                KidQuestTheme(dark = dark, season = season) {
+                    SeasonSample()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Enough of the screen to judge a palette: the band, the chips, the unpaired-phone row
+ * and the primary action -- every place a colour has to hold text.
+ */
+@Composable
+private fun SeasonSample() {
+    val palette = LocalSeasonPalette.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(palette.pageBg),
+    ) {
+        SeasonHeader(done = 8, total = 10, palette = palette, onClick = {})
+        Box(modifier = Modifier.padding(12.dp)) {
+            ChildCard(
+                name = "Ella",
+                hasPairedDevice = false,
+                cardPastel = palette.surface,
+                textPrimary = palette.ink,
+                textSecondary = palette.inkSoft,
+                buttonPastel = palette.accent,
+                buttonOnPastel = palette.onAccent,
+                summary = ChildSummary(
+                    memberId = "1",
+                    memberName = "Ella",
+                    todaysDone = 5,
+                    todaysTotal = 5,
+                    hasPet = true,
+                    petType = "dragon",
+                    growthStage = 3,
+                    allowanceNote = "50 kr varje fredag",
+                ),
+                onPetClick = {},
+                onWalletClick = {},
+                onTasksClick = {},
+                onInviteClick = {},
+            )
         }
     }
 }
