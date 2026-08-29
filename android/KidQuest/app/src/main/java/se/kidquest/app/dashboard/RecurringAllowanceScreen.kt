@@ -65,17 +65,34 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.RecurringAllowanceResponse
 import se.kidquest.app.network.SaveRecurringAllowanceRequest
+import se.kidquest.app.theme.LocalSeasonPalette
 
-private val ink = Color(0xFF1C1917)
-private val inkSoft = Color(0xFF57534E)
-private val inkFaint = Color(0xFF78716C)
-private val cardBg = Color(0xFFFFFBEB)
-private val accent = Color(0xFF4C1D95)
-private val accentSoft = Color(0xFFF5F3FF)
-private val hairline = Color(0xFFE7E5E4)
-private val money = Color(0xFF38A169)
-private val deepBlue = Color(0xFF0C4A6E)
-private val radioOff = Color(0xFFA8A29E)
+// The layout is the one that was agreed -- three cards, only the chosen one unfolded.
+// Only the colours changed, and they now come from the season like every other screen
+// a parent opens, so this stops being the one view in its own palette.
+//
+// Written as composable getters rather than threaded through: every use below is
+// already inside a composable, so nothing else in the file had to move.
+private val ink: Color @Composable get() = LocalSeasonPalette.current.ink
+private val inkSoft: Color @Composable get() = LocalSeasonPalette.current.inkSoft
+private val inkFaint: Color @Composable get() = LocalSeasonPalette.current.inkFaint
+private val cardBg: Color @Composable get() = LocalSeasonPalette.current.surface
+private val accent: Color @Composable get() = LocalSeasonPalette.current.accent
+private val accentSoft: Color @Composable get() = LocalSeasonPalette.current.calBg
+private val hairline: Color @Composable get() = LocalSeasonPalette.current.outlineEdge
+
+/** A field sits inside a card, so it takes the page's colour to separate from it. */
+private val fieldBg: Color @Composable get() = LocalSeasonPalette.current.pageBg
+
+/** Stays semantic: an amount is green because it is money, not because it is spring. */
+private val money: Color
+    @Composable get() =
+        if (LocalSeasonPalette.current.dark) Color(0xFF6FD38F) else Color(0xFF38A169)
+
+private val deepBlue: Color @Composable get() = LocalSeasonPalette.current.accent
+private val onDeepBlue: Color @Composable get() = LocalSeasonPalette.current.onAccent
+private val radioOff: Color @Composable get() = LocalSeasonPalette.current.inkFaint
+private val danger: Color @Composable get() = LocalSeasonPalette.current.danger
 
 /** Day of the month is capped at 28 so the date exists in February too -- the server agrees. */
 private const val MAX_DAY_OF_MONTH = 28
@@ -155,7 +172,7 @@ fun RecurringAllowanceScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE)))),
+            .background(LocalSeasonPalette.current.pageBg),
     ) {
         when {
             loading -> CircularProgressIndicator(
@@ -296,7 +313,7 @@ fun RecurringAllowanceScreen(
                         Text(
                             text = error!!,
                             fontSize = 13.sp,
-                            color = Color(0xFFB91C1C),
+                            color = danger,
                             modifier = Modifier.padding(horizontal = 2.dp),
                         )
                     }
@@ -336,7 +353,7 @@ fun RecurringAllowanceScreen(
                             text = if (saving) "Sparar…" else "Spara",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
+                            color = onDeepBlue,
                         )
                     }
 
@@ -563,7 +580,7 @@ private fun AmountField(
             .fillMaxWidth()
             .height(46.dp)
             .clip(RoundedCornerShape(11.dp))
-            .background(if (highlighted) Color(0xFFFAF8FF) else Color.White)
+            .background(if (highlighted) accentSoft else fieldBg)
             .border(
                 width = if (highlighted) 1.5.dp else 1.dp,
                 color = if (highlighted) accent else hairline,
@@ -624,7 +641,7 @@ private fun RowScope.DayChip(label: String, selected: Boolean, onClick: () -> Un
             .weight(1f)
             .height(44.dp)
             .clip(RoundedCornerShape(11.dp))
-            .background(if (selected) accentSoft else Color.White)
+            .background(if (selected) accentSoft else fieldBg)
             .border(
                 width = if (selected) 1.5.dp else 1.dp,
                 color = if (selected) accent else hairline,
@@ -651,7 +668,7 @@ private fun DayOfMonthField(day: Int, onDayChange: (Int) -> Unit) {
                 .fillMaxWidth()
                 .height(46.dp)
                 .clip(RoundedCornerShape(11.dp))
-                .background(Color.White)
+                .background(fieldBg)
                 .border(1.dp, hairline, RoundedCornerShape(11.dp))
                 .clickable { open = true }
                 .padding(horizontal = 14.dp),

@@ -57,6 +57,8 @@ import kotlinx.coroutines.launch
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
+import se.kidquest.app.theme.LocalSeasonPalette
+import se.kidquest.app.theme.SeasonHeaderBar
 
 private val CHILD_WEEKDAY_ABBREVS = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 private val CHILD_WEEKDAY_LABELS_SV = listOf("Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön")
@@ -75,6 +77,7 @@ fun ChildTasksScreen(
     childId: String,
     onBack: () -> Unit,
 ) {
+    val palette = LocalSeasonPalette.current
     var tasks by remember { mutableStateOf<List<DailyChoreWithCompletionResponse>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -107,40 +110,16 @@ fun ChildTasksScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE))),
-            ),
+            .background(palette.pageBg),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
             // ── Header ──────────────────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Tillbaka",
-                        tint = Color(0xFF1E3A5F),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "$childName – Sysslor",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1C1917),
-                    )
-                    Text(
-                        text = dateLabel,
-                        fontSize = 13.sp,
-                        color = Color(0xFF666666),
-                    )
-                }
-            }
+            SeasonHeaderBar(
+                title = "$childName – Sysslor",
+                subtitle = dateLabel,
+                onBack = onBack,
+            )
 
             // ── Tabs ─────────────────────────────────────────────────────────
             Row(
@@ -169,7 +148,7 @@ fun ChildTasksScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator(color = Color(0xFF0C4A6E))
+                    CircularProgressIndicator(color = palette.accent)
                 }
 
                 error != null -> Box(
@@ -188,7 +167,7 @@ fun ChildTasksScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEDED)),
+                            colors = CardDefaults.cardColors(containerColor = palette.warnBg),
                         ) {
                             Row(
                                 modifier = Modifier
@@ -200,13 +179,13 @@ fun ChildTasksScreen(
                                 Text(
                                     text = toggleError!!,
                                     fontSize = 13.sp,
-                                    color = Color(0xFFC53030),
+                                    color = palette.danger,
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(
                                     text = "✕",
                                     fontSize = 14.sp,
-                                    color = Color(0xFFC53030),
+                                    color = palette.danger,
                                     modifier = Modifier
                                         .clickable { toggleError = null }
                                         .padding(start = 8.dp),
@@ -230,7 +209,7 @@ fun ChildTasksScreen(
                                     Text(
                                         "Inga uppgifter idag.",
                                         fontSize = 14.sp,
-                                        color = Color(0xFF666666),
+                                        color = palette.inkSoft,
                                         modifier = Modifier.padding(4.dp),
                                     )
                                 }
@@ -272,10 +251,10 @@ fun ChildTasksScreen(
                                             modifier = Modifier
                                                 .size(24.dp)
                                                 .clip(CircleShape)
-                                                .background(if (task.completed) Color(0xFF4ADE80) else Color.Transparent)
+                                                .background(if (task.completed) palette.goodInk else Color.Transparent)
                                                 .border(
                                                     width = 2.dp,
-                                                    color = if (task.completed) Color(0xFF4ADE80) else Color(0xFFCCCCCC),
+                                                    color = if (task.completed) palette.goodInk else palette.track,
                                                     shape = CircleShape,
                                                 ),
                                             contentAlignment = Alignment.Center,
@@ -284,7 +263,7 @@ fun ChildTasksScreen(
                                                 Text(
                                                     "✓",
                                                     fontSize = 12.sp,
-                                                    color = Color.White,
+                                                    color = palette.pageBg,
                                                     fontWeight = FontWeight.Bold,
                                                 )
                                             }
@@ -294,7 +273,7 @@ fun ChildTasksScreen(
                                                 text = task.chore.title,
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Medium,
-                                                color = if (task.completed) Color(0xFF888888) else Color(0xFF1A1A1A),
+                                                color = if (task.completed) palette.inkFaint else palette.ink,
                                                 textDecoration = if (task.completed) TextDecoration.LineThrough
                                                 else TextDecoration.None,
                                             )
@@ -302,7 +281,7 @@ fun ChildTasksScreen(
                                                 Text(
                                                     "${task.chore.xpPoints} XP",
                                                     fontSize = 12.sp,
-                                                    color = Color(0xFF0C4A6E),
+                                                    color = palette.accent,
                                                 )
                                             }
                                         }
@@ -313,7 +292,7 @@ fun ChildTasksScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
                                                 contentDescription = "Ta bort ${task.chore.title}",
-                                                tint = Color(0xFF9CA3AF),
+                                                tint = palette.inkFaint,
                                                 modifier = Modifier.size(20.dp),
                                             )
                                         }
@@ -400,7 +379,7 @@ fun ChildTasksScreen(
                         }
                     },
                 ) {
-                    Text("Ta bort", color = Color(0xFFC53030))
+                    Text("Ta bort", color = palette.danger)
                 }
             },
             dismissButton = {
@@ -443,13 +422,14 @@ private fun ChildTabButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val palette = LocalSeasonPalette.current
     Button(
         onClick = onClick,
         modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(0xFF0C4A6E) else Color(0xFFBAE6FD),
-            contentColor = if (selected) Color.White else Color(0xFF0C4A6E),
+            containerColor = if (selected) palette.accent else palette.accent,
+            contentColor = if (selected) palette.onAccent else palette.accent,
         ),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
     ) {
@@ -459,10 +439,11 @@ private fun ChildTabButton(
 
 @Composable
 private fun ChildSurfaceCard(content: @Composable () -> Unit) {
+    val palette = LocalSeasonPalette.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.92f)),
+        colors = CardDefaults.cardColors(containerColor = palette.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Box(modifier = Modifier.padding(16.dp)) {
@@ -478,6 +459,7 @@ private fun ChildWeekDayCard(
     day: LocalDate,
     allChores: List<DailyChoreWithCompletionResponse>,
 ) {
+    val palette = LocalSeasonPalette.current
     val today = LocalDate.now()
     val isToday = day == today
     val dayIndex = day.dayOfWeek.value - 1 // 0=Mon…6=Sun
@@ -494,19 +476,19 @@ private fun ChildWeekDayCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isToday) Color(0xFFEFF6FF) else Color.White.copy(alpha = 0.88f),
+            containerColor = if (isToday) palette.calBg else palette.surface,
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (isToday) 4.dp else 1.dp,
         ),
-        border = if (isToday) BorderStroke(2.dp, Color(0xFF0C4A6E)) else null,
+        border = if (isToday) BorderStroke(2.dp, palette.accent) else null,
     ) {
         Column {
             // Day header row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (isToday) Color(0xFFDBEAFE) else Color(0xFFF7FAFC))
+                    .background(if (isToday) palette.calBg else palette.tipBg)
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -519,19 +501,19 @@ private fun ChildWeekDayCard(
                         text = "$dayLabelSv $dateStr",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isToday) Color(0xFF0C4A6E) else Color(0xFF2D3748),
+                        color = if (isToday) palette.accent else palette.ink,
                     )
                     if (isToday) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF0C4A6E))
+                                .background(palette.accent)
                                 .padding(horizontal = 7.dp, vertical = 2.dp),
                         ) {
                             Text(
                                 "idag",
                                 fontSize = 11.sp,
-                                color = Color.White,
+                                color = palette.onAccent,
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }
@@ -545,7 +527,7 @@ private fun ChildWeekDayCard(
                     },
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (allDoneToday) Color(0xFF16A34A) else Color(0xFF718096),
+                    color = if (allDoneToday) palette.goodInk else palette.inkSoft,
                 )
             }
 
@@ -554,7 +536,7 @@ private fun ChildWeekDayCard(
                 Text(
                     "Inga sysslor",
                     fontSize = 13.sp,
-                    color = Color(0xFFAAAAAA),
+                    color = palette.inkFaint,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             } else {
@@ -573,14 +555,14 @@ private fun ChildWeekDayCard(
                             Text(
                                 text = if (isToday) (if (item.completed) "✅" else "⭕") else "·",
                                 fontSize = if (isToday) 14.sp else 18.sp,
-                                color = if (!isToday) Color(0xFF9CA3AF) else Color.Unspecified,
+                                color = if (!isToday) palette.inkFaint else Color.Unspecified,
                                 lineHeight = 18.sp,
                             )
                             Text(
                                 text = item.chore.title,
                                 fontSize = 14.sp,
-                                color = if (isToday && item.completed) Color(0xFF9CA3AF)
-                                else Color(0xFF374151),
+                                color = if (isToday && item.completed) palette.inkFaint
+                                else palette.inkSoft,
                                 textDecoration = if (isToday && item.completed)
                                     TextDecoration.LineThrough
                                 else TextDecoration.None,
@@ -590,7 +572,7 @@ private fun ChildWeekDayCard(
                                 Text(
                                     "${item.chore.xpPoints} XP",
                                     fontSize = 11.sp,
-                                    color = Color(0xFFAAAAAA),
+                                    color = palette.inkFaint,
                                 )
                             }
                         }

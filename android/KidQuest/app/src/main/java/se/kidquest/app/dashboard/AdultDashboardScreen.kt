@@ -98,6 +98,17 @@ import se.kidquest.app.pet.PetTheme
 import se.kidquest.app.pet.PetVisual
 import se.kidquest.app.session.PrefsStore
 import se.kidquest.app.session.TokenStore
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
+import se.kidquest.app.theme.LocalSeasonPalette
+import se.kidquest.app.theme.SeasonPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,6 +126,9 @@ fun AdultDashboardScreen(
     onFamilyTasks: () -> Unit = {},
     onOpenPaywall: () -> Unit = {},
     onFamilyDeleted: () -> Unit = {},
+    /** Null while nobody has chosen, in which case the phone decides. */
+    darkMode: Boolean? = null,
+    onSetDarkMode: (Boolean) -> Unit = {},
 ) {
     var children by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
     // refreshKey comes from the caller; this covers reloads the screen triggers
@@ -135,6 +149,9 @@ fun AdultDashboardScreen(
     var checklistExpanded by remember { mutableStateOf<Boolean?>(null) }
     var subscription by remember { mutableStateOf<SubscriptionStatusResponse?>(null) }
     var topMenuOpen by remember { mutableStateOf(false) }
+    // The family already named itself at registration. Falling back to "Min familj"
+    // rather than blank, because the header is drawn before this arrives.
+    var familyName by remember { mutableStateOf<String?>(null) }
     var confirmingFamilyDeletion by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -179,7 +196,6 @@ fun AdultDashboardScreen(
 
                             val total = chores.size
                             val done = chores.count { it.completed }
-                            val nextTaskTitle = chores.firstOrNull { !it.completed }?.chore?.title
                             val pet = petResp?.takeIf { it.isSuccessful }?.body()
 
                             child.id to ChildSummary(
@@ -190,7 +206,6 @@ fun AdultDashboardScreen(
                                 hasPet = pet != null,
                                 petType = pet?.petType,
                                 growthStage = pet?.growthStage ?: 1,
-                                nextTaskTitle = nextTaskTitle,
                                 allowanceNote = allowance?.let { describeAllowance(it) },
                             )
                         } catch (_: Exception) {
@@ -211,95 +226,41 @@ fun AdultDashboardScreen(
         subscription = kotlin.runCatching {
             ApiClient.subscriptionApi.getStatus().takeIf { it.isSuccessful }?.body()
         }.getOrNull()
+
+        familyName = kotlin.runCatching {
+            adults.firstOrNull()?.familyId?.let { id ->
+                ApiClient.familyApi.getFamily(id).takeIf { it.isSuccessful }?.body()?.name
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
-    val backgroundBrush = Brush.verticalGradient(
-        listOf(
-            Color(0xFFE0E7FF), // ljus lavendel
-            Color(0xFFE0F2FE), // ljus blå
-        )
-    )
-    val cardPastel = Color(0xFFFFFBEB)       // mjuk creme
-    val textPrimary = Color(0xFF1C1917)
-    val textSecondary = Color(0xFF57534E)
-    val buttonPastel = Color(0xFFBAE6FD)
-    val buttonOnPastel = Color(0xFF0C4A6E)
+    // The old lavender-to-sky gradient competed with the animals, which are the only
+    // thing the children care about. The season carries the colour now and the pets
+    // are the brightest thing on the screen again.
+    val palette = LocalSeasonPalette.current
+    val cardPastel = palette.surface
+    val textPrimary = palette.ink
+    val textSecondary = palette.inkSoft
+    val buttonPastel = palette.accent
+    val buttonOnPastel = palette.onAccent
+    val listState = rememberLazyListState()
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text("Min familj", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    titleContentColor = textPrimary,
-                ),
-                actions = {
-                    // Signing out is a once-a-year action. As a full outlined button it
-                    // was the loudest thing on a screen where everything else had been
-                    // quietened deliberately.
-                    Box(modifier = Modifier.padding(end = 4.dp)) {
-                        IconButton(onClick = { topMenuOpen = true }) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Fler val",
-                                tint = textSecondary,
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = topMenuOpen,
-                            onDismissRequest = { topMenuOpen = false },
-                        ) {
-                            // The banner only appears in the last 30 days of the trial,
-                            // so without this a parent who decides in week two that they
-                            // want to pay has no way to. It is also the only route to the
-                            // paywall for anyone testing a purchase.
-                            if (BillingConfig.isConfigured) {
-                                DropdownMenuItem(
-                                    text = { Text("Prenumeration") },
-                                    onClick = {
-                                        topMenuOpen = false
-                                        onOpenPaywall()
-                                    },
-                                )
-                            }
-                            DropdownMenuItem(
-                                text = { Text("Logga ut") },
-                                onClick = {
-                                    topMenuOpen = false
-                                    onLogout()
-                                },
-                            )
-                            HorizontalDivider()
-                            // Both stores require this to be reachable in the app, and
-                            // Apple enforces it. Last in the menu and in red, because it
-                            // is the one entry here that cannot be undone.
-                            DropdownMenuItem(
-                                text = { Text("Ta bort familjen", color = Color(0xFFC53030)) },
-                                onClick = {
-                                    topMenuOpen = false
-                                    confirmingFamilyDeletion = true
-                                },
-                            )
-                        }
-                    }
-                },
-            )
-        },
         containerColor = Color.Transparent,
     ) { innerPadding ->
+      Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(backgroundBrush)
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
+                .background(palette.pageBg)
+                .padding(innerPadding),
         ) {
             if (loading) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(backgroundBrush)
+                        .background(palette.pageBg)
                         .padding(32.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -312,7 +273,7 @@ fun AdultDashboardScreen(
                 Text(
                     text = error!!,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(24.dp),
                 )
                 return@Scaffold
             }
@@ -321,59 +282,31 @@ fun AdultDashboardScreen(
             val totalTasksToday = summaryList.sumOf { it.todaysTotal }
             val completedTasksToday = summaryList.sumOf { it.todaysDone }
             val childrenWithPet = summaryList.count { it.hasPet }
-            val suggestion = summaryList
-                .filter { it.todaysTotal > 0 }
-                .minByOrNull { if (it.todaysTotal == 0) 1.0 else it.todaysDone.toDouble() / it.todaysTotal.toDouble() }
-
             LazyColumn(
+                state = listState,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
-                subscription?.let { sub ->
-                    item {
-                        SubscriptionBanner(
-                            status = sub,
-                            textSecondary = textSecondary,
-                            // Only a route worth offering once there is something on the
-                            // other end of it. No key, no paywall, no dead tap.
-                            onClick = if (BillingConfig.isConfigured) onOpenPaywall else null,
-                        )
-                    }
+                item {
+                    SeasonHeader(
+                        done = completedTasksToday,
+                        total = totalTasksToday,
+                        palette = palette,
+                        onClick = onFamilyTasks,
+                    )
                 }
 
-                if (children.isNotEmpty()) {
+                subscription?.let { sub ->
                     item {
-                        FamilyTodayCard(
-                            done = completedTasksToday,
-                            total = totalTasksToday,
-                            childrenWithPet = childrenWithPet,
-                            childCount = children.size,
-                            cardPastel = cardPastel,
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary,
-                            accent = buttonOnPastel,
-                            // The card is the way into the family task list. It replaced
-                            // a full-width button that sat here competing with the four
-                            // buttons inside every child card below it.
-                            onClick = onFamilyTasks,
-                        )
-                    }
-
-                    suggestion?.let { s ->
-                        item {
-                            SuggestionStrip(
-                                childName = s.memberName,
-                                message = when {
-                                    s.todaysDone >= s.todaysTotal && s.todaysTotal > 0 ->
-                                        "har gjort alla sina uppgifter idag – ge extra beröm!"
-                                    !s.nextTaskTitle.isNullOrBlank() ->
-                                        "behöver påminnas om \"${s.nextTaskTitle}\" för att mata sitt djur."
-                                    else -> "behöver påminnas om dagens uppgifter."
-                                },
-                                textPrimary = textPrimary,
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            SubscriptionBanner(
+                                status = sub,
                                 textSecondary = textSecondary,
+                                // Only a route worth offering once there is something on the
+                                // other end of it. No key, no paywall, no dead tap.
+                                onClick = if (BillingConfig.isConfigured) onOpenPaywall else null,
                             )
                         }
                     }
@@ -381,152 +314,210 @@ fun AdultDashboardScreen(
 
                 if (!onboardingDismissed) {
                     item {
-                        val hasChild = children.isNotEmpty()
-                        val hasPairedDevice = children.any { it.hasPairedDevice }
-                        val hasPet = childSummaries.values.any { it.hasPet }
-                        val doneCount =
-                            listOf(hasChild, anyChildHasChores, hasPairedDevice, hasPet).count { it }
-                        // A family that has not started sees the whole guide. Once any
-                        // step is done it folds into one row, so four setup steps stop
-                        // taking the screenful that belongs to the children.
-                        val expanded = checklistExpanded ?: (doneCount == 0)
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            val hasChild = children.isNotEmpty()
+                            val hasPairedDevice = children.any { it.hasPairedDevice }
+                            val hasPet = childSummaries.values.any { it.hasPet }
+                            val doneCount =
+                                listOf(hasChild, anyChildHasChores, hasPairedDevice, hasPet).count { it }
+                            // A family that has not started sees the whole guide. Once any
+                            // step is done it folds into one row, so four setup steps stop
+                            // taking the screenful that belongs to the children.
+                            val expanded = checklistExpanded ?: (doneCount == 0)
 
-                        if (expanded) {
-                            GetStartedCard(
-                                hasChild = hasChild,
-                                hasChores = anyChildHasChores,
-                                hasPairedDevice = hasPairedDevice,
-                                hasPet = hasPet,
-                                cardPastel = cardPastel,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
-                                onAddChild = onAddFamilyMember,
-                                onAddChores = {
-                                    children.firstOrNull()?.let { onChildTasks(it.id, it.name) }
-                                },
-                                onPairDevice = { children.firstOrNull()?.let { inviteChild = it } },
-                                // The child view, not the pet screen. The pet screen is
-                                // read-only for a parent -- it says the child has not chosen
-                                // an egg and offers no way to do it. The child view is where
-                                // the egg picker lives.
-                                onSeePet = {
-                                    children.firstOrNull()?.let { onChildView(it.id, it.name) }
-                                },
-                                onCollapse = { checklistExpanded = false },
-                                onDismiss = {
-                                    onboardingDismissed = true
-                                    dashboardScope.launch { PrefsStore.setOnboardingDismissed(true) }
-                                },
-                            )
-                        } else {
-                            GetStartedStrip(
-                                doneCount = doneCount,
-                                // Pairing is last on purpose: it is the skippable step,
-                                // so it should never be what a parent is told to do next.
-                                nextLabel = when {
-                                    !hasChild -> "lägg till ett barn"
-                                    !anyChildHasChores -> "lägg till dagliga sysslor"
-                                    !hasPet -> "välj ett ägg"
-                                    !hasPairedDevice -> "koppla barnets telefon"
-                                    else -> null
-                                },
-                                cardPastel = cardPastel,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
-                                accent = buttonOnPastel,
-                                onExpand = { checklistExpanded = true },
-                            )
+                            if (expanded) {
+                                GetStartedCard(
+                                    hasChild = hasChild,
+                                    hasChores = anyChildHasChores,
+                                    hasPairedDevice = hasPairedDevice,
+                                    hasPet = hasPet,
+                                    cardPastel = cardPastel,
+                                    textPrimary = textPrimary,
+                                    textSecondary = textSecondary,
+                                    onAddChild = onAddFamilyMember,
+                                    onAddChores = {
+                                        children.firstOrNull()?.let { onChildTasks(it.id, it.name) }
+                                    },
+                                    onPairDevice = { children.firstOrNull()?.let { inviteChild = it } },
+                                    // The child view, not the pet screen. The pet screen is
+                                    // read-only for a parent -- it says the child has not chosen
+                                    // an egg and offers no way to do it. The child view is where
+                                    // the egg picker lives.
+                                    onSeePet = {
+                                        children.firstOrNull()?.let { onChildView(it.id, it.name) }
+                                    },
+                                    onCollapse = { checklistExpanded = false },
+                                    onDismiss = {
+                                        onboardingDismissed = true
+                                        dashboardScope.launch { PrefsStore.setOnboardingDismissed(true) }
+                                    },
+                                )
+                            } else {
+                                GetStartedStrip(
+                                    doneCount = doneCount,
+                                    // Pairing is last on purpose: it is the skippable step,
+                                    // so it should never be what a parent is told to do next.
+                                    nextLabel = when {
+                                        !hasChild -> "lägg till ett barn"
+                                        !anyChildHasChores -> "lägg till dagliga sysslor"
+                                        !hasPet -> "välj ett ägg"
+                                        !hasPairedDevice -> "koppla barnets telefon"
+                                        else -> null
+                                    },
+                                    cardPastel = cardPastel,
+                                    textPrimary = textPrimary,
+                                    textSecondary = textSecondary,
+                                    accent = palette.accent,
+                                    onExpand = { checklistExpanded = true },
+                                )
+                            }
                         }
                     }
                 }
 
-                item {
-                    Text(
-                        text = "Mina barn",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = textPrimary,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                    )
-                }
-
                 if (children.isEmpty()) {
                     item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = cardPastel),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = cardPastel),
                             ) {
-                                Text(
-                                    text = "Inga barn i familjen ännu",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = textPrimary,
-                                )
-                                Text(
-                                    text = "Lägg till ditt första barn nedan.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = textSecondary,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Text(
+                                        text = "Inga barn i familjen ännu",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = textPrimary,
+                                    )
+                                    Text(
+                                        text = "Lägg till ditt första barn nedan.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = textSecondary,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
                             }
                         }
                     }
                 } else {
                     items(children, key = { it.id }) { child ->
-                        val summary = childSummaries[child.id]
-                        ChildCard(
-                            name = child.name,
-                            hasPairedDevice = child.hasPairedDevice,
-                            cardPastel = cardPastel,
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary,
-                            buttonPastel = buttonPastel,
-                            buttonOnPastel = buttonOnPastel,
-                            summary = summary,
-                            onPetClick = { onChildPet(child.id, child.name) },
-                            onWalletClick = { onChildWallet(child.id, child.name) },
-                            onTasksClick = { onChildTasks(child.id, child.name) },
-                            onChildViewClick = { onChildView(child.id, child.name) },
-                            onRenameClick = { memberPendingRename = child },
-                            onDeleteClick = { memberPendingDelete = child },
-                            onInviteClick = { inviteChild = child },
-                        )
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            val summary = childSummaries[child.id]
+                            ChildCard(
+                                name = child.name,
+                                hasPairedDevice = child.hasPairedDevice,
+                                cardPastel = cardPastel,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                buttonPastel = buttonPastel,
+                                buttonOnPastel = buttonOnPastel,
+                                summary = summary,
+                                onPetClick = { onChildPet(child.id, child.name) },
+                                onWalletClick = { onChildWallet(child.id, child.name) },
+                                onTasksClick = { onChildTasks(child.id, child.name) },
+                                onChildViewClick = { onChildView(child.id, child.name) },
+                                onRenameClick = { memberPendingRename = child },
+                                onDeleteClick = { memberPendingDelete = child },
+                                onInviteClick = { inviteChild = child },
+                            )
+                        }
                     }
                 }
 
                 if (adults.isNotEmpty()) {
                     item {
-                        Text(
-                            text = "Vuxna",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = textPrimary,
-                            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-                        )
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            Text(
+                                text = "Vuxna",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textPrimary,
+                                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                            )
+                        }
                     }
                     items(adults, key = { it.id }) { adult ->
-                        AdultRow(
-                            name = adult.name,
-                            isCurrentUser = adult.id == currentMemberId,
-                            hasPairedDevice = adult.hasPairedDevice,
-                            cardPastel = cardPastel,
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary,
-                            buttonPastel = buttonPastel,
-                            buttonOnPastel = buttonOnPastel,
-                            onRenameClick = { memberPendingRename = adult },
-                            onPasswordClick = { memberPendingPassword = adult },
-                            onDeleteClick = { memberPendingDelete = adult },
-                            onInviteClick = { inviteChild = adult },
-                        )
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            AdultRow(
+                                name = adult.name,
+                                isCurrentUser = adult.id == currentMemberId,
+                                hasPairedDevice = adult.hasPairedDevice,
+                                cardPastel = cardPastel,
+                                textPrimary = textPrimary,
+                                textSecondary = textSecondary,
+                                buttonPastel = buttonPastel,
+                                buttonOnPastel = buttonOnPastel,
+                                onRenameClick = { memberPendingRename = adult },
+                                onPasswordClick = { memberPendingPassword = adult },
+                                onDeleteClick = { memberPendingDelete = adult },
+                                onInviteClick = { inviteChild = adult },
+                            )
+                        }
                     }
                 }
+
+                if (showAddMemberHint && children.isEmpty()) {
+                    item {
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = palette.surface),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Text(
+                                        text = "Steg 1: Lägg till ditt första barn",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = textPrimary,
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Tryck på \"Lägg till familjemedlem\" här nedanför så hjälper vi dig komma igång.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = textSecondary,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Last in the list rather than pinned to the bottom of the screen.
+                // Adding a family member happens a handful of times ever, and until now
+                // it held 52dp of every screenful for the rest of the app's life.
+                item {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                onDismissAddMemberHint()
+                                onAddFamilyMember()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .padding(top = 4.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.5.dp, palette.accent),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text("Lägg till familjemedlem", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(8.dp)) }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -572,57 +563,28 @@ fun AdultDashboardScreen(
                 )
             }
 
-            if (showAddMemberHint && children.isEmpty()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = "Steg 1: Lägg till ditt första barn",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = textPrimary,
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Tryck på \"Lägg till familjemedlem\" här nedanför så hjälper vi dig komma igång.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textSecondary,
-                        )
-                    }
-                }
-            }
 
-            // Outlined rather than filled: it stays pinned and always reachable, but
-            // a second sky-blue slab down here read as important as the one action
-            // inside each child's card, which is the thing a parent opens daily.
-            OutlinedButton(
-                onClick = {
-                    onDismissAddMemberHint()
-                    onAddFamilyMember()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.5.dp, Color(0xFFA5B4FC)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3730A3)),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("Lägg till familjemedlem", fontWeight = FontWeight.SemiBold)
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
+
+        // Drawn over the list rather than above it, so the photograph can run up
+        // behind it and the name and the menu never scroll out of reach. The menu is
+        // the only way to Prenumeration and Logga ut.
+        DashboardTopBar(
+            familyName = familyName ?: "Min familj",
+            palette = palette,
+            // Fully faded in by the time the photograph's own title would have left.
+            collapsed = collapseFraction(listState),
+            modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
+            menuOpen = topMenuOpen,
+            onMenuOpenChange = { topMenuOpen = it },
+            darkMode = darkMode,
+            onSetDarkMode = onSetDarkMode,
+            showSubscription = BillingConfig.isConfigured,
+            onOpenPaywall = onOpenPaywall,
+            onLogout = onLogout,
+            onDeleteFamily = { confirmingFamilyDeletion = true },
+        )
+      }
     }
 
     inviteChild?.let { child ->
@@ -630,6 +592,236 @@ fun AdultDashboardScreen(
             child = child,
             onDismiss = { inviteChild = null },
         )
+    }
+}
+
+/** Height of the seasonal band. The bar overlaps its top 56dp. */
+private val HEADER_HEIGHT = 196.dp
+private val TOP_BAR_HEIGHT = 56.dp
+
+/**
+ * How far the header has scrolled away, 0f to 1f.
+ *
+ * Read as derived state so scrolling recomposes the bar and nothing else.
+ */
+@Composable
+private fun collapseFraction(listState: LazyListState): Float {
+    val travel = with(LocalDensity.current) { (HEADER_HEIGHT - TOP_BAR_HEIGHT).toPx() }
+    val fraction by remember(travel) {
+        derivedStateOf {
+            when {
+                listState.firstVisibleItemIndex > 0 -> 1f
+                travel <= 0f -> 1f
+                else -> (listState.firstVisibleItemScrollOffset / travel).coerceIn(0f, 1f)
+            }
+        }
+    }
+    return fraction
+}
+
+/**
+ * The season as a colour field, with the family's day on top of it.
+ *
+ * The seasonal artwork went here first, at full size, and it read as clutter: the
+ * paintings are detailed, and detail directly above a list of children competes with
+ * them. What survived is the colour, which is what carried the season anyway. The
+ * paintings stay where they started, behind each pet portrait, at the size that suits
+ * them -- so the season still appears twice on the screen.
+ *
+ * A blurred photograph would have been the other answer, but Modifier.blur needs
+ * API 31 and this app runs from 24.
+ */
+@Composable
+private fun SeasonHeader(
+    done: Int,
+    total: Int,
+    palette: SeasonPalette,
+    onClick: () -> Unit,
+) {
+    val fraction = if (total > 0) (done.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(HEADER_HEIGHT)
+            .background(
+                Brush.verticalGradient(
+                    0f to palette.headerTop,
+                    0.52f to palette.headerMid,
+                    1f to palette.headerBottom,
+                ),
+            )
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 16.dp, end = 16.dp, bottom = 20.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "IDAG I FAMILJEN",
+                    modifier = Modifier.weight(1f),
+                    fontSize = 10.5.sp,
+                    lineHeight = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.3.sp,
+                    color = Color.White.copy(alpha = 0.84f),
+                )
+                Text(
+                    text = "Alla uppgifter",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                )
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = done.toString(),
+                    fontSize = 40.sp,
+                    lineHeight = 44.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+                Spacer(modifier = Modifier.size(7.dp))
+                Text(
+                    text = if (total > 0) "av $total uppgifter" else "inga uppgifter planerade",
+                    modifier = Modifier.padding(bottom = 5.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White.copy(alpha = 0.9f),
+                )
+            }
+            Spacer(modifier = Modifier.height(9.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color.White.copy(alpha = 0.34f)),
+            ) {
+                if (fraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color.White),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The family's name and the overflow menu, laid over the header.
+ *
+ * It starts transparent with white text on the photograph and fades into a solid bar
+ * as the photograph scrolls away. Pinned rather than scrolling, because this menu is
+ * the only route to Prenumeration, Logga ut and deleting the family.
+ */
+@Composable
+private fun DashboardTopBar(
+    familyName: String,
+    palette: SeasonPalette,
+    collapsed: Float,
+    modifier: Modifier = Modifier,
+    menuOpen: Boolean,
+    onMenuOpenChange: (Boolean) -> Unit,
+    darkMode: Boolean?,
+    onSetDarkMode: (Boolean) -> Unit,
+    showSubscription: Boolean,
+    onOpenPaywall: () -> Unit,
+    onLogout: () -> Unit,
+    onDeleteFamily: () -> Unit,
+) {
+    // White on the photograph, the season's ink once the bar is solid.
+    val titleColour = lerp(Color.White, palette.ink, collapsed)
+    val iconColour = lerp(Color.White, palette.inkSoft, collapsed)
+    val systemDark = isSystemInDarkTheme()
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(TOP_BAR_HEIGHT)
+            .background(palette.pageBg.copy(alpha = collapsed))
+            .padding(start = 16.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = familyName,
+            modifier = Modifier.weight(1f),
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = titleColour,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Box {
+            IconButton(onClick = { onMenuOpenChange(true) }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Fler val",
+                    tint = iconColour,
+                )
+            }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { onMenuOpenChange(false) },
+            ) {
+                // Deliberately a switch rather than a system setting only. A parent who
+                // reads this in bed wants it dark whatever the phone is doing, and until
+                // they touch it the phone still decides.
+                DropdownMenuItem(
+                    text = { Text("Mörkt läge") },
+                    trailingIcon = {
+                        Switch(
+                            checked = darkMode ?: systemDark,
+                            onCheckedChange = { onSetDarkMode(it) },
+                        )
+                    },
+                    onClick = { onSetDarkMode(!(darkMode ?: systemDark)) },
+                )
+                HorizontalDivider()
+                // The banner only appears in the last 30 days of the trial, so without
+                // this a parent who decides in week two has no way to pay. It is also
+                // the only route to the paywall for anyone testing a purchase.
+                if (showSubscription) {
+                    DropdownMenuItem(
+                        text = { Text("Prenumeration") },
+                        onClick = {
+                            onMenuOpenChange(false)
+                            onOpenPaywall()
+                        },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Logga ut") },
+                    onClick = {
+                        onMenuOpenChange(false)
+                        onLogout()
+                    },
+                )
+                HorizontalDivider()
+                // Both stores require this to be reachable in the app, and Apple
+                // enforces it. Last in the menu and in red, because it is the one
+                // entry here that cannot be undone.
+                DropdownMenuItem(
+                    text = { Text("Ta bort familjen", color = palette.danger) },
+                    onClick = {
+                        onMenuOpenChange(false)
+                        onDeleteFamily()
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -642,7 +834,6 @@ private data class ChildSummary(
     /** Drives the card's portrait and its colour. Null until an egg has been chosen. */
     val petType: String?,
     val growthStage: Int,
-    val nextTaskTitle: String?,
     /** "50 kr varje fredag", or null when no automatic allowance is running. */
     val allowanceNote: String?,
 )
@@ -671,6 +862,10 @@ private fun describeAllowance(schedule: RecurringAllowanceResponse): String {
 // A streakDays field used to live here, hardcoded to 0, behind a `> 0` check in the
 // card -- so the streak line it fed could never appear. Dropped rather than kept as
 // dead weight; it comes back the day the backend actually reports a streak.
+//
+// nextTaskTitle went the same way with the suggestion strip: the strip named the
+// child furthest from done and said what was left, directly above the cards that
+// already show both. Two readings of one fact, competing for the same fold.
 
 /** Diameter of the ring drawn around a child's pet portrait. */
 private val PORTRAIT_SIZE = 84.dp
@@ -834,6 +1029,7 @@ private fun ChildCard(
     onRenameClick: () -> Unit = {},
     onDeleteClick: () -> Unit = {},
 ) {
+    val season = LocalSeasonPalette.current
     var menuOpen by remember { mutableStateOf(false) }
     val palette = PetTheme.forPet(summary?.petType)
     val speciesName = PetImages.speciesName(summary?.petType)
@@ -895,14 +1091,14 @@ private fun ChildCard(
                         Row(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFDCFCE7))
+                                .background(season.goodBg)
                                 .padding(horizontal = 8.dp, vertical = 3.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
-                                tint = Color(0xFF166534),
+                                tint = season.goodInk,
                                 modifier = Modifier.size(12.dp),
                             )
                             Spacer(modifier = Modifier.size(4.dp))
@@ -910,7 +1106,7 @@ private fun ChildCard(
                                 text = "Allt klart idag",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF166534),
+                                color = season.goodInk,
                             )
                         }
                     } else if (summary != null && summary.todaysTotal == 0) {
@@ -929,14 +1125,14 @@ private fun ChildCard(
                         Row(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFDCFCE7))
+                                .background(season.goodBg)
                                 .padding(horizontal = 8.dp, vertical = 3.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CalendarMonth,
                                 contentDescription = null,
-                                tint = Color(0xFF166534),
+                                tint = season.goodInk,
                                 modifier = Modifier.size(12.dp),
                             )
                             Spacer(modifier = Modifier.size(4.dp))
@@ -944,7 +1140,7 @@ private fun ChildCard(
                                 text = note,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF166534),
+                                color = season.goodInk,
                             )
                         }
                     }
@@ -985,7 +1181,7 @@ private fun ChildCard(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Ta bort", color = Color(0xFFC53030)) },
+                            text = { Text("Ta bort", color = season.danger) },
                             onClick = {
                                 menuOpen = false
                                 onDeleteClick()
@@ -1005,7 +1201,7 @@ private fun ChildCard(
                         .fillMaxWidth()
                         .height(44.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFFFF7ED))
+                        .background(season.warnBg)
                         .clickable(onClick = onInviteClick)
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1014,13 +1210,13 @@ private fun ChildCard(
                         text = "Ingen telefon kopplad ännu",
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF92400E),
+                        color = season.warnInk,
                     )
                     Text(
                         text = "Bjud in",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFB45309),
+                        color = season.warnStrong,
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1059,10 +1255,10 @@ private fun ChildCard(
                         .weight(1f)
                         .height(44.dp),
                     shape = RoundedCornerShape(11.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE7E5E4)),
+                    border = BorderStroke(1.dp, season.outlineEdge),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = Color.White.copy(alpha = 0.55f),
-                        contentColor = Color(0xFF44403C),
+                        containerColor = season.outlineBg,
+                        contentColor = season.outlineInk,
                     ),
                 ) {
                     Icon(
@@ -1080,16 +1276,16 @@ private fun ChildCard(
                         .weight(1f)
                         .height(44.dp),
                     shape = RoundedCornerShape(11.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE7E5E4)),
+                    border = BorderStroke(1.dp, season.outlineEdge),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = Color.White.copy(alpha = 0.55f),
-                        contentColor = Color(0xFF44403C),
+                        containerColor = season.outlineBg,
+                        contentColor = season.outlineInk,
                     ),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Wallet,
                         contentDescription = null,
-                        tint = Color(0xFF78716C),
+                        tint = season.inkFaint,
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.size(7.dp))
@@ -1174,6 +1370,7 @@ private fun DeleteMemberDialog(
     onDismiss: () -> Unit,
     onDeleted: () -> Unit,
 ) {
+    val season = LocalSeasonPalette.current
     var typed by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -1232,7 +1429,7 @@ private fun DeleteMemberDialog(
             ) {
                 Text(
                     text = if (deleting) "Tar bort…" else "Ta bort",
-                    color = if (confirmed) Color(0xFFC53030) else Color(0xFF9CA3AF),
+                    color = if (confirmed) season.danger else season.inkFaint,
                 )
             }
         },
@@ -1269,6 +1466,7 @@ private fun AdultRow(
     onInviteClick: () -> Unit,
     onPasswordClick: () -> Unit = {},
 ) {
+    val season = LocalSeasonPalette.current
     var menuOpen by remember { mutableStateOf(false) }
 
     Card(
@@ -1289,14 +1487,14 @@ private fun AdultRow(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFE0E7FF)),
+                    .background(season.calBg),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = name.trim().take(1).uppercase(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF3730A3),
+                    color = season.calInk,
                 )
             }
             Spacer(modifier = Modifier.size(12.dp))
@@ -1366,7 +1564,7 @@ private fun AdultRow(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Ta bort", color = Color(0xFFC53030)) },
+                            text = { Text("Ta bort", color = season.danger) },
                             onClick = {
                                 menuOpen = false
                                 onDeleteClick()
@@ -1379,170 +1577,6 @@ private fun AdultRow(
     }
 }
 
-/**
- * The family's day, as one figure.
- *
- * This replaced a card of the same weight as every other card, carrying two sentences
- * of bodySmall. The screen had no dominant element at all -- five card groups all
- * shouting at the same volume -- so nothing read as the point of it.
- *
- * The card is the way into the family task list, which is what let the full-width
- * "Familjens uppgifter idag" button go away.
- */
-@Composable
-private fun FamilyTodayCard(
-    done: Int,
-    total: Int,
-    childrenWithPet: Int,
-    childCount: Int,
-    cardPastel: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    accent: Color,
-    onClick: () -> Unit,
-) {
-    val fraction = if (total > 0) (done.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = cardPastel),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "IDAG I FAMILJEN",
-                    modifier = Modifier.weight(1f),
-                    fontSize = 10.5.sp,
-                    lineHeight = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.3.sp,
-                    color = Color(0xFF78716C),
-                )
-                Text(
-                    text = "Alla uppgifter",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = accent,
-                )
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = done.toString(),
-                    fontSize = 40.sp,
-                    lineHeight = 44.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = accent,
-                )
-                Spacer(modifier = Modifier.size(7.dp))
-                Text(
-                    text = if (total > 0) "av $total uppgifter" else "inga uppgifter planerade",
-                    modifier = Modifier.padding(bottom = 5.dp),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = textSecondary,
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            // Drawn rather than a LinearProgressIndicator so the fill can carry the
-            // app's own background pastels at full strength.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Color(0xFFE7E5E4)),
-            ) {
-                if (fraction > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(fraction)
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(Color(0xFF6366F1), Color(0xFF0EA5E9)),
-                                )
-                            ),
-                    )
-                }
-            }
-            if (childCount > 0) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "$childrenWithPet av $childCount barn har ett aktivt djur",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = textSecondary,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Today's nudge, at a volume below the figure above it.
- *
- * Same information the "Förslag idag" card carried, without the card: it was drawn to
- * the same recipe as everything else on the screen, which is how a suggestion came to
- * look as important as the family's whole day.
- */
-@Composable
-private fun SuggestionStrip(
-    childName: String,
-    message: String,
-    textPrimary: Color,
-    textSecondary: Color,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFFFF7ED))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Default.Lightbulb,
-            contentDescription = null,
-            tint = Color(0xFFB45309),
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(modifier = Modifier.size(9.dp))
-        Text(
-            // The name leads and carries the weight, because that is what a parent is
-            // scanning for.
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = textPrimary)) {
-                    append(childName)
-                }
-                append(" ")
-                append(message)
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = textSecondary,
-        )
-    }
-}
-
-/**
- * The setup guide, folded to one row.
- *
- * Expanded it is four steps with subtitles -- around 320.dp, which is most of a phone
- * screen -- and it kept that space long after it stopped being the thing a parent came
- * for. Tapping the row opens the full card again; "Dölj" inside that card is still the
- * only way to be rid of it permanently.
- */
 @Composable
 private fun GetStartedStrip(
     doneCount: Int,
@@ -1553,6 +1587,7 @@ private fun GetStartedStrip(
     accent: Color,
     onExpand: () -> Unit,
 ) {
+    val season = LocalSeasonPalette.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1568,7 +1603,7 @@ private fun GetStartedStrip(
                     modifier = Modifier
                         .size(7.dp)
                         .clip(CircleShape)
-                        .background(if (index < doneCount) accent else Color(0xFFD6D3D1)),
+                        .background(if (index < doneCount) accent else season.track),
                 )
             }
         }
@@ -1591,7 +1626,7 @@ private fun GetStartedStrip(
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = "Visa alla steg",
-            tint = Color(0xFFA8A29E),
+            tint = season.inkFaint,
             modifier = Modifier.size(18.dp),
         )
     }
@@ -1615,6 +1650,7 @@ private fun ChangePasswordDialog(
     onDismiss: () -> Unit,
     onChanged: () -> Unit,
 ) {
+    val season = LocalSeasonPalette.current
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
@@ -1668,7 +1704,7 @@ private fun ChangePasswordDialog(
                     else -> null
                 }
                 hint?.let {
-                    Text(text = it, style = MaterialTheme.typography.bodySmall, color = Color(0xFFC53030))
+                    Text(text = it, style = MaterialTheme.typography.bodySmall, color = season.danger)
                 }
                 error?.let {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1835,6 +1871,7 @@ private fun GetStartedRow(
     enabled: Boolean = true,
     isLast: Boolean = false,
 ) {
+    val season = LocalSeasonPalette.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1846,16 +1883,16 @@ private fun GetStartedRow(
                 .padding(top = 2.dp, end = 12.dp)
                 .size(22.dp)
                 .clip(CircleShape)
-                .background(if (done) Color(0xFF4ADE80) else Color.Transparent)
+                .background(if (done) season.goodInk else Color.Transparent)
                 .border(
                     width = 2.dp,
-                    color = if (done) Color(0xFF4ADE80) else Color(0xFFCBD5E1),
+                    color = if (done) season.goodInk else season.track,
                     shape = CircleShape,
                 ),
             contentAlignment = Alignment.Center,
         ) {
             if (done) {
-                Text("✓", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Text("✓", fontSize = 12.sp, color = season.pageBg, fontWeight = FontWeight.Bold)
             }
         }
         Column(modifier = Modifier.weight(1f)) {
@@ -1892,11 +1929,12 @@ private fun GetStartedRow(
 @Preview(name = "Föräldravy", widthDp = 390, heightDp = 1000, showBackground = true)
 @Composable
 private fun AdultDashboardPreview() {
-    val cardPastel = Color(0xFFFFFBEB)
-    val textPrimary = Color(0xFF1C1917)
-    val textSecondary = Color(0xFF57534E)
-    val buttonPastel = Color(0xFFBAE6FD)
-    val buttonOnPastel = Color(0xFF0C4A6E)
+    val palette = LocalSeasonPalette.current
+    val cardPastel = palette.surface
+    val textPrimary = palette.ink
+    val textSecondary = palette.inkSoft
+    val buttonPastel = palette.accent
+    val buttonOnPastel = palette.onAccent
 
     val ella = ChildSummary(
         memberId = "1",
@@ -1906,7 +1944,6 @@ private fun AdultDashboardPreview() {
         hasPet = true,
         petType = "dragon",
         growthStage = 3,
-        nextTaskTitle = "Duka bordet",
         allowanceNote = "Peng efter nivå den 1:a",
     )
     val oskar = ChildSummary(
@@ -1917,51 +1954,25 @@ private fun AdultDashboardPreview() {
         hasPet = true,
         petType = "cat",
         growthStage = 2,
-        nextTaskTitle = null,
         allowanceNote = null,
     )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE)))
-            )
+            .background(palette.pageBg)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        FamilyTodayCard(
-            done = 8,
-            total = 10,
-            childrenWithPet = 2,
-            childCount = 2,
-            cardPastel = cardPastel,
-            textPrimary = textPrimary,
-            textSecondary = textSecondary,
-            accent = buttonOnPastel,
-            onClick = {},
-        )
-        SuggestionStrip(
-            childName = "Ella",
-            message = "behöver påminnas om \"Duka bordet\" för att mata sitt djur.",
-            textPrimary = textPrimary,
-            textSecondary = textSecondary,
-        )
+        SeasonHeader(done = 8, total = 10, palette = palette, onClick = {})
         GetStartedStrip(
             doneCount = 2,
             nextLabel = "koppla barnets telefon",
             cardPastel = cardPastel,
             textPrimary = textPrimary,
             textSecondary = textSecondary,
-            accent = buttonOnPastel,
+            accent = palette.accent,
             onExpand = {},
-        )
-        Text(
-            text = "Mina barn",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = textPrimary,
-            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
         )
         ChildCard(
             name = "Ella",
@@ -2047,6 +2058,7 @@ private fun SubscriptionBanner(
     textSecondary: Color,
     onClick: (() -> Unit)? = null,
 ) {
+    val season = LocalSeasonPalette.current
     // A comped family is never nagged, whatever the trial clock says -- they were
     // given free access on purpose.
     if (status.comped) return
@@ -2080,7 +2092,7 @@ private fun SubscriptionBanner(
             .fillMaxWidth()
             .padding(top = 8.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (urgent) Color(0xFFFEF2F2) else Color(0xFFFFF7ED))
+            .background(if (urgent) season.warnBg else season.warnBg)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.Top,
@@ -2088,7 +2100,7 @@ private fun SubscriptionBanner(
         Icon(
             imageVector = if (urgent) Icons.Default.ErrorOutline else Icons.Default.Schedule,
             contentDescription = null,
-            tint = if (urgent) Color(0xFF991B1B) else Color(0xFFB45309),
+            tint = if (urgent) season.danger else season.warnStrong,
             modifier = Modifier
                 .padding(top = 1.dp)
                 .size(17.dp),
@@ -2099,7 +2111,7 @@ private fun SubscriptionBanner(
                 text = headline,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = if (urgent) Color(0xFF991B1B) else Color(0xFF92400E),
+                color = if (urgent) season.danger else season.warnInk,
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
@@ -2113,7 +2125,7 @@ private fun SubscriptionBanner(
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = if (urgent) Color(0xFF991B1B) else Color(0xFFB45309),
+                tint = if (urgent) season.danger else season.warnStrong,
                 modifier = Modifier
                     .padding(top = 2.dp)
                     .size(17.dp),
@@ -2143,7 +2155,7 @@ private fun SubscriptionBannerPreview() {
 
     Column(
         modifier = Modifier
-            .background(Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE))))
+            .background(LocalSeasonPalette.current.pageBg)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -2177,6 +2189,7 @@ private fun DeleteFamilyDialog(
     onDismiss: () -> Unit,
     onDeleted: () -> Unit,
 ) {
+    val season = LocalSeasonPalette.current
     val familyId = remember { TokenStore.getSession()?.familyId }
     var typed by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf(false) }
@@ -2249,7 +2262,7 @@ private fun DeleteFamilyDialog(
             ) {
                 Text(
                     text = if (deleting) "Tar bort…" else "Ta bort allt",
-                    color = if (confirmed) Color(0xFFC53030) else Color(0xFF9CA3AF),
+                    color = if (confirmed) season.danger else season.inkFaint,
                 )
             }
         },

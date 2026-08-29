@@ -60,6 +60,8 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.network.FamilyMemberResponse
+import se.kidquest.app.theme.LocalSeasonPalette
+import se.kidquest.app.theme.SeasonHeaderBar
 
 private data class MemberWithChores(
     val member: FamilyMemberResponse,
@@ -79,6 +81,7 @@ private fun currentWeekDays(): List<LocalDate> {
 
 @Composable
 fun FamilyTasksScreen(onBack: () -> Unit) {
+    val palette = LocalSeasonPalette.current
     var data by remember { mutableStateOf<List<MemberWithChores>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -115,40 +118,16 @@ fun FamilyTasksScreen(onBack: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE))),
-            ),
+            .background(palette.pageBg),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
             // ── Header ──────────────────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Tillbaka",
-                        tint = Color(0xFF1E3A5F),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Familjens uppgifter",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1C1917),
-                    )
-                    Text(
-                        text = dateLabel,
-                        fontSize = 13.sp,
-                        color = Color(0xFF666666),
-                    )
-                }
-            }
+            SeasonHeaderBar(
+                title = "Familjens uppgifter",
+                subtitle = dateLabel,
+                onBack = onBack,
+            )
 
             // ── Tabs ─────────────────────────────────────────────────────────
             Row(
@@ -177,7 +156,7 @@ fun FamilyTasksScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator(color = Color(0xFF0C4A6E))
+                    CircularProgressIndicator(color = palette.accent)
                 }
 
                 error != null -> Box(
@@ -201,7 +180,7 @@ fun FamilyTasksScreen(onBack: () -> Unit) {
                                     Text(
                                         "Inga familjemedlemmar hittades.",
                                         fontSize = 14.sp,
-                                        color = Color(0xFF666666),
+                                        color = palette.inkSoft,
                                         modifier = Modifier.padding(4.dp),
                                     )
                                 }
@@ -259,13 +238,14 @@ private fun TabButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val palette = LocalSeasonPalette.current
     Button(
         onClick = onClick,
         modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(0xFF0C4A6E) else Color(0xFFBAE6FD),
-            contentColor = if (selected) Color.White else Color(0xFF0C4A6E),
+            containerColor = if (selected) palette.accent else palette.accent,
+            contentColor = if (selected) palette.onAccent else palette.accent,
         ),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
     ) {
@@ -275,10 +255,11 @@ private fun TabButton(
 
 @Composable
 private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
+    val palette = LocalSeasonPalette.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.92f)),
+        colors = CardDefaults.cardColors(containerColor = palette.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp), content = content)
@@ -292,6 +273,7 @@ private fun TodayMemberCard(
     row: MemberWithChores,
     onToggle: (choreId: String, isCompleted: Boolean) -> Unit,
 ) {
+    val palette = LocalSeasonPalette.current
     val done = row.chores.count { it.completed }
     val total = row.chores.size
     val allDone = total > 0 && done == total
@@ -307,12 +289,12 @@ private fun TodayMemberCard(
                 text = row.member.name,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1C1917),
+                color = palette.ink,
             )
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (allDone) Color(0xFFDCFCE7) else Color(0xFFF3F4F6))
+                    .background(if (allDone) palette.goodBg else palette.tipBg)
                     .padding(horizontal = 10.dp, vertical = 3.dp),
             ) {
                 Text(
@@ -323,7 +305,7 @@ private fun TodayMemberCard(
                     },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (allDone) Color(0xFF16A34A) else Color(0xFF555555),
+                    color = if (allDone) palette.goodInk else palette.inkSoft,
                 )
             }
         }
@@ -333,11 +315,11 @@ private fun TodayMemberCard(
             Text(
                 "Inga uppgifter idag",
                 fontSize = 13.sp,
-                color = Color(0xFF888888),
+                color = palette.inkFaint,
             )
         } else {
             Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = Color(0x14000000))
+            HorizontalDivider(color = palette.cardEdge)
             Spacer(modifier = Modifier.height(4.dp))
 
             row.chores.forEach { item ->
@@ -354,10 +336,10 @@ private fun TodayMemberCard(
                         modifier = Modifier
                             .size(22.dp)
                             .clip(CircleShape)
-                            .background(if (item.completed) Color(0xFF4ADE80) else Color.Transparent)
+                            .background(if (item.completed) palette.goodInk else Color.Transparent)
                             .border(
                                 width = 2.dp,
-                                color = if (item.completed) Color(0xFF4ADE80) else Color(0xFFCCCCCC),
+                                color = if (item.completed) palette.goodInk else palette.track,
                                 shape = CircleShape,
                             ),
                         contentAlignment = Alignment.Center,
@@ -366,7 +348,7 @@ private fun TodayMemberCard(
                             Text(
                                 "✓",
                                 fontSize = 11.sp,
-                                color = Color.White,
+                                color = palette.pageBg,
                                 fontWeight = FontWeight.Bold,
                             )
                         }
@@ -374,7 +356,7 @@ private fun TodayMemberCard(
                     Text(
                         text = item.chore.title,
                         fontSize = 15.sp,
-                        color = if (item.completed) Color(0xFF888888) else Color(0xFF1A1A1A),
+                        color = if (item.completed) palette.inkFaint else palette.ink,
                         textDecoration = if (item.completed) TextDecoration.LineThrough
                         else TextDecoration.None,
                         modifier = Modifier.weight(1f),
@@ -383,7 +365,7 @@ private fun TodayMemberCard(
                         Text(
                             "${item.chore.xpPoints} XP",
                             fontSize = 12.sp,
-                            color = Color(0xFFAAAAAA),
+                            color = palette.inkFaint,
                         )
                     }
                 }
@@ -399,6 +381,7 @@ private fun WeekDayCard(
     day: LocalDate,
     members: List<MemberWithChores>,
 ) {
+    val palette = LocalSeasonPalette.current
     val today = LocalDate.now()
     val isToday = day == today
     val dayIndex = day.dayOfWeek.value - 1 // 0=Mon…6=Sun
@@ -420,19 +403,19 @@ private fun WeekDayCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isToday) Color(0xFFEFF6FF) else Color.White.copy(alpha = 0.88f),
+            containerColor = if (isToday) palette.calBg else palette.surface,
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (isToday) 4.dp else 1.dp,
         ),
-        border = if (isToday) BorderStroke(2.dp, Color(0xFF0C4A6E)) else null,
+        border = if (isToday) BorderStroke(2.dp, palette.accent) else null,
     ) {
         Column {
             // Day header row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (isToday) Color(0xFFDBEAFE) else Color(0xFFF7FAFC))
+                    .background(if (isToday) palette.calBg else palette.tipBg)
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -445,19 +428,19 @@ private fun WeekDayCard(
                         text = "$dayLabelSv $dateStr",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isToday) Color(0xFF0C4A6E) else Color(0xFF2D3748),
+                        color = if (isToday) palette.accent else palette.ink,
                     )
                     if (isToday) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF0C4A6E))
+                                .background(palette.accent)
                                 .padding(horizontal = 7.dp, vertical = 2.dp),
                         ) {
                             Text(
                                 "idag",
                                 fontSize = 11.sp,
-                                color = Color.White,
+                                color = palette.onAccent,
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }
@@ -471,7 +454,7 @@ private fun WeekDayCard(
                     },
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (allDoneToday) Color(0xFF16A34A) else Color(0xFF718096),
+                    color = if (allDoneToday) palette.goodInk else palette.inkSoft,
                 )
             }
 
@@ -480,7 +463,7 @@ private fun WeekDayCard(
                 Text(
                     "Inga sysslor",
                     fontSize = 13.sp,
-                    color = Color(0xFFAAAAAA),
+                    color = palette.inkFaint,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             } else {
@@ -494,7 +477,7 @@ private fun WeekDayCard(
                             text = row.member.name,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF374151),
+                            color = palette.inkSoft,
                         )
                         chores.forEach { item ->
                             Row(
@@ -508,14 +491,14 @@ private fun WeekDayCard(
                                     text = if (isToday) (if (item.completed) "✅" else "⭕")
                                     else "·",
                                     fontSize = if (isToday) 14.sp else 18.sp,
-                                    color = if (!isToday) Color(0xFF9CA3AF) else Color.Unspecified,
+                                    color = if (!isToday) palette.inkFaint else Color.Unspecified,
                                     lineHeight = 18.sp,
                                 )
                                 Text(
                                     text = item.chore.title,
                                     fontSize = 14.sp,
-                                    color = if (isToday && item.completed) Color(0xFF9CA3AF)
-                                    else Color(0xFF374151),
+                                    color = if (isToday && item.completed) palette.inkFaint
+                                    else palette.inkSoft,
                                     textDecoration = if (isToday && item.completed)
                                         TextDecoration.LineThrough
                                     else TextDecoration.None,
@@ -525,7 +508,7 @@ private fun WeekDayCard(
                                     Text(
                                         "${item.chore.xpPoints} XP",
                                         fontSize = 11.sp,
-                                        color = Color(0xFFAAAAAA),
+                                        color = palette.inkFaint,
                                     )
                                 }
                             }

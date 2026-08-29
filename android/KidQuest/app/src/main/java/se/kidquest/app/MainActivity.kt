@@ -103,7 +103,13 @@ class MainActivity : ComponentActivity() {
         PrefsStore.init(applicationContext)
         enableEdgeToEdge()
         setContent {
-            KidQuestTheme {
+            // Hoisted above the theme because the theme is what consumes it. Null until
+            // a parent picks a side, which is what lets a fresh install follow the phone.
+            var darkMode by remember { mutableStateOf<Boolean?>(null) }
+            LaunchedEffect(Unit) { darkMode = PrefsStore.darkMode() }
+            val themeScope = rememberCoroutineScope()
+
+            KidQuestTheme(dark = darkMode) {
                 var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Loading) }
                 var showAddMemberDialog by remember { mutableStateOf(false) }
                 var dashboardRefreshKey by remember { mutableStateOf(0) }
@@ -193,6 +199,13 @@ class MainActivity : ComponentActivity() {
                         AppScreen.Home -> AdultDashboardScreen(
                             modifier = Modifier.padding(innerPadding),
                             refreshKey = dashboardRefreshKey,
+                            // The switch lives in the dashboard's overflow menu, but
+                            // the value has to sit above the theme to be able to change it.
+                            darkMode = darkMode,
+                            onSetDarkMode = { on ->
+                                darkMode = on
+                                themeScope.launch { PrefsStore.setDarkMode(on) }
+                            },
                             showAddMemberHint = showAddMemberHint,
                             onDismissAddMemberHint = { showAddMemberHint = false },
                             onLogout = {

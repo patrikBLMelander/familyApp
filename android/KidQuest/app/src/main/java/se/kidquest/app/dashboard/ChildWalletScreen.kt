@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,9 +56,26 @@ import se.kidquest.app.network.RecurringAllowanceResponse
 import se.kidquest.app.network.SavingsGoalResponse
 import se.kidquest.app.network.WalletBalanceResponse
 import se.kidquest.app.network.WalletTransactionResponse
+import se.kidquest.app.theme.SeasonPalette
+import se.kidquest.app.theme.LocalSeasonPalette
 
 private val textPrimary = Color(0xFF1C1917)
 private val textSecondary = Color(0xFF57534E)
+
+/**
+ * Whose screen this is, as far as colour is concerned.
+ *
+ * A child's own wallet -- and a parent previewing it -- keeps the animal's colours,
+ * because that is the child's identity. A parent administering the wallet gets the
+ * season, like every other screen a parent opens.
+ */
+private class WalletSkin(val parentView: Boolean, val palette: SeasonPalette) {
+    val surface: Color get() = if (parentView) palette.surface else Color.White.copy(alpha = 0.82f)
+    val ink: Color get() = if (parentView) palette.ink else textPrimary
+    val inkSoft: Color get() = if (parentView) palette.inkSoft else textSecondary
+    /** White reads on every animal gradient; on a light season ground it does not. */
+    val onBackground: Color get() = if (parentView) palette.ink else Color.White
+}
 
 @Composable
 fun ChildWalletScreen(
@@ -128,7 +146,10 @@ fun ChildWalletScreen(
         }
     }
 
-    val backgroundBrush = walletGradient(petType)
+    val palette = LocalSeasonPalette.current
+    val skin = WalletSkin(parentView = !isOwnWallet && !fromChildView, palette = palette)
+    val backgroundBrush =
+        if (skin.parentView) SolidColor(palette.pageBg) else walletGradient(petType)
 
     Box(
         modifier = Modifier
@@ -138,7 +159,7 @@ fun ChildWalletScreen(
         if (loading) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center),
-                color = Color.White,
+                color = skin.onBackground,
             )
         } else if (error != null) {
             Column(
@@ -146,7 +167,7 @@ fun ChildWalletScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(text = error!!, color = Color.White)
+                Text(text = error!!, color = skin.onBackground)
                 Button(onClick = { refreshKey++ }) { Text("Försök igen") }
             }
         } else {
@@ -169,7 +190,7 @@ fun ChildWalletScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Tillbaka",
-                            tint = Color.White,
+                            tint = skin.onBackground,
                         )
                     }
                     Spacer(modifier = Modifier.weight(1f))
@@ -177,23 +198,23 @@ fun ChildWalletScreen(
                         text = "$childName – Plånbok",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = skin.onBackground,
                     )
                 }
 
                 // Balance card
                 balance?.let { b ->
-                    WalletCard {
+                    WalletCard(skin) {
                         Text(
                             text = "Saldo",
                             fontSize = 14.sp,
-                            color = textSecondary,
+                            color = skin.inkSoft,
                         )
                         Text(
                             text = "${b.balance} kr",
                             fontSize = 34.sp,
                             fontWeight = FontWeight.Bold,
-                            color = textPrimary,
+                            color = skin.ink,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         // Giving money is a decision a parent makes from their own
@@ -228,6 +249,7 @@ fun ChildWalletScreen(
                 // read as a price list is a promise no one made.
                 if (!isOwnWallet) {
                     RecurringAllowanceRow(
+                        skin = skin,
                         schedule = recurring,
                         onClick = if (fromChildView) null else onOpenRecurringAllowance,
                     )
@@ -235,7 +257,7 @@ fun ChildWalletScreen(
 
                 // Savings goals (own wallet only)
                 if (isOwnWallet) {
-                    WalletCard {
+                    WalletCard(skin) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -279,23 +301,23 @@ fun ChildWalletScreen(
                 }
 
                 // Transactions
-                WalletCard {
+                WalletCard(skin) {
                     Text(
                         text = "Senaste transaktioner",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = textPrimary,
+                        color = skin.ink,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     if (transactions.isEmpty()) {
                         Text(
                             text = "Inga transaktioner ännu.",
                             fontSize = 14.sp,
-                            color = textSecondary,
+                            color = skin.inkSoft,
                         )
                     } else {
                         transactions.take(20).forEach { t ->
-                            TransactionRow(t)
+                            TransactionRow(skin, t)
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                     }
@@ -339,12 +361,12 @@ fun ChildWalletScreen(
 // MARK: - Reusable card
 
 @Composable
-private fun WalletCard(content: @Composable ColumnScope.() -> Unit) {
+private fun WalletCard(skin: WalletSkin, content: @Composable ColumnScope.() -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.82f))
+            .background(skin.surface)
             .padding(16.dp),
     ) {
         Column(
@@ -367,6 +389,7 @@ private fun WalletCard(content: @Composable ColumnScope.() -> Unit) {
  */
 @Composable
 private fun RecurringAllowanceRow(
+    skin: WalletSkin,
     schedule: RecurringAllowanceResponse?,
     /** Null inside the child's view: the arrangement is worth seeing, not changing there. */
     onClick: (() -> Unit)?,
@@ -376,7 +399,7 @@ private fun RecurringAllowanceRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.82f))
+            .background(skin.surface)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -393,19 +416,19 @@ private fun RecurringAllowanceRow(
                 text = "Automatisk utbetalning",
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = textPrimary,
+                color = skin.ink,
             )
             Text(
                 text = describeSchedule(schedule),
                 fontSize = 12.sp,
-                color = if (active) textSecondary else Color(0xFF78716C),
+                color = if (active) skin.inkSoft else skin.palette.inkFaint,
             )
         }
         if (onClick != null) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = Color(0xFFA8A29E),
+                tint = skin.palette.inkFaint,
                 modifier = Modifier.width(16.dp),
             )
         }
@@ -484,13 +507,16 @@ private fun SavingsGoalRow(goal: SavingsGoalResponse, dimmed: Boolean) {
 // MARK: - Transaction row
 
 @Composable
-private fun TransactionRow(t: WalletTransactionResponse) {
+private fun TransactionRow(skin: WalletSkin, t: WalletTransactionResponse) {
     val isSavings = t.transactionType == "SAVINGS_ALLOCATION"
     val isExpense = t.amount < 0
+    // Money colours mean something, so they stay -- but a dark card needs the lighter
+    // end of each hue or the amount disappears into it.
+    val onDark = skin.parentView && skin.palette.dark
     val accentColor = when {
-        isSavings -> Color(0xFF2563EB)
-        isExpense -> Color(0xFFEF4444)
-        else -> Color(0xFF22C55E)
+        isSavings -> if (onDark) Color(0xFF7FB0F5) else Color(0xFF2563EB)
+        isExpense -> if (onDark) Color(0xFFF58A8A) else Color(0xFFEF4444)
+        else -> if (onDark) Color(0xFF6FD38F) else Color(0xFF22C55E)
     }
     val sign = if (t.amount >= 0) "+" else ""
 
@@ -515,12 +541,12 @@ private fun TransactionRow(t: WalletTransactionResponse) {
             Text(
                 text = t.description ?: localizedType(t.transactionType),
                 fontSize = 14.sp,
-                color = textPrimary,
+                color = skin.ink,
             )
             Text(
                 text = formatDate(t.createdAt),
                 fontSize = 11.sp,
-                color = textSecondary,
+                color = skin.inkSoft,
             )
         }
         Text(
