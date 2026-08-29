@@ -76,6 +76,7 @@ fun ChildTasksScreen(
     childName: String,
     childId: String,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val palette = LocalSeasonPalette.current
     var tasks by remember { mutableStateOf<List<DailyChoreWithCompletionResponse>>(emptyList()) }
@@ -108,7 +109,7 @@ fun ChildTasksScreen(
     val dateLabel = "$dayLabelFull ${today.dayOfMonth}/${today.monthValue}"
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(palette.pageBg),
     ) {
@@ -428,8 +429,11 @@ private fun ChildTabButton(
         modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) palette.accent else palette.accent,
-            contentColor = if (selected) palette.onAccent else palette.accent,
+            // Two different roles that a single accent cannot fill: the chosen tab is
+            // the accent itself, the other is the accent's tinted pair. Mapping both to
+            // the accent made the unselected label invisible against its own background.
+            containerColor = if (selected) palette.accent else palette.calBg,
+            contentColor = if (selected) palette.onAccent else palette.calInk,
         ),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
     ) {

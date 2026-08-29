@@ -80,7 +80,7 @@ private fun currentWeekDays(): List<LocalDate> {
 }
 
 @Composable
-fun FamilyTasksScreen(onBack: () -> Unit) {
+fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val palette = LocalSeasonPalette.current
     var data by remember { mutableStateOf<List<MemberWithChores>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -116,7 +116,7 @@ fun FamilyTasksScreen(onBack: () -> Unit) {
     val dateLabel = "$dayLabelFull ${today.dayOfMonth}/${today.monthValue}"
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(palette.pageBg),
     ) {
@@ -244,8 +244,11 @@ private fun TabButton(
         modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) palette.accent else palette.accent,
-            contentColor = if (selected) palette.onAccent else palette.accent,
+            // Two different roles that a single accent cannot fill: the chosen tab is
+            // the accent itself, the other is the accent's tinted pair. Mapping both to
+            // the accent made the unselected label invisible against its own background.
+            containerColor = if (selected) palette.accent else palette.calBg,
+            contentColor = if (selected) palette.onAccent else palette.calInk,
         ),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
     ) {

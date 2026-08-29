@@ -250,6 +250,7 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                         AppScreen.FamilyTasks -> FamilyTasksScreen(
+                            modifier = Modifier.padding(innerPadding),
                             onBack = { currentScreen = AppScreen.Home },
                         )
                         AppScreen.Paywall -> PaywallScreen(
@@ -355,6 +356,7 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                         is AppScreen.ChildTasks -> ChildTasksScreen(
+                            modifier = Modifier.padding(innerPadding),
                             childName = screen.childName,
                             childId = screen.childId,
                             onBack = {
