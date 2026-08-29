@@ -44,8 +44,12 @@ android {
         targetSdk = 36
         // Play rejects a version code that has already been uploaded, and the
         // 15 March 2026 closed-track build already used one. Override per build
-        // rather than editing this file:
-        //   ./gradlew :app:bundleRelease -Pkidquest.versionCode=3
+        // rather than editing this file -- and pass BOTH, always:
+        //   ./gradlew :app:bundleRelease -Pkidquest.versionCode=14 -Pkidquest.versionName=1.4
+        //
+        // The first thirteen releases passed only the version code, so every one of
+        // them shipped as "1.0" and the Play Console listed thirteen identical names.
+        // The code is what Play enforces; the name is what a human reads.
         versionCode = (findProperty("kidquest.versionCode") as String?)?.toInt() ?: 2
         versionName = findProperty("kidquest.versionName") as String? ?: "1.0"
 
