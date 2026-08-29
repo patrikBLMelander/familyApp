@@ -41,19 +41,53 @@ public class FamilyController {
         );
     }
 
+    /**
+     * The family's own name. Read by the app to title the parent's overview.
+     *
+     * Took no device token until the app had a reason to call it: a family id was
+     * enough to read the name of any household in the database. Same shape as the
+     * thirteen endpoints already closed -- a missing token skipped the check rather
+     * than failing it, because there was no check.
+     */
     @GetMapping("/{familyId}")
-    public FamilyResponse getFamily(@PathVariable("familyId") UUID familyId) {
-        var family = service.getFamilyById(familyId);
-        return toResponse(family);
+    public FamilyResponse getFamily(
+            @PathVariable("familyId") UUID familyId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireMemberOf(familyId, deviceToken);
+        return toResponse(service.getFamilyById(familyId));
     }
 
+    /** Renaming is parent administration, and until now it took no token at all. */
     @PatchMapping("/{familyId}/name")
     public FamilyResponse updateFamilyName(
             @PathVariable("familyId") UUID familyId,
-            @RequestBody UpdateFamilyNameRequest request
+            @RequestBody UpdateFamilyNameRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
-        var family = service.updateFamilyName(familyId, request.name());
-        return toResponse(family);
+        var requester = requireMemberOf(familyId, deviceToken);
+        if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
+            throw new IllegalArgumentException("Endast en förälder kan byta familjens namn");
+        }
+        return toResponse(service.updateFamilyName(familyId, request.name()));
+    }
+
+    /**
+     * The caller must be in the family they are asking about. A child has a device
+     * token too, so this is a membership check rather than a role check -- reading
+     * the household's own name is not privileged within it.
+     */
+    private com.familyapp.domain.familymember.FamilyMember requireMemberOf(
+            UUID familyId, String deviceToken
+    ) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        var requester = memberService.getMemberByDeviceToken(deviceToken);
+        if (!familyId.equals(requester.familyId())) {
+            throw new IllegalArgumentException("Not a member of this family");
+        }
+        return requester;
     }
 
     /**
