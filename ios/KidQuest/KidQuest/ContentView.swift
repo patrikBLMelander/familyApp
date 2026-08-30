@@ -23,6 +23,7 @@ enum AppScreen: Equatable {
 
 struct ContentView: View {
     @State private var currentScreen: AppScreen = .loading
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -42,7 +43,7 @@ struct ContentView: View {
                 case .register:
                     RegisterView(
                         onRegisterSuccess: {
-                            // När backend finns kopplar vi in riktig token-hantering här.
+                            // Den som registrerar familjen är alltid dess förälder.
                             currentScreen = .home
                         },
                         onBackToLogin: {
@@ -53,7 +54,8 @@ struct ContentView: View {
                 case .auth:
                     AuthView(
                         onLoginSuccess: {
-                            // När backend finns kopplar vi in riktig token-hantering här.
+                            // Bara föräldrar och assistenter kan logga in med e-post,
+                            // så inloggning härifrån leder alltid till föräldravyn.
                             currentScreen = .home
                         },
                         onChildInviteLogin: {
@@ -64,6 +66,7 @@ struct ContentView: View {
                 case .home:
                     AdultDashboardView(
                         onLogout: {
+                            TokenStoreIOS.shared.clearToken()
                             currentScreen = .auth
                         },
                         onChildPet: { id, name in
@@ -82,6 +85,9 @@ struct ContentView: View {
                         onBack: { currentScreen = .welcome },
                         onLoginAsChild: { childId, childName in
                             currentScreen = .childDashboard(childId: childId, childName: childName)
+                        },
+                        onLoginAsAdult: {
+                            currentScreen = .home
                         }
                     )
 
@@ -90,6 +96,7 @@ struct ContentView: View {
                         childId: childId,
                         childName: childName,
                         onBack: {
+                            TokenStoreIOS.shared.clearToken()
                             currentScreen = .auth
                         },
                         onOpenTasks: {
@@ -123,14 +130,64 @@ struct ContentView: View {
                 }
             }
         }
+        // Injiceras här, en gång, i stället för i varje skärm. Utan det här faller
+        // hela appen tillbaka på standardvärdet i SeasonTheme -- sommar, ljust -- och
+        // årstiden syntes bara i debug-riggen.
+        .environment(\.seasonPalette, SeasonTheme.current(dark: colorScheme == .dark))
         .task {
-            if currentScreen == .loading {
-                if TokenStoreIOS.shared.getToken() != nil {
-                    currentScreen = .home
-                } else {
-                    currentScreen = .welcome
-                }
+            guard currentScreen == .loading else { return }
+            await routeOnStartup()
+        }
+    }
+
+    /// Väljer startskärm utifrån vem sessionen tillhör.
+    ///
+    /// En device-token säger i sig inte vem den tillhör. Att routa enbart på att den
+    /// finns skickade barn rakt in i föräldravyn, där de kunde lägga till och ta bort
+    /// uppgifter och öppna familjens plånbok. Därför routar vi på rollen.
+    private func routeOnStartup() async {
+        TokenStoreIOS.shared.load()
+        var session = TokenStoreIOS.shared.getSession()
+
+        if let stored = session, stored.isIncomplete {
+            // Kopplad innan rollen sparades lokalt: slå upp den en gång istället för
+            // att tvinga familjen att koppla om enheten.
+            session = nil
+            if let member = try? await AuthService.memberByDeviceToken(stored.deviceToken) {
+                TokenStoreIOS.shared.setSession(
+                    deviceToken: stored.deviceToken,
+                    memberId: member.id,
+                    memberName: member.name,
+                    role: member.role,
+                    familyId: member.familyId
+                )
+                session = TokenStoreIOS.shared.getSession()
             }
+            // Misslyckas uppslagningen behåller vi token i lagringen: ett tillfälligt
+            // nätverksfel ska inte kosta familjen en ny koppling, vi försöker igen
+            // nästa gång appen startar.
+        }
+
+        guard let session else {
+            currentScreen = .welcome
+            return
+        }
+
+        if session.isIncomplete {
+            // Fortfarande okänd efter uppslagningen: token är gammal eller medlemmen
+            // borta. Att skicka dem till föräldravyn vore precis den ursprungliga
+            // buggen, så vi börjar om istället.
+            TokenStoreIOS.shared.clearToken()
+            currentScreen = .welcome
+        } else if session.isChild {
+            // isIncomplete har redan garanterat att memberId finns; ?? håller oss
+            // borta från en force unwrap.
+            currentScreen = .childDashboard(
+                childId: session.memberId ?? "",
+                childName: session.memberName ?? "Barn"
+            )
+        } else {
+            currentScreen = .home
         }
     }
 }
@@ -401,8 +458,10 @@ struct AuthView: View {
         status = "Loggar in..."
 
         do {
-            try await AuthRepository.login(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                                           password: password)
+            _ = try await AuthService.loginByEmail(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password
+            )
             isLoading = false
             status = "Inloggad"
             onLoginSuccess()
@@ -584,7 +643,7 @@ struct RegisterView: View {
         status = nil
 
         do {
-            try await AuthRepository.registerFamily(
+            _ = try await AuthService.register(
                 familyName: familyName.trimmingCharacters(in: .whitespacesAndNewlines),
                 adminName: parentName.trimmingCharacters(in: .whitespacesAndNewlines),
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -602,6 +661,9 @@ struct RegisterView: View {
 struct ChildInviteLoginView: View {
     var onBack: () -> Void = {}
     var onLoginAsChild: (String, String) -> Void = { _, _ in }
+    /// A code can belong to a second parent as easily as to a child, and where it
+    /// lands has to follow the member's role rather than the screen they typed it on.
+    var onLoginAsAdult: () -> Void = {}
 
     @State private var inviteCode: String = ""
     @State private var status: String?
@@ -740,361 +802,18 @@ struct ChildInviteLoginView: View {
         do {
             let member = try await FamilyRepository.linkDeviceByInviteToken(inviteToken: trimmed)
             isLoading = false
-            onLoginAsChild(member.id, member.name)
+            // The same bug Android shipped and fixed: routing on where the code was
+            // entered rather than on whose it is put a paired parent in the child's
+            // view, and a paired child in the adult dashboard.
+            if member.role == "CHILD" || member.role == "ASSISTANT" {
+                onLoginAsChild(member.id, member.name)
+            } else {
+                onLoginAsAdult()
+            }
         } catch {
             isLoading = false
             status = "Kunde inte koppla enheten. Kontrollera koden."
         }
-    }
-}
-
-// MARK: - Adult dashboard (förälder)
-
-private struct AdultChildSummary: Identifiable {
-    let id: String
-    let name: String
-    let todaysDone: Int
-    let todaysTotal: Int
-    let hasPet: Bool
-    let streakDays: Int
-    let nextTaskTitle: String?
-}
-
-struct AdultDashboardView: View {
-    var onLogout: () -> Void = {}
-    var onAddFamilyMember: () -> Void = {}
-    var onChildPet: (String, String) -> Void = { _, _ in }
-    var onChildWallet: (String, String) -> Void = { _, _ in }
-    var onChildTasks: (String, String) -> Void = { _, _ in }
-
-    @State private var children: [AdultChildSummary] = []
-    @State private var isLoading: Bool = true
-    @State private var errorMessage: String?
-    @State private var inviteChild: AdultChildSummary?
-
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 224 / 255, green: 231 / 255, blue: 1.0),
-                Color(red: 224 / 255, green: 242 / 255, blue: 1.0),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private let cardPastel = Color(red: 1.0, green: 251 / 255, blue: 235 / 255)
-    private let textPrimary = Color(red: 28 / 255, green: 25 / 255, blue: 23 / 255)
-    private let textSecondary = Color(red: 87 / 255, green: 83 / 255, blue: 78 / 255)
-    private let buttonPastel = Color(red: 186 / 255, green: 230 / 255, blue: 253 / 255)
-    private let buttonOnPastel = Color(red: 12 / 255, green: 74 / 255, blue: 110 / 255)
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                backgroundGradient
-                    .ignoresSafeArea()
-                if isLoading {
-                    ProgressView()
-                } else {
-                    VStack(spacing: 0) {
-                        // Top bar
-                        HStack {
-                            Text("Min familj")
-                                .font(.title2.weight(.bold))
-                                .foregroundColor(textPrimary)
-
-                            Spacer()
-
-                            Button(action: onLogout) {
-                                Text("Logga ut")
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-
-                        ScrollView {
-                            VStack(spacing: 16) {
-                                if let errorMessage {
-                                    Text(errorMessage)
-                                        .foregroundColor(.red)
-                                        .padding(.horizontal, 16)
-                                }
-
-                                summaryCards
-                                Text("Mina barn")
-                                    .font(.title2.weight(.semibold))
-                                    .foregroundColor(textPrimary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 16)
-
-                                if children.isEmpty {
-                                    emptyChildrenCard
-                                } else {
-                                    VStack(spacing: 12) {
-                                        ForEach(children) { child in
-                                            AdultChildCardView(
-                                                child: child,
-                                                cardPastel: cardPastel,
-                                                textPrimary: textPrimary,
-                                                buttonPastel: buttonPastel,
-                                                buttonOnPastel: buttonOnPastel,
-                                                onPetClick: { onChildPet(child.id, child.name) },
-                                                onWalletClick: { onChildWallet(child.id, child.name) },
-                                                onTasksClick: { onChildTasks(child.id, child.name) },
-                                                onInviteClick: { inviteChild = child }
-                                            )
-                                            .padding(.horizontal, 16)
-                                        }
-                                    }
-                                }
-
-                                addChildButton
-                                    .padding(.horizontal, 16)
-
-                                Spacer(minLength: 24)
-                            }
-                            .padding(.top, 8)
-                        }
-                    }
-                }
-            }
-        }
-        .task {
-            await loadChildren()
-        }
-        .sheet(item: $inviteChild) { child in
-            ChildInviteSheet(
-                childName: child.name,
-                memberId: child.id
-            )
-        }
-    }
-
-    private var summaryCards: some View {
-        let totalTasksToday = children.map { $0.todaysTotal }.reduce(0, +)
-        let completedTasksToday = children.map { $0.todaysDone }.reduce(0, +)
-        let childrenWithPet = children.filter { $0.hasPet }.count
-
-        return VStack(spacing: 8) {
-            // Översikt idag
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Idag i familjen")
-                    .font(.headline)
-                    .foregroundColor(textPrimary)
-                Text(
-                    totalTasksToday > 0
-                        ? "Barnen har gjort \(completedTasksToday) av \(totalTasksToday) uppgifter idag."
-                        : "Inga uppgifter planerade idag ännu."
-                )
-                .font(.subheadline)
-                .foregroundColor(textSecondary)
-
-                if childrenWithPet > 0 {
-                    Text("\(childrenWithPet) av \(children.count) barn har ett aktivt djur just nu.")
-                        .font(.subheadline)
-                        .foregroundColor(textSecondary)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.9))
-            )
-            .padding(.horizontal, 16)
-
-            // Förslag idag
-            if let suggestion = children
-                .filter({ $0.todaysTotal > 0 })
-                .min(by: { lhs, rhs in
-                    let lRatio = lhs.todaysTotal == 0 ? 1.0 : Double(lhs.todaysDone) / Double(lhs.todaysTotal)
-                    let rRatio = rhs.todaysTotal == 0 ? 1.0 : Double(rhs.todaysDone) / Double(rhs.todaysTotal)
-                    return lRatio < rRatio
-                }) {
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Förslag idag")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(textPrimary)
-
-                    let message = suggestion.todaysDone >= suggestion.todaysTotal && suggestion.todaysTotal > 0
-                        ? "Ge extra beröm – \(suggestion.name) har gjort alla sina uppgifter idag!"
-                        : (
-                            (suggestion.nextTaskTitle?.isEmpty == false)
-                            ? "Påminn \(suggestion.name) om \"\(suggestion.nextTaskTitle ?? "")\" för att mata sitt djur."
-                            : "Påminn \(suggestion.name) om dagens uppgifter."
-                        )
-
-                    Text(message)
-                        .font(.subheadline)
-                        .foregroundColor(textSecondary)
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(cardPastel)
-                )
-                .padding(.horizontal, 16)
-            }
-        }
-    }
-
-    private var emptyChildrenCard: some View {
-        VStack(alignment: .center, spacing: 8) {
-            Text("Inga barn i familjen ännu")
-                .font(.body.weight(.semibold))
-                .foregroundColor(textPrimary)
-            Text("Lägg till ditt första barn nedan.")
-                .font(.body)
-                .foregroundColor(textSecondary)
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(cardPastel)
-        )
-        .padding(.horizontal, 16)
-    }
-
-    private var addChildButton: some View {
-        Button {
-            onAddFamilyMember()
-        } label: {
-            HStack {
-                Image(systemName: "person.badge.plus")
-                Text("Lägg till barn")
-            }
-            .font(.headline)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(buttonPastel)
-        .foregroundColor(buttonOnPastel)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private func loadChildren() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            let members = try await FamilyRepository.fetchChildren()
-            let order = members.enumerated().reduce(into: [String: Int]()) { $0[$1.element.id] = $1.offset }
-
-            var updated = await withTaskGroup(of: AdultChildSummary.self) { group -> [AdultChildSummary] in
-                for member in members {
-                    group.addTask {
-                        async let petTask: PetResponseDTO? = try? ApiClient.shared.send(
-                            PetResponseDTO.self,
-                            path: "pets/members/\(member.id)/current",
-                            method: "GET"
-                        )
-                        async let tasksTask = CalendarRepositoryIOS.fetchTasksForToday(memberId: member.id)
-
-                        let pet = await petTask
-                        let todaysTasks = (try? await tasksTask) ?? []
-                        let done = todaysTasks.filter { $0.completed }.count
-                        let nextTitle = todaysTasks.first(where: { !$0.completed })?.event.title
-
-                        return AdultChildSummary(
-                            id: member.id,
-                            name: member.name,
-                            todaysDone: done,
-                            todaysTotal: todaysTasks.count,
-                            hasPet: pet != nil,
-                            streakDays: 0,
-                            nextTaskTitle: nextTitle
-                        )
-                    }
-                }
-                var results: [AdultChildSummary] = []
-                for await summary in group { results.append(summary) }
-                return results
-            }
-
-            updated.sort { (order[$0.id] ?? 0) < (order[$1.id] ?? 0) }
-            children = updated
-            isLoading = false
-        } catch {
-            errorMessage = "Kunde inte ladda familjemedlemmar."
-            isLoading = false
-        }
-    }
-}
-
-private struct AdultChildCardView: View {
-    let child: AdultChildSummary
-    let cardPastel: Color
-    let textPrimary: Color
-    let buttonPastel: Color
-    let buttonOnPastel: Color
-    var onPetClick: () -> Void
-    var onWalletClick: () -> Void
-    var onTasksClick: () -> Void
-    var onInviteClick: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(child.name)
-                .font(.headline)
-                .foregroundColor(textPrimary)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(
-                    child.todaysTotal > 0
-                        ? "Idag: \(child.todaysDone) av \(child.todaysTotal) uppgifter gjorda"
-                        : "Idag: inga uppgifter planerade"
-                )
-                .foregroundColor(textPrimary)
-
-                Text(child.hasPet ? "Djur: aktivt den här månaden" : "Djur: inget ägg valt ännu")
-                    .foregroundColor(textPrimary)
-
-                if child.streakDays > 0 {
-                    Text("Streak: \(child.streakDays) dagar i rad")
-                        .foregroundColor(.blue)
-                }
-            }
-            .font(.subheadline)
-
-            HStack(spacing: 12) {
-                Button(action: onPetClick) {
-                    Label("Djur", systemImage: "pawprint.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                Button(action: onWalletClick) {
-                    Label("Plånbok", systemImage: "wallet.pass.fill")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(buttonPastel)
-            .foregroundColor(buttonOnPastel)
-
-            Button(action: onTasksClick) {
-                Text("Att göra idag")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(buttonPastel)
-            .foregroundColor(buttonOnPastel)
-
-            Button(action: onInviteClick) {
-                Text("Bjud in till appen")
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        .tint(buttonOnPastel)
-        .foregroundColor(textPrimary)
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(cardPastel.opacity(0.95))
-        )
     }
 }
 

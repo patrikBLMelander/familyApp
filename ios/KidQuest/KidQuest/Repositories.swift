@@ -1,51 +1,30 @@
 import Foundation
 
-// MARK: - Auth repository
-
-enum AuthRepository {
-    static func registerFamily(
-        familyName: String,
-        adminName: String,
-        email: String,
-        password: String
-    ) async throws {
-        let body = RegisterFamilyRequestDTO(
-            familyName: familyName,
-            adminName: adminName,
-            adminEmail: email,
-            password: password
-        )
-        let response = try await ApiClient.shared.send(
-            FamilyRegistrationResponseDTO.self,
-            path: "families/register",
-            method: "POST",
-            body: body
-        )
-        TokenStoreIOS.shared.setToken(response.deviceToken)
-    }
-
-    static func login(email: String, password: String) async throws {
-        let body = EmailLoginRequestDTO(email: email, password: password)
-        let response = try await ApiClient.shared.send(
-            EmailLoginResponseDTO.self,
-            path: "families/login-by-email",
-            method: "POST",
-            body: body
-        )
-        TokenStoreIOS.shared.setToken(response.deviceToken)
-    }
-}
-
 // MARK: - Family members
 
 enum FamilyRepository {
-    static func fetchChildren() async throws -> [FamilyMemberResponseDTO] {
-        let members = try await ApiClient.shared.send(
+    static func fetchAllMembers() async throws -> [FamilyMemberResponseDTO] {
+        try await ApiClient.shared.send(
             [FamilyMemberResponseDTO].self,
             path: "family-members",
             method: "GET"
         )
-        return members.filter { $0.role == "CHILD" || $0.role == "ASSISTANT" }
+    }
+
+    static func fetchChildren() async throws -> [FamilyMemberResponseDTO] {
+        try await fetchAllMembers().filter { $0.role == "CHILD" || $0.role == "ASSISTANT" }
+    }
+
+    /// Familjens namn, valt vid registreringen. Tomt namn behandlas som inget namn,
+    /// så att anroparen kan falla tillbaka på "Min familj".
+    static func fetchFamilyName(familyId: String) async throws -> String? {
+        let family = try await ApiClient.shared.send(
+            FamilyResponseDTO.self,
+            path: "families/\(familyId)",
+            method: "GET"
+        )
+        let trimmed = family.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     static func linkDeviceByInviteToken(inviteToken: String) async throws -> FamilyMemberResponseDTO {
@@ -57,7 +36,13 @@ enum FamilyRepository {
             method: "POST",
             body: body
         )
-        TokenStoreIOS.shared.setToken(deviceToken)
+        TokenStoreIOS.shared.setSession(
+            deviceToken: deviceToken,
+            memberId: member.id,
+            memberName: member.name,
+            role: member.role,
+            familyId: member.familyId
+        )
         return member
     }
 
@@ -275,6 +260,20 @@ enum WalletRepository {
         try await ApiClient.shared.sendWithoutResponse(path: "wallet/allowance", method: "POST", body: body)
     }
 
+    /// Den stående veckopengen eller månadspengen, eller nil när ingen är igång.
+    ///
+    /// Backend svarar 204 utan kropp när inget är inställt. Avkodningen av en tom
+    /// kropp kastar, vilket är samma sak som "ingen peng inställd" här — därför
+    /// `try?` i stället för att låta hela översikten falla på det.
+    static func fetchRecurringAllowance(memberId: String) async -> RecurringAllowanceResponseDTO? {
+        let response = try? await ApiClient.shared.send(
+            RecurringAllowanceResponseDTO.self,
+            path: "wallet/members/\(memberId)/recurring-allowance",
+            method: "GET"
+        )
+        return response?.active == true ? response : nil
+    }
+
     static func allocateToGoals(allocations: [(goalId: String, amount: Int)]) async throws {
         let body = AllocateToGoalsRequestDTO(
             savingsGoalAllocations: allocations.map { SavingsGoalAllocationRequestDTO(savingsGoalId: $0.goalId, amount: $0.amount) }
@@ -304,3 +303,148 @@ enum PetRepository {
     }
 }
 
+
+// MARK: - Adult dashboard
+
+/// Allt föräldravyn behöver, i ett anrop.
+///
+/// Ligger här och inte i vyn av samma skäl som `ChildDashboardRepository`: skärmen ska
+/// inte veta att dagens sysslor, djuret och veckopengen är tre olika endpoints. Att
+/// samla dem här gör det också möjligt att mata skärmen med `Overview`-fixtures.
+enum AdultDashboardRepository {
+
+    struct Child: Identifiable, Equatable {
+        let id: String
+        let name: String
+        let hasPairedDevice: Bool
+        let todaysDone: Int
+        let todaysTotal: Int
+        /// Driver kortets porträtt och dess färg. Nil tills ett ägg har valts.
+        let petType: String?
+        let growthStage: Int
+        /// "50 kr varje fredag", eller nil när ingen automatisk peng är igång.
+        let allowanceNote: String?
+        /// Sant när barnets rad inte gick att läsa; kortet säger det i stället för
+        /// att visa noll sysslor som om det vore ett svar.
+        let loadFailed: Bool
+    }
+
+    struct Adult: Identifiable, Equatable {
+        let id: String
+        let name: String
+        let role: String
+        let hasPairedDevice: Bool
+        let isCurrentUser: Bool
+    }
+
+    struct Overview: Equatable {
+        let familyName: String
+        let children: [Child]
+        let adults: [Adult]
+
+        var doneToday: Int { children.reduce(0) { $0 + $1.todaysDone } }
+        var totalToday: Int { children.reduce(0) { $0 + $1.todaysTotal } }
+    }
+
+    static let defaultFamilyName = "Min familj"
+
+    static func fetchOverview() async throws -> Overview {
+        let members = try await FamilyRepository.fetchAllMembers()
+        let childMembers = members.filter { $0.role == "CHILD" || $0.role == "ASSISTANT" }
+        let adultMembers = members.filter { $0.role != "CHILD" && $0.role != "ASSISTANT" }
+        let currentMemberId = TokenStoreIOS.shared.getSession()?.memberId
+
+        let summaries = await withTaskGroup(of: Child.self) { group -> [String: Child] in
+            for member in childMembers {
+                group.addTask { await summary(for: member) }
+            }
+            var byId: [String: Child] = [:]
+            for await child in group { byId[child.id] = child }
+            return byId
+        }
+
+        // Serverns ordning är familjens ordning. Task-gruppen returnerar i den ordning
+        // svaren kommer in, så listan sätts ihop från medlemslistan igen.
+        let children = childMembers.compactMap { summaries[$0.id] }
+
+        let adults = adultMembers.map { member in
+            Adult(
+                id: member.id,
+                name: member.name,
+                role: member.role,
+                hasPairedDevice: isPaired(member),
+                isCurrentUser: member.id == currentMemberId
+            )
+        }
+
+        // Namnet hämtas efter medlemmarna och får misslyckas för sig: en familj utan
+        // namn ska se sina barn ändå.
+        let familyId = TokenStoreIOS.shared.getSession()?.familyId
+            ?? members.compactMap { $0.familyId }.first
+        var familyName = defaultFamilyName
+        if let familyId, let fetched = try? await FamilyRepository.fetchFamilyName(familyId: familyId) {
+            familyName = fetched
+        }
+
+        return Overview(familyName: familyName, children: children, adults: adults)
+    }
+
+    private static func summary(for member: FamilyMemberResponseDTO) async -> Child {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+
+        // Var och en får misslyckas för sig. Ett barn utan djur, utan peng eller utan
+        // sysslor är tre vanliga tillstånd, inte tre fel.
+        async let choresTask: [DailyChoreWithCompletionResponseDTO]? =
+            try? DailyChoreRepositoryIOS.fetchChoresForDate(memberId: member.id, date: today)
+        async let petTask: PetResponseDTO? =
+            try? PetRepository.fetchPetForMember(memberId: member.id)
+        async let allowanceTask: RecurringAllowanceResponseDTO? =
+            WalletRepository.fetchRecurringAllowance(memberId: member.id)
+
+        let chores = await choresTask
+        let pet = await petTask
+        let allowance = await allowanceTask
+
+        return Child(
+            id: member.id,
+            name: member.name,
+            hasPairedDevice: isPaired(member),
+            todaysDone: chores?.filter { $0.completed }.count ?? 0,
+            todaysTotal: chores?.count ?? 0,
+            petType: pet?.petType,
+            growthStage: pet?.growthStage ?? 1,
+            allowanceNote: allowance.map(describeAllowance),
+            loadFailed: chores == nil
+        )
+    }
+
+    private static func isPaired(_ member: FamilyMemberResponseDTO) -> Bool {
+        if let flag = member.hasPairedDevice { return flag }
+        // Äldre svar bär inte flaggan. Token finns bara med för den som får se den,
+        // så dess närvaro räcker som svar.
+        return !(member.deviceToken?.isEmpty ?? true)
+    }
+
+    /// Den stående överenskommelsen på en rad, från förälderns sida av den.
+    ///
+    /// Nivåpengen nämner medvetet ingen summa: beloppet avgörs inte förrän månaden är
+    /// slut, och en siffra här skulle läsas som ett löfte.
+    private static func describeAllowance(_ schedule: RecurringAllowanceResponseDTO) -> String {
+        let day = schedule.dayOfMonth ?? 1
+        let ordinal = (1...2).contains(day % 10) && day != 11 && day != 12 ? "\(day):a" : "\(day):e"
+        switch schedule.kind {
+        case "WEEKLY":
+            let weekdays = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"]
+            let index = (schedule.weekday ?? 7) - 1
+            let weekday = weekdays.indices.contains(index) ? weekdays[index] : "söndag"
+            return "\(schedule.amount ?? 0) kr varje \(weekday)"
+        case "MONTHLY":
+            return "\(schedule.amount ?? 0) kr den \(ordinal)"
+        default:
+            return "Efter nivå den \(ordinal)"
+        }
+    }
+}

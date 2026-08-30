@@ -15,6 +15,11 @@ struct FamilyMemberResponseDTO: Decodable {
     let deviceToken: String?
     let email: String?
     let role: String
+    /// Köp hör till familjen, inte till medlemmen. Optional för säkerhets skull.
+    let familyId: String?
+    /// Om medlemmen har en kopplad telefon, utan att lämna ut token som skulle låta
+    /// den som frågar bli dem. Optional eftersom äldre svar inte bär med sig fältet.
+    let hasPairedDevice: Bool?
 }
 
 struct FamilyRegistrationResponseDTO: Decodable {
@@ -252,6 +257,21 @@ struct ExpenseCategoryResponseDTO: Decodable, Identifiable {
     let name: String
     let emoji: String?
     let isDefault: Bool
+}
+
+/// Den stående överenskommelsen om veckopeng eller månadspeng för ett barn.
+///
+/// Backend svarar 204 utan kropp när inget är inställt, så anropet måste tåla att
+/// avkodningen misslyckas — se `WalletRepository.fetchRecurringAllowance`.
+struct RecurringAllowanceResponseDTO: Decodable {
+    let memberId: String
+    /// WEEKLY, MONTHLY eller LEVEL.
+    let kind: String
+    let amount: Int?
+    /// 1 = måndag ... 7 = söndag, samma som java.time.
+    let weekday: Int?
+    let dayOfMonth: Int?
+    let active: Bool
 }
 
 struct WalletNotificationResponseDTO: Decodable, Identifiable {

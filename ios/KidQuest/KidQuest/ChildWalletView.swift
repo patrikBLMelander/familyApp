@@ -299,11 +299,17 @@ struct ChildWalletView: View {
     }
 
     private func gradient(_ top: UInt32, _ bottom: UInt32) -> LinearGradient {
+        // The species table above is written as six-digit RGB, while the shared
+        // initialiser in SeasonTheme reads ARGB so it can carry the palette's one
+        // translucent value. Passing these unqualified would give every animal an
+        // alpha of zero -- compiles, renders nothing.
         LinearGradient(
-            colors: [Color(hex: top), Color(hex: bottom)],
+            colors: [Color(hex: opaque(top)), Color(hex: opaque(bottom))],
             startPoint: .top, endPoint: .bottom
         )
     }
+
+    private func opaque(_ rgb: UInt32) -> UInt32 { 0xFF00_0000 | rgb }
 
     // MARK: - Helpers
 
@@ -363,18 +369,6 @@ struct ChildWalletView: View {
             errorMessage = "Kunde inte ladda plånboken."
             isLoading = false
         }
-    }
-}
-
-// MARK: - Color hex helper
-
-private extension Color {
-    init(hex: UInt32) {
-        self.init(
-            red: Double((hex >> 16) & 0xFF) / 255,
-            green: Double((hex >> 8) & 0xFF) / 255,
-            blue: Double(hex & 0xFF) / 255
-        )
     }
 }
 

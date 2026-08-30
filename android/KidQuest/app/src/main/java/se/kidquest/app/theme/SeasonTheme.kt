@@ -84,7 +84,12 @@ object SeasonTheme {
             pageBg = Color(0xFFEEF4E6), surface = Color(0xFFFFFFFF), cardEdge = Color(0xFFDEE8D2),
             ink = Color(0xFF1B211A), inkSoft = Color(0xFF54604E), inkFaint = Color(0xFF88947D),
             accent = Color(0xFF3E7D3A), onAccent = Color(0xFFFFFFFF),
-            outlineBg = Color(0xFFFFFFFF), outlineEdge = Color(0xFFDEE8D2), outlineInk = Color(0xFF44403C),
+            // outlineBg is the page's own tint rather than the card's white: a quiet
+            // button sits ON a card, and filling it with the card's colour made it the
+            // same colour as the thing behind it -- a plate with a hairline round it and
+            // nothing else to say it is pressable. Dark mode never had the problem,
+            // which is why nobody running dark ever saw it.
+            outlineBg = Color(0xFFEEF4E6), outlineEdge = Color(0xFFDEE8D2), outlineInk = Color(0xFF44403C),
             track = Color(0xFFE0EAD4),
             goodBg = Color(0xFFDCEFD5), goodInk = Color(0xFF2C5C2A),
             calBg = Color(0xFFEBF1DD), calInk = Color(0xFF5A6B2E),
@@ -98,7 +103,12 @@ object SeasonTheme {
             pageBg = Color(0xFFE7F1EE), surface = Color(0xFFFFFFFF), cardEdge = Color(0xFFD2E2DD),
             ink = Color(0xFF14201C), inkSoft = Color(0xFF4B5B55), inkFaint = Color(0xFF83918B),
             accent = Color(0xFF0F6A59), onAccent = Color(0xFFFFFFFF),
-            outlineBg = Color(0xFFFFFFFF), outlineEdge = Color(0xFFD2E2DD), outlineInk = Color(0xFF44403C),
+            // outlineBg is the page's own tint rather than the card's white: a quiet
+            // button sits ON a card, and filling it with the card's colour made it the
+            // same colour as the thing behind it -- a plate with a hairline round it and
+            // nothing else to say it is pressable. Dark mode never had the problem,
+            // which is why nobody running dark ever saw it.
+            outlineBg = Color(0xFFE7F1EE), outlineEdge = Color(0xFFD2E2DD), outlineInk = Color(0xFF44403C),
             track = Color(0xFFD8E7E2),
             goodBg = Color(0xFFD3EDE1), goodInk = Color(0xFF0F5F4C),
             calBg = Color(0xFFDEEDE8), calInk = Color(0xFF0F6A59),
@@ -112,7 +122,12 @@ object SeasonTheme {
             pageBg = Color(0xFFF7EDDF), surface = Color(0xFFFFFCF6), cardEdge = Color(0xFFE9D9C1),
             ink = Color(0xFF241A12), inkSoft = Color(0xFF5E5044), inkFaint = Color(0xFF93816E),
             accent = Color(0xFFA0451E), onAccent = Color(0xFFFFFFFF),
-            outlineBg = Color(0xFFFFFCF6), outlineEdge = Color(0xFFE9D9C1), outlineInk = Color(0xFF4A3C30),
+            // outlineBg is the page's own tint rather than the card's white: a quiet
+            // button sits ON a card, and filling it with the card's colour made it the
+            // same colour as the thing behind it -- a plate with a hairline round it and
+            // nothing else to say it is pressable. Dark mode never had the problem,
+            // which is why nobody running dark ever saw it.
+            outlineBg = Color(0xFFF7EDDF), outlineEdge = Color(0xFFE9D9C1), outlineInk = Color(0xFF4A3C30),
             track = Color(0xFFEBDCC6),
             goodBg = Color(0xFFE5EBD4), goodInk = Color(0xFF4A5B26),
             calBg = Color(0xFFF4E1CB), calInk = Color(0xFF8A4A1E),
@@ -126,7 +141,12 @@ object SeasonTheme {
             pageBg = Color(0xFFE9EFF6), surface = Color(0xFFFBFCFE), cardEdge = Color(0xFFD7E0EA),
             ink = Color(0xFF141A21), inkSoft = Color(0xFF4D5765), inkFaint = Color(0xFF85909F),
             accent = Color(0xFF1D5C8A), onAccent = Color(0xFFFFFFFF),
-            outlineBg = Color(0xFFFBFCFE), outlineEdge = Color(0xFFD7E0EA), outlineInk = Color(0xFF44403C),
+            // outlineBg is the page's own tint rather than the card's white: a quiet
+            // button sits ON a card, and filling it with the card's colour made it the
+            // same colour as the thing behind it -- a plate with a hairline round it and
+            // nothing else to say it is pressable. Dark mode never had the problem,
+            // which is why nobody running dark ever saw it.
+            outlineBg = Color(0xFFE9EFF6), outlineEdge = Color(0xFFD7E0EA), outlineInk = Color(0xFF44403C),
             track = Color(0xFFDCE4EE),
             goodBg = Color(0xFFD7EAE2), goodInk = Color(0xFF1F5F4A),
             calBg = Color(0xFFDEE9F3), calInk = Color(0xFF1D5C8A),

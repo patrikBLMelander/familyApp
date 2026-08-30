@@ -183,3 +183,72 @@ enum PetImagesIOS {
             ?? defaultPetScale
     }
 }
+
+/// Per-species colour, mirroring the Android PetTheme and frontend petTheme.ts.
+///
+/// `accent` is the reason this is a table rather than just a pair of gradient stops.
+/// Neither end of a species gradient is reliably usable on its own: dragon's pale end
+/// is nearly black, unicorn's saturated end is a pastel pink. `accent` is the member
+/// picked to stay visible as a 4pt stroke or a 1.5pt border on a light card, which is
+/// what the parent dashboard draws its progress rings with. It is deliberately NOT a
+/// text colour — several accents sit near 2.5:1 against cream.
+///
+/// The same values are still written out a second time inside ChildDashboardView and
+/// ChildWalletView, which is how shark and lion came to be missing from both. Those
+/// two should come here; this table already has all fourteen.
+enum PetThemeIOS {
+
+    struct Palette {
+        /// Pale end of the species gradient — the top of the child's own screen.
+        let from: Color
+        /// Saturated end.
+        let to: Color
+        /// Legible as a stroke or a border on a light card. Not for text.
+        let accent: Color
+    }
+
+    private static let palettes: [String: Palette] = [
+        "dragon": palette(0x4C1D95, 0x1E293B, 0x4C1D95),
+        "cat": palette(0xFDE68A, 0xF97316, 0xF97316),
+        "dog": palette(0xBBF7D0, 0x22C55E, 0x16A34A),
+        "bird": palette(0xBFDBFE, 0x2563EB, 0x2563EB),
+        "rabbit": palette(0xFCE7F3, 0xEC4899, 0xDB2777),
+        "bear": palette(0xFEF3C7, 0x92400E, 0x92400E),
+        "snake": palette(0xDCFCE7, 0x15803D, 0x15803D),
+        "panda": palette(0xE5E7EB, 0x111827, 0x111827),
+        "slot": palette(0xE5E7EB, 0x6B7280, 0x4B5563),
+        "hydra": palette(0xC4B5FD, 0x4C1D95, 0x4C1D95),
+        // Both ends of unicorn are pastel, so the accent steps down the same hue ramp
+        // to a strength that still reads as a ring.
+        "unicorn": palette(0xFDE68A, 0xF9A8D4, 0xDB2777),
+        "kapybara": palette(0xDCFCE7, 0x22C55E, 0x16A34A),
+        "shark": palette(0xBAE6FD, 0x0369A1, 0x0369A1),
+        "lion": palette(0xFEF3C7, 0xD97706, 0xD97706),
+    ]
+
+    /// For a child who has not chosen an egg yet: the app's own background pastels.
+    private static let neutral = palette(0xE0E7FF, 0xE0F2FE, 0x0C4A6E)
+
+    /// Accepts a petType or an eggType; the API hands out both.
+    static func forPet(_ petType: String?) -> Palette {
+        guard let species = PetImagesIOS.petType(forEgg: petType) else { return neutral }
+        return palettes[species] ?? neutral
+    }
+
+    /// The sliver along the top of a card, so it reads as a piece of that child's screen.
+    static func edge(_ petType: String?) -> LinearGradient {
+        let p = forPet(petType)
+        return LinearGradient(colors: [p.from, p.to], startPoint: .leading, endPoint: .trailing)
+    }
+
+    /// The table is written as six-digit RGB, like the web palette it comes from,
+    /// while `Color(hex:)` reads ARGB. Passing these unqualified would give every
+    /// animal an alpha of zero — compiles, renders nothing.
+    private static func palette(_ from: UInt32, _ to: UInt32, _ accent: UInt32) -> Palette {
+        Palette(
+            from: Color(hex: 0xFF00_0000 | from),
+            to: Color(hex: 0xFF00_0000 | to),
+            accent: Color(hex: 0xFF00_0000 | accent)
+        )
+    }
+}
