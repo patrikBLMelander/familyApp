@@ -66,6 +66,7 @@ import se.kidquest.app.paywall.PaywallScreen
 import se.kidquest.app.session.PrefsStore
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
+import androidx.activity.compose.BackHandler
 
 private sealed class AppScreen {
     data object Loading : AppScreen()
@@ -165,6 +166,54 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    // One answer to "where does back go", shared by the arrow drawn on
+                    // the screen and the phone's own back gesture. The gesture used to be
+                    // unhandled, so it left the app from any depth instead of stepping
+                    // back one screen.
+                    //
+                    // Null marks a root, where Android expects back to leave. The child's
+                    // dashboard is one on purpose: its own back affordance signs the child
+                    // out, and wiring the gesture to that would have a child logging
+                    // themselves out by reflex -- needing a parent and a fresh code to undo.
+                    val backAction: (() -> Unit)? = when (val s = currentScreen) {
+                        AppScreen.Loading, AppScreen.Welcome, AppScreen.Home -> null
+                        is AppScreen.ChildDashboard -> null
+
+                        AppScreen.Register, AppScreen.Auth, AppScreen.ChildInviteLogin ->
+                            ({ currentScreen = AppScreen.Welcome })
+
+                        AppScreen.FamilyTasks, AppScreen.Paywall ->
+                            ({ currentScreen = AppScreen.Home })
+
+                        is AppScreen.ChildViewAsParent ->
+                            ({ currentScreen = AppScreen.Home })
+
+                        is AppScreen.ChildPet -> ({
+                            returnToChildDashboard = null
+                            currentScreen = AppScreen.Home
+                        })
+
+                        is AppScreen.RecurringAllowance -> ({
+                            currentScreen = AppScreen.ChildWallet(
+                                s.childId,
+                                s.childName,
+                                isOwnWallet = false,
+                            )
+                        })
+
+                        // Both were opened either from the parent's overview or from a
+                        // child's own dashboard, and have to return to whichever it was.
+                        is AppScreen.ChildWallet, is AppScreen.ChildTasks -> ({
+                            val toDashboard = returnToChildDashboard
+                            returnToChildDashboard = null
+                            currentScreen = if (toDashboard != null) {
+                                AppScreen.ChildDashboard(toDashboard.first, toDashboard.second)
+                            } else AppScreen.Home
+                        })
+                    }
+
+                    BackHandler(enabled = backAction != null) { backAction?.invoke() }
+
                     when (val screen = currentScreen) {
                         AppScreen.Loading -> {
                             Column(
@@ -251,7 +300,7 @@ class MainActivity : ComponentActivity() {
                         )
                         AppScreen.FamilyTasks -> FamilyTasksScreen(
                             modifier = Modifier.padding(innerPadding),
-                            onBack = { currentScreen = AppScreen.Home },
+                            onBack = { backAction?.invoke() },
                         )
                         AppScreen.Paywall -> PaywallScreen(
                             modifier = Modifier.padding(innerPadding),
@@ -267,7 +316,7 @@ class MainActivity : ComponentActivity() {
                         )
                         AppScreen.ChildInviteLogin -> ChildInviteLoginScreen(
                             modifier = Modifier.padding(innerPadding),
-                            onBack = { currentScreen = AppScreen.Welcome },
+                            onBack = { backAction?.invoke() },
                             onLoginAsChild = { childId, childName ->
                                 currentScreen = AppScreen.ChildDashboard(childId, childName)
                             },
@@ -300,7 +349,7 @@ class MainActivity : ComponentActivity() {
                             // which is the entire point of this route.
                             onExitChildView = { currentScreen = AppScreen.Home },
                             onSwitchChild = { currentScreen = AppScreen.Home },
-                            onBack = { currentScreen = AppScreen.Home },
+                            onBack = { backAction?.invoke() },
                             onOpenTasks = {
                                 returnToChildDashboard = screen.childId to screen.childName
                                 currentScreen = AppScreen.ChildTasks(screen.childId, screen.childName)
@@ -318,23 +367,14 @@ class MainActivity : ComponentActivity() {
                         is AppScreen.ChildPet -> ChildPetScreen(
                             childName = screen.childName,
                             childId = screen.childId,
-                            onBack = {
-                                returnToChildDashboard = null
-                                currentScreen = AppScreen.Home
-                            },
+                            onBack = { backAction?.invoke() },
                         )
                         is AppScreen.ChildWallet -> ChildWalletScreen(
                             childName = screen.childName,
                             childId = screen.childId,
                             isOwnWallet = screen.isOwnWallet,
                             fromChildView = screen.fromChildView,
-                            onBack = {
-                                val toDashboard = returnToChildDashboard
-                                returnToChildDashboard = null
-                                currentScreen = if (toDashboard != null) {
-                                    AppScreen.ChildDashboard(toDashboard.first, toDashboard.second)
-                                } else AppScreen.Home
-                            },
+                            onBack = { backAction?.invoke() },
                             onOpenRecurringAllowance = {
                                 currentScreen = AppScreen.RecurringAllowance(
                                     screen.childId,
@@ -347,25 +387,13 @@ class MainActivity : ComponentActivity() {
                             childId = screen.childId,
                             // Back to the wallet it was opened from, so a parent who
                             // just set an amount sees the row say so.
-                            onBack = {
-                                currentScreen = AppScreen.ChildWallet(
-                                    screen.childId,
-                                    screen.childName,
-                                    isOwnWallet = false,
-                                )
-                            },
+                            onBack = { backAction?.invoke() },
                         )
                         is AppScreen.ChildTasks -> ChildTasksScreen(
                             modifier = Modifier.padding(innerPadding),
                             childName = screen.childName,
                             childId = screen.childId,
-                            onBack = {
-                                val toDashboard = returnToChildDashboard
-                                returnToChildDashboard = null
-                                currentScreen = if (toDashboard != null) {
-                                    AppScreen.ChildDashboard(toDashboard.first, toDashboard.second)
-                                } else AppScreen.Home
-                            },
+                            onBack = { backAction?.invoke() },
                         )
                     }
                 }
