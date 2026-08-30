@@ -72,7 +72,7 @@ enum ScreenHarness {
         let anchor: UnitPoint? = (env["KQ_SCROLL"] == "bottom") ? .bottom : nil
 
         switch name {
-        // The three screens a family sees before there is a session at all. Each one
+        // The four screens a family sees before there is a session at all. Each one
         // is reached in a real run by tapping the one before it, which the simulator
         // cannot do, so each gets its own name here.
         case "welcome":
@@ -92,6 +92,13 @@ enum ScreenHarness {
         case "register":
             return Entry(view: AnyView(
                 RegisterView.fixture()
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+        case "childinvite":
+            return Entry(view: AnyView(
+                ChildInviteLoginView.fixture()
                     .environment(\.seasonPalette, palette)
                     .preferredColorScheme(dark ? .dark : .light)
                     .defaultScrollAnchor(anchor, for: .initialOffset)

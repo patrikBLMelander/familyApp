@@ -357,6 +357,7 @@ struct AuthView: View {
     @State private var password: String = ""
     @State private var status: String = "Inte inloggad"
     @State private var isLoading: Bool = false
+    @State private var isShowingForgotPassword: Bool = false
 
     @Environment(\.seasonPalette) private var palette
 
@@ -391,6 +392,13 @@ struct AuthView: View {
                     }
                     .padding(.top, 2)
 
+                    // Utan den här var en förälder som glömt sitt lösenord utelåst för
+                    // gott: en annan förälder kunde sätta ett nytt, vilket inte hjälper
+                    // en familj med bara en vuxen.
+                    QuietActionButton(title: "Glömt lösenordet?") {
+                        isShowingForgotPassword = true
+                    }
+
                     if let statusMessage {
                         FormMessage(message: statusMessage)
                     }
@@ -409,6 +417,16 @@ struct AuthView: View {
             guard let prefill, email.isEmpty, password.isEmpty else { return }
             email = prefill.email
             password = prefill.password
+        }
+        .sheet(isPresented: $isShowingForgotPassword) {
+            ForgotPasswordSheet(initialEmail: email)
+                // Handed over rather than inherited: the sheet is hosted in its own
+                // presentation, outside this view's hierarchy, and the palette is
+                // injected once at ContentView's root. Without this the sheet falls
+                // back to SeasonTheme's default and is the wrong season.
+                .environment(\.seasonPalette, palette)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -710,6 +728,7 @@ private struct OutlinedActionButton: View {
     @Environment(\.seasonPalette) private var palette
 
     let title: String
+    var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
@@ -725,6 +744,8 @@ private struct OutlinedActionButton: View {
                 )
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.6)
     }
 }
 
@@ -765,6 +786,141 @@ private struct FormMessage: View {
     }
 }
 
+/// Begär en länk för att välja ett nytt lösenord.
+///
+/// Says the same thing whether or not the address has an account, because the server
+/// does: it answers 200 either way and will not tell the app which it was. Anything
+/// else here would turn the form into a way of finding out which families use
+/// KidQuest, and the answer would be a list of parents.
+///
+/// The link in the mail opens a web page, so the app's job ends at asking for it --
+/// there is no token to type in here.
+private struct ForgotPasswordSheet: View {
+    @Environment(\.seasonPalette) private var palette
+    @Environment(\.dismiss) private var dismiss
+
+    /// Det som redan står i inloggningsformuläret, så att adressen inte behöver
+    /// skrivas två gånger.
+    var initialEmail: String = ""
+
+    @State private var email: String = ""
+    @State private var isSending: Bool = false
+    @State private var didSend: Bool = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // The sheet keeps its own title bar and rewrites it in place, rather than
+            // closing and leaving the parent to guess whether anything was sent.
+            SeasonHeaderBar(title: didSend ? "Kolla din mejl" : "Glömt lösenordet?")
+
+            ScrollView {
+                VStack(spacing: 16) {
+                    if didSend {
+                        confirmation
+                    } else {
+                        form
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 22)
+                .padding(.bottom, 24)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(palette.pageBg.ignoresSafeArea())
+        .onAppear {
+            guard email.isEmpty else { return }
+            email = initialEmail
+        }
+    }
+
+    private var form: some View {
+        VStack(spacing: 16) {
+            explanation("Skriv din e‑postadress så skickar vi en länk för att välja ett nytt lösenord.")
+
+            LabeledField(
+                label: "E‑post",
+                placeholder: "namn@exempel.se",
+                text: $email
+            )
+            .keyboardType(.emailAddress)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+
+            FilledActionButton(
+                title: isSending ? "Skickar…" : "Skicka länk",
+                isEnabled: canSend
+            ) {
+                Task { await submit() }
+            }
+            .padding(.top, 2)
+
+            QuietActionButton(title: "Avbryt") {
+                guard !isSending else { return }
+                dismiss()
+            }
+
+            if let errorMessage {
+                FormMessage(message: errorMessage)
+            }
+        }
+    }
+
+    /// Samma text oavsett utfall -- se doc-kommentaren ovanför vyn.
+    private var confirmation: some View {
+        VStack(spacing: 16) {
+            explanation(
+                "Om adressen finns hos oss har vi skickat en länk dit. Den gäller i en timme. "
+                + "Titta i skräpposten om den inte dyker upp."
+            )
+
+            FilledActionButton(title: "Klart") {
+                dismiss()
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func explanation(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 14))
+            .foregroundStyle(palette.inkSoft)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var canSend: Bool {
+        !isSending && !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func submit() async {
+        guard canSend else { return }
+
+        isSending = true
+        errorMessage = nil
+
+        do {
+            try await AuthService.requestPasswordReset(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            // Bara transportfel når hit -- AuthService sväljer statuskoden med flit,
+            // så ett "skickat" ser likadant ut för varje adress.
+            didSend = true
+        } catch {
+            errorMessage = ApiErrors.message(error, fallback: "Kunde inte skicka just nu.")
+        }
+
+        isSending = false
+    }
+}
+
+/// Den tredje vägen in: en kod från en förälder kopplar den här enheten.
+///
+/// Dressed in the seasonal palette like the two screens it sits between. It kept the
+/// old lavender-and-cream look after those were rebuilt, so the entry flow turned
+/// green on the welcome screen and back to lavender one tap later -- the same break
+/// that reskinning WelcomeView was meant to remove, moved one screen down.
 struct ChildInviteLoginView: View {
     var onBack: () -> Void = {}
     var onLoginAsChild: (String, String) -> Void = { _, _ in }
@@ -772,128 +928,71 @@ struct ChildInviteLoginView: View {
     /// lands has to follow the member's role rather than the screen they typed it on.
     var onLoginAsAdult: () -> Void = {}
 
+    /// Fyller koden åt debug-riggen. Bara `fixture()` sätter den.
+    ///
+    /// Se AuthView.prefill -- samma skäl: ett tomt fält kan inte visa att etiketten
+    /// står kvar när koden väl är itryckt.
+    var prefill: Prefill?
+
+    struct Prefill {
+        let inviteCode: String
+    }
+
     @State private var inviteCode: String = ""
     @State private var status: String?
     @State private var isLoading: Bool = false
 
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 224 / 255, green: 231 / 255, blue: 1.0),
-                Color(red: 224 / 255, green: 242 / 255, blue: 1.0),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private let cardColor = Color(red: 1.0, green: 251 / 255, blue: 235 / 255)
-    private let textPrimary = Color(red: 28 / 255, green: 25 / 255, blue: 23 / 255)
-    private let textSecondary = Color(red: 87 / 255, green: 83 / 255, blue: 78 / 255)
-    private let buttonColor = Color(red: 186 / 255, green: 230 / 255, blue: 253 / 255)
-    private let buttonOnColor = Color(red: 12 / 255, green: 74 / 255, blue: 110 / 255)
+    @Environment(\.seasonPalette) private var palette
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .center) {
-                Spacer().frame(height: 24)
+        VStack(spacing: 0) {
+            SeasonHeaderBar(
+                title: "Koppla din enhet",
+                subtitle: "Be någon i familjen visa koden eller QR‑koden",
+                onBack: onBack
+            )
 
-                Text("Koppla din enhet")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(textPrimary)
-                    .multilineTextAlignment(.center)
-
-                Spacer().frame(height: 8)
-
-                Text("Be mamma eller pappa visa koden eller QR-koden – eller skanna här nedan.")
-                    .font(.body)
-                    .foregroundColor(textSecondary)
-                    .multilineTextAlignment(.center)
-
-                Spacer().frame(height: 24)
-
-                VStack(alignment: .center, spacing: 16) {
-                    Button {
-                        // TODO: Lägg till riktig QR-skanning med AVFoundation om vi vill.
-                    } label: {
-                        HStack {
-                            Image(systemName: "qrcode.viewfinder")
-                            Text("Skanna QR-kod")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(buttonOnColor)
-                    .disabled(true) // placeholder tills vi implementerar skanning
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Kvar som platshållare tills skanningen finns: knappen visar att
+                    // vägen är planerad, men den går inte att trycka på.
+                    // TODO: Lägg till riktig QR-skanning med AVFoundation.
+                    OutlinedActionButton(title: "Skanna QR‑kod", isEnabled: false) {}
 
                     Text("eller skriv in koden")
-                        .font(.footnote)
-                        .foregroundColor(textSecondary)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(palette.inkSoft)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Inbjudningskod")
-                            .font(.caption)
-                            .foregroundColor(textSecondary)
-                        TextField("", text: $inviteCode)
-                            .foregroundColor(textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(buttonOnColor.opacity(0.4), lineWidth: 1)
-                                    .background(Color.white.cornerRadius(12))
-                            )
-                    }
+                    LabeledField(
+                        label: "Inbjudningskod",
+                        placeholder: "Koden du fått",
+                        text: $inviteCode
+                    )
 
-                    Button {
-                        Task {
-                            await performLink()
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "iphone")
-                            Text(isLoading ? "Kopplar…" : "Koppla denna enhet")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
+                    FilledActionButton(
+                        title: isLoading ? "Kopplar…" : "Koppla denna enhet",
+                        isEnabled: !isLoading
+                    ) {
+                        Task { await performLink() }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(buttonColor)
-                    .foregroundColor(buttonOnColor)
-                    .disabled(isLoading)
+                    .padding(.top, 2)
 
                     if let status {
-                        Text(status)
-                            .font(.footnote)
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
+                        FormMessage(message: status)
                     }
                 }
-                .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(cardColor)
-                )
                 .padding(.horizontal, 16)
-
-                Spacer().frame(height: 20)
-
-                Button(action: onBack) {
-                    Text("Tillbaka")
-                        .foregroundColor(textSecondary)
-                }
-                .buttonStyle(.plain)
-
-                Spacer().frame(height: 24)
+                .padding(.top, 22)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            backgroundGradient
-                .ignoresSafeArea()
-        )
+        .background(palette.pageBg.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            guard let prefill, inviteCode.isEmpty else { return }
+            inviteCode = prefill.inviteCode
+        }
     }
 
     private func performLink() async {
@@ -969,6 +1068,15 @@ extension RegisterView {
     }
 }
 
+extension ChildInviteLoginView {
+
+    /// Med en kod ifylld: ett tomt fält kan inte visa det etiketten finns för, att
+    /// fältets namn står kvar när koden väl är itryckt.
+    static func fixture() -> ChildInviteLoginView {
+        ChildInviteLoginView(prefill: Prefill(inviteCode: "8F3K-2QX7"))
+    }
+}
+
 #Preview("Välkomst") {
     WelcomeView.fixture()
         .environment(\.seasonPalette, SeasonTheme.current(dark: false))
@@ -982,6 +1090,16 @@ extension RegisterView {
 
 #Preview("Registrera") {
     RegisterView.fixture()
+        .environment(\.seasonPalette, SeasonTheme.current(dark: false))
+}
+
+#Preview("Koppla enhet") {
+    ChildInviteLoginView.fixture()
+        .environment(\.seasonPalette, SeasonTheme.current(dark: false))
+}
+
+#Preview("Glömt lösenord") {
+    ForgotPasswordSheet(initialEmail: "patrik@exempel.se")
         .environment(\.seasonPalette, SeasonTheme.current(dark: false))
 }
 #endif

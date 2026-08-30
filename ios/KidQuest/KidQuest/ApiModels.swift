@@ -45,6 +45,12 @@ struct EmailLoginRequestDTO: Encodable {
     let password: String
 }
 
+/// Begär en återställningslänk. Servern svarar 200 oavsett om adressen finns,
+/// så det finns inget svar att läsa -- bara ett kvitto på att frågan kom fram.
+struct PasswordResetRequestDTO: Encodable {
+    let email: String
+}
+
 // MARK: - Family members
 
 struct CreateFamilyMemberRequestDTO: Encodable {
