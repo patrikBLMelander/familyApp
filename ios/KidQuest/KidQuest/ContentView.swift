@@ -48,6 +48,11 @@ struct ContentView: View {
                         },
                         onBackToLogin: {
                             currentScreen = .auth
+                        },
+                        // Bakåtpilen går dit skärmen kom ifrån, välkomstskärmen, och
+                        // inte till inloggningen som länken i botten gör.
+                        onBack: {
+                            currentScreen = .welcome
                         }
                     )
 
@@ -60,6 +65,12 @@ struct ContentView: View {
                         },
                         onChildInviteLogin: {
                             currentScreen = .childInviteLogin
+                        },
+                        // Välkomstskärmen är appens rot, och det är dit bakåt leder
+                        // även när man kom hit genom att logga ut: den har alla tre
+                        // vägarna in, inloggningen bara en.
+                        onBack: {
+                            currentScreen = .welcome
                         }
                     )
 
@@ -204,258 +215,237 @@ struct ContentView: View {
     }
 }
 
+/// Det första en ny familj ser: vad appen är, och tre vägar in i den.
+///
+/// Dressed in the seasonal palette like every screen behind the login. It used to open
+/// in lavender and cream and then turn green one screen later, which read as two
+/// different apps rather than one.
 struct WelcomeView: View {
     var onParentTap: () -> Void = {}
     var onChildInviteTap: () -> Void = {}
     var onLoginTap: () -> Void = {}
 
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 224 / 255, green: 231 / 255, blue: 1.0),
-                Color(red: 224 / 255, green: 242 / 255, blue: 1.0),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private let cardColor = Color(red: 1.0, green: 251 / 255, blue: 235 / 255)
-    private let textPrimary = Color(red: 28 / 255, green: 25 / 255, blue: 23 / 255)
-    private let textSecondary = Color(red: 87 / 255, green: 83 / 255, blue: 78 / 255)
-    private let buttonColor = Color(red: 186 / 255, green: 230 / 255, blue: 253 / 255)
-    private let buttonOnColor = Color(red: 12 / 255, green: 74 / 255, blue: 110 / 255)
+    @Environment(\.seasonPalette) private var palette
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .center, spacing: 0) {
-                Spacer(minLength: 24)
+        VStack(spacing: 0) {
+            // The shared bar rather than a bespoke title block: this screen has no back
+            // control, and the band is what carries the season on every other screen.
+            SeasonHeaderBar(
+                title: "KidQuest",
+                subtitle: "Gör tråkiga sysslor till roliga uppdrag"
+            )
 
-                Image("onboarding_hero_family")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 180)
-
-                Spacer(minLength: 24)
-
-                Text("Gör tråkiga sysslor till roliga uppdrag")
-                    .font(.title2.weight(.bold))
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(textPrimary)
-
-                Spacer().frame(height: 8)
-
-                Text("Varje månad ett hemligt ägg, mata djuret med vardagsuppdrag och levla upp – plus belöningar som motiverar.")
-                    .font(.body)
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(textSecondary)
-
-                Spacer().frame(height: 24)
-
-                HStack(spacing: 12) {
-                    ValueCard(
-                        imageName: "onboarding_card_pet_xp",
-                        title: "Hemligt ägg varje månad",
-                        subtitle: "Barnen får ett nytt ägg med ett djur i – en överraskning vilket djur det blir.",
-                        cardColor: cardColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary
-                    )
-
-                    ValueCard(
-                        imageName: "onboarding_card_family_overview",
-                        title: "Uppdrag matar djuret",
-                        subtitle: "Under månaden gör barnet uppgifter i vardagen för att mata och levla upp djuret.",
-                        cardColor: cardColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary
-                    )
-
-                    ValueCard(
-                        imageName: "onboarding_card_rewards_savings",
-                        title: "Belöningar som motiverar",
-                        subtitle: "Koppla uppdrag till veckopeng eller små mål – om du vill.",
-                        cardColor: cardColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary
-                    )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    hero
+                    points
+                    actions
                 }
-
-                Spacer().frame(height: 32)
-
-                Button(action: onParentTap) {
-                    Text("Jag är förälder")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(buttonColor)
-                .foregroundColor(buttonOnColor)
-                .controlSize(.large)
-
-                Spacer().frame(height: 12)
-
-                Button(action: onChildInviteTap) {
-                    Text("Jag är barn och har en kod")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(buttonOnColor)
-                .controlSize(.large)
-
-                Spacer().frame(height: 8)
-
-                Button(action: onLoginTap) {
-                    Text("Logga in")
-                        .foregroundColor(textSecondary)
-                }
-                .buttonStyle(.plain)
-
-                Spacer().frame(height: 32)
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
             }
-            .padding(24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            backgroundGradient
-                .ignoresSafeArea()
-        )
+        .background(palette.pageBg.ignoresSafeArea())
+        // The bar draws the title, so the navigation bar would only be an empty strip
+        // of a second colour above it.
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    /// Samma illustration som tidigare, nu som ett band över hela bredden.
+    ///
+    /// scaledToFill inside a fixed frame, so the artwork spans 320pt and 430pt alike
+    /// and is cropped rather than letterboxed.
+    private var hero: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: 150)
+            .overlay {
+                Image("onboarding_hero_family")
+                    .resizable()
+                    .scaledToFill()
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
+    /// Tre punkter i en lodrät lista.
+    ///
+    /// They were three cards side by side. At 390pt that left roughly 100pt per card:
+    /// every title broke over three lines, the cards ended up unequal heights, and the
+    /// block took a third of the screen. Stacked, each point gets one line of body and
+    /// the whole section is shorter than one of the old cards.
+    private var points: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            point(
+                title: "Hemligt ägg varje månad",
+                detail: "Barnen får ett nytt djur — de vet inte vilket."
+            )
+            point(
+                title: "Uppdrag matar djuret",
+                detail: "Vardagssysslor ger XP, och XP får djuret att växa."
+            )
+            point(
+                title: "Belöningar som motiverar",
+                detail: "Koppla till veckopeng eller små mål, om du vill."
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func point(title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Circle()
+                .fill(palette.accent)
+                .frame(width: 8, height: 8)
+                // Sits the dot on the title's mid-x-height rather than its top edge.
+                .padding(.top, 6)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(palette.ink)
+                Text(detail)
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.inkSoft)
+                    // Multi-line text in an HStack is otherwise free to truncate.
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Tre vägar in, i fallande vikt.
+    ///
+    /// They used to be a filled pale-blue button, an outlined one and a text link —
+    /// three different weights, but none of them clearly the one to press. Creating the
+    /// family is what this screen exists for, the invite code is the second way in, and
+    /// an account that already exists is the rare case.
+    private var actions: some View {
+        VStack(spacing: 12) {
+            FilledActionButton(title: "Skapa en ny familj", action: onParentTap)
+            OutlinedActionButton(title: "Jag har en inbjudningskod", action: onChildInviteTap)
+            QuietActionButton(title: "Logga in", action: onLoginTap)
+        }
+        .padding(.top, 2)
     }
 }
 
 struct AuthView: View {
     var onLoginSuccess: () -> Void = {}
     var onChildInviteLogin: () -> Void = {}
+    /// Nil när det inte finns någon skärm att gå tillbaka till.
+    ///
+    /// Reaching this screen by logging out leaves nothing behind it, and the bar then
+    /// draws no chevron rather than one that goes nowhere.
+    var onBack: (() -> Void)?
+
+    /// Fyller formuläret åt debug-riggen. Bara `fixture()` sätter den.
+    ///
+    /// An empty form photographs as if the labels had never been tested: the whole
+    /// point of them is that the field's name survives being typed over.
+    var prefill: Prefill?
+
+    struct Prefill {
+        let email: String
+        let password: String
+    }
 
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var status: String = "Inte inloggad"
     @State private var isLoading: Bool = false
 
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 224 / 255, green: 231 / 255, blue: 1.0),
-                Color(red: 224 / 255, green: 242 / 255, blue: 1.0),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private let cardColor = Color(red: 1.0, green: 251 / 255, blue: 235 / 255)
-    private let textPrimary = Color(red: 28 / 255, green: 25 / 255, blue: 23 / 255)
-    private let textSecondary = Color(red: 87 / 255, green: 83 / 255, blue: 78 / 255)
-    private let buttonColor = Color(red: 186 / 255, green: 230 / 255, blue: 253 / 255)
-    private let buttonOnColor = Color(red: 12 / 255, green: 74 / 255, blue: 110 / 255)
+    @Environment(\.seasonPalette) private var palette
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .center) {
-                Spacer().frame(height: 32)
+        VStack(spacing: 0) {
+            SeasonHeaderBar(
+                title: "Logga in",
+                subtitle: "Förälder eller vårdnadshavare",
+                onBack: onBack
+            )
 
-                Text("Logga in")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(textPrimary)
-                    .multilineTextAlignment(.center)
+            ScrollView {
+                VStack(spacing: 16) {
+                    LabeledField(
+                        label: "E‑post",
+                        placeholder: "namn@exempel.se",
+                        text: $email
+                    )
 
-                Spacer().frame(height: 8)
+                    LabeledField(
+                        label: "Lösenord",
+                        placeholder: "••••••••",
+                        text: $password,
+                        isSecure: true
+                    )
 
-                Text("Förälder eller vårdnadshavare")
-                    .font(.body)
-                    .foregroundColor(textSecondary)
-                    .multilineTextAlignment(.center)
-
-                Spacer().frame(height: 24)
-
-                VStack {
-                    VStack(alignment: .center, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("E‑post")
-                                .font(.caption)
-                                .foregroundColor(textSecondary)
-                            TextField("", text: $email)
-                                .foregroundColor(textPrimary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .strokeBorder(buttonOnColor.opacity(0.4), lineWidth: 1)
-                                        .background(Color.white.cornerRadius(12))
-                                )
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Lösenord")
-                                .font(.caption)
-                                .foregroundColor(textSecondary)
-                            SecureField("", text: $password)
-                                .foregroundColor(textPrimary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .strokeBorder(buttonOnColor.opacity(0.4), lineWidth: 1)
-                                        .background(Color.white.cornerRadius(12))
-                                )
-                        }
-
-                        Button {
-                            Task {
-                                await performLogin()
-                            }
-                        } label: {
-                            Text(isLoading ? "Loggar in..." : "Logga in")
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 48)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(buttonColor)
-                        .foregroundColor(buttonOnColor)
-                        .disabled(isLoading)
-
-                        if status != "Loggar in..." && status != "Inte inloggad" {
-                            Text(status)
-                                .font(.footnote)
-                                .foregroundColor(.red)
-                                .multilineTextAlignment(.center)
-                                .padding(.top, 4)
-                        }
+                    FilledActionButton(
+                        title: isLoading ? "Loggar in..." : "Logga in",
+                        isEnabled: !isLoading
+                    ) {
+                        Task { await performLogin() }
                     }
-                    .padding(20)
+                    .padding(.top, 2)
+
+                    if let statusMessage {
+                        FormMessage(message: statusMessage)
+                    }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(cardColor)
-                )
                 .padding(.horizontal, 16)
-
-                Spacer().frame(height: 24)
-
-                Text("Barn i familjen?")
-                    .font(.body)
-                    .foregroundColor(textSecondary)
-
-                Spacer().frame(height: 8)
-
-                Button(action: onChildInviteLogin) {
-                    Text("Jag är barn och har en kod")
-                        .foregroundColor(buttonOnColor)
-                }
-                .buttonStyle(.plain)
-
-                Spacer().frame(height: 24)
+                .padding(.top, 22)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 20)
+
+            childRoute
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            backgroundGradient
-                .ignoresSafeArea()
-        )
+        .background(palette.pageBg.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            guard let prefill, email.isEmpty, password.isEmpty else { return }
+            email = prefill.email
+            password = prefill.password
+        }
+    }
+
+    /// Barnvägen, förankrad i botten bakom en avskiljare.
+    ///
+    /// It used to float in the middle of an otherwise empty lower half, directly under
+    /// the form, where it read as the form's next step. It is not: it is a different
+    /// kind of sign-in, with no email and no password, which is what the rule and the
+    /// distance say.
+    private var childRoute: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(palette.cardEdge)
+                .frame(height: 1)
+                .padding(.bottom, 16)
+
+            Text("Barn i familjen?")
+                .font(.system(size: 13.5))
+                .foregroundStyle(palette.inkSoft)
+                .padding(.bottom, 10)
+
+            OutlinedActionButton(
+                title: "Jag är barn och har en kod",
+                action: onChildInviteLogin
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 22)
+    }
+
+    /// De två vilolägena är inte fel och visas inte.
+    ///
+    /// Same predicate the screen has always used, moved out of the body so the row it
+    /// feeds is one view rather than an inline condition.
+    private var statusMessage: String? {
+        guard status != "Loggar in..." && status != "Inte inloggad" else { return nil }
+        return status
     }
 
     private func performLogin() async {
@@ -487,6 +477,22 @@ struct AuthView: View {
 struct RegisterView: View {
     var onRegisterSuccess: () -> Void = {}
     var onBackToLogin: () -> Void = {}
+    /// Se AuthView.onBack — samma skäl.
+    var onBack: (() -> Void)?
+
+    /// Fyller formuläret åt debug-riggen. Bara `fixture()` sätter den.
+    ///
+    /// Four unlabelled boxes was worst here: family name and your own name filled in
+    /// the wrong order could not be noticed. A photograph of an empty form cannot show
+    /// that the labels fix it.
+    var prefill: Prefill?
+
+    struct Prefill {
+        let familyName: String
+        let parentName: String
+        let email: String
+        let password: String
+    }
 
     @State private var familyName: String = ""
     @State private var parentName: String = ""
@@ -495,150 +501,93 @@ struct RegisterView: View {
     @State private var status: String?
     @State private var isLoading: Bool = false
 
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 224 / 255, green: 231 / 255, blue: 1.0),
-                Color(red: 224 / 255, green: 242 / 255, blue: 1.0),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private let cardColor = Color(red: 1.0, green: 251 / 255, blue: 235 / 255)
-    private let textPrimary = Color(red: 28 / 255, green: 25 / 255, blue: 23 / 255)
-    private let textSecondary = Color(red: 87 / 255, green: 83 / 255, blue: 78 / 255)
-    private let buttonColor = Color(red: 186 / 255, green: 230 / 255, blue: 253 / 255)
-    private let buttonOnColor = Color(red: 12 / 255, green: 74 / 255, blue: 110 / 255)
+    @Environment(\.seasonPalette) private var palette
 
     var body: some View {
-        ScrollView {
-            VStack {
-                Spacer().frame(height: 32)
+        VStack(spacing: 0) {
+            SeasonHeaderBar(
+                title: "Skapa familj",
+                subtitle: "Registrera dig som förälder och bjud in dina barn",
+                onBack: onBack
+            )
 
-                Text("Skapa familj")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(textPrimary)
-                    .multilineTextAlignment(.center)
+            ScrollView {
+                VStack(spacing: 14) {
+                    LabeledField(
+                        label: "Familjens namn",
+                        placeholder: "T.ex. Melander",
+                        text: $familyName
+                    )
 
-                Spacer().frame(height: 8)
+                    LabeledField(
+                        label: "Ditt namn",
+                        placeholder: "T.ex. Patrik",
+                        text: $parentName
+                    )
 
-                Text("Registrera dig som förälder och bjud in dina barn.")
-                    .font(.body)
-                    .foregroundColor(textSecondary)
-                    .multilineTextAlignment(.center)
+                    LabeledField(
+                        label: "E‑post",
+                        placeholder: "namn@exempel.se",
+                        text: $email
+                    )
 
-                Spacer().frame(height: 24)
+                    LabeledField(
+                        label: "Lösenord",
+                        placeholder: "minst 6 tecken",
+                        text: $password,
+                        isSecure: true
+                    )
 
-                VStack(alignment: .center, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Familjens namn")
-                            .font(.caption)
-                            .foregroundColor(textSecondary)
-                        TextField("", text: $familyName)
-                            .foregroundColor(textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(buttonOnColor.opacity(0.4), lineWidth: 1)
-                                    .background(Color.white.cornerRadius(12))
-                            )
+                    FilledActionButton(
+                        title: isLoading ? "Skapar familj..." : "Skapa familj",
+                        isEnabled: !isLoading
+                    ) {
+                        Task { await performRegister() }
                     }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Ditt namn")
-                            .font(.caption)
-                            .foregroundColor(textSecondary)
-                        TextField("", text: $parentName)
-                            .foregroundColor(textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(buttonOnColor.opacity(0.4), lineWidth: 1)
-                                    .background(Color.white.cornerRadius(12))
-                            )
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("E‑post")
-                            .font(.caption)
-                            .foregroundColor(textSecondary)
-                        TextField("", text: $email)
-                            .foregroundColor(textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(buttonOnColor.opacity(0.4), lineWidth: 1)
-                                    .background(Color.white.cornerRadius(12))
-                            )
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Lösenord")
-                            .font(.caption)
-                            .foregroundColor(textSecondary)
-                        SecureField("", text: $password)
-                            .foregroundColor(textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(buttonOnColor.opacity(0.4), lineWidth: 1)
-                                    .background(Color.white.cornerRadius(12))
-                            )
-                    }
-
-                    Button {
-                        Task {
-                            await performRegister()
-                        }
-                    } label: {
-                        Text(isLoading ? "Skapar familj..." : "Skapa familj")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(buttonColor)
-                    .foregroundColor(buttonOnColor)
-                    .disabled(isLoading)
+                    .padding(.top, 2)
 
                     if let status {
-                        Text(status)
-                            .font(.footnote)
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
-                            .padding(.top, 4)
+                        FormMessage(message: status)
                     }
                 }
-                .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(cardColor)
-                )
                 .padding(.horizontal, 16)
-
-                Spacer().frame(height: 16)
-
-                Button(action: onBackToLogin) {
-                    Text("Har redan konto? Logga in")
-                        .foregroundColor(textSecondary)
-                }
-                .buttonStyle(.plain)
-
-                Spacer().frame(height: 24)
+                .padding(.top, 20)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 20)
+
+            loginRoute
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            backgroundGradient
-                .ignoresSafeArea()
-        )
+        .background(palette.pageBg.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            guard let prefill, familyName.isEmpty, parentName.isEmpty else { return }
+            familyName = prefill.familyName
+            parentName = prefill.parentName
+            email = prefill.email
+            password = prefill.password
+        }
+    }
+
+    /// Förankrad i botten i stället för direkt under knappen, där den konkurrerade
+    /// med den om samma blick.
+    private var loginRoute: some View {
+        Button(action: onBackToLogin) {
+            HStack(spacing: 4) {
+                Text("Har redan konto?")
+                    .foregroundStyle(palette.inkSoft)
+                Text("Logga in")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(palette.accent)
+            }
+            .font(.system(size: 13.5))
+            .frame(maxWidth: .infinity)
+            .frame(height: 32)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 22)
     }
 
     private func performRegister() async {
@@ -667,6 +616,152 @@ struct RegisterView: View {
             isLoading = false
             status = "Fel: \(error.localizedDescription)"
         }
+    }
+}
+
+// MARK: - Entry screen building blocks
+
+/// Ett fält med sitt namn kvar ovanför sig.
+///
+/// The entry forms were placeholder-only: the word that told you what the field was
+/// vanished at the first keystroke. On register that left four identical rounded
+/// boxes, where the family's name and your own filled in the wrong order was
+/// impossible to notice afterwards.
+private struct LabeledField: View {
+    @Environment(\.seasonPalette) private var palette
+
+    let label: String
+    let placeholder: String
+    @Binding var text: String
+    var isSecure: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .kerning(0.24)
+                .foregroundStyle(palette.inkFaint)
+
+            field
+                .font(.system(size: 15))
+                .foregroundStyle(palette.ink)
+                .tint(palette.accent)
+                .padding(.horizontal, 14)
+                .frame(height: 50)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(palette.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(palette.cardEdge, lineWidth: 1)
+                )
+                // The visible name is the label above; without this VoiceOver falls
+                // back to reading the prompt, which for a password is eight bullets.
+                .accessibilityLabel(label)
+        }
+    }
+
+    /// The prompt carries the palette's faint ink rather than the system placeholder
+    /// grey, which is tuned for the system background and not for a seasonal one.
+    @ViewBuilder
+    private var field: some View {
+        if isSecure {
+            SecureField("", text: $text, prompt: promptText)
+        } else {
+            TextField("", text: $text, prompt: promptText)
+        }
+    }
+
+    private var promptText: Text {
+        Text(placeholder).foregroundStyle(palette.inkFaint)
+    }
+}
+
+/// Den tunga knappen: fylld med årstidens accent.
+private struct FilledActionButton: View {
+    @Environment(\.seasonPalette) private var palette
+
+    let title: String
+    var isEnabled: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .foregroundStyle(palette.onAccent)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(palette.accent)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.6)
+    }
+}
+
+/// Den andra vägen: kontur i accentfärgen, samma vikt som "Lägg till familjemedlem"
+/// på föräldravyn.
+private struct OutlinedActionButton: View {
+    @Environment(\.seasonPalette) private var palette
+
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15.5, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .foregroundStyle(palette.accent)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(palette.accent, lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Den tysta vägen: bara text.
+private struct QuietActionButton: View {
+    @Environment(\.seasonPalette) private var palette
+
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14))
+                .foregroundStyle(palette.accent)
+                .frame(maxWidth: .infinity)
+                // 44pt is the smallest thing a thumb should be asked to hit, and a
+                // line of 14pt text is half that on its own.
+                .frame(height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Ett fel ur formuläret, sagt högt under knappen.
+private struct FormMessage: View {
+    @Environment(\.seasonPalette) private var palette
+
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.footnote)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(palette.danger)
+            .frame(maxWidth: .infinity)
     }
 }
 
@@ -829,45 +924,67 @@ struct ChildInviteLoginView: View {
     }
 }
 
-private struct ValueCard: View {
-    let imageName: String
-    let title: String
-    let subtitle: String
-    let cardColor: Color
-    let textPrimary: Color
-    let textSecondary: Color
+#if DEBUG
+extension WelcomeView {
 
-    var body: some View {
-        VStack(spacing: 8) {
-            // Wide illustrations (1.83), not icons. A square frame with scaledToFit
-            // letterboxed them, so span the card and crop to a header strip.
-            Color.clear
-                .aspectRatio(1.83, contentMode: .fit)
-                .overlay(
-                    Image(imageName)
-                        .resizable()
-                        .scaledToFill()
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+    /// Skärmen som den ser ut för en ny familj, så den kan fotograferas.
+    ///
+    /// The iOS simulator hands over a screenshot but takes no input, so a screen behind
+    /// a tap cannot be reached to be looked at at all. This is the way in — see
+    /// ScreenHarness in KidQuestApp.swift.
+    static func fixture() -> WelcomeView {
+        WelcomeView()
+    }
+}
 
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .multilineTextAlignment(.center)
-                .foregroundColor(textPrimary)
+extension AuthView {
 
-            Text(subtitle)
-                .font(.caption)
-                .multilineTextAlignment(.center)
-                .foregroundColor(textSecondary)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(cardColor)
+    /// Ifylld, och med bakåtpilen framme.
+    ///
+    /// Both on purpose: the chevron only exists when there is somewhere to go back to,
+    /// and an empty form cannot show the one thing the labels are for — that the
+    /// field's name is still above it once the placeholder has been typed over.
+    static func fixture() -> AuthView {
+        AuthView(
+            onBack: {},
+            prefill: Prefill(email: "patrik@exempel.se", password: "hemligt123")
         )
     }
 }
+
+extension RegisterView {
+
+    /// Ifylld i rätt ordning, vilket är hela poängen: familjens namn och ditt eget är
+    /// två olika fält, och utan etiketter fanns inget som sa vilket som var vilket.
+    static func fixture() -> RegisterView {
+        RegisterView(
+            onBack: {},
+            prefill: Prefill(
+                familyName: "Melander",
+                parentName: "Patrik",
+                email: "patrik@exempel.se",
+                password: "hemligt123"
+            )
+        )
+    }
+}
+
+#Preview("Välkomst") {
+    WelcomeView.fixture()
+        .environment(\.seasonPalette, SeasonTheme.current(dark: false))
+}
+
+#Preview("Logga in mörk") {
+    AuthView.fixture()
+        .environment(\.seasonPalette, SeasonTheme.current(dark: true))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Registrera") {
+    RegisterView.fixture()
+        .environment(\.seasonPalette, SeasonTheme.current(dark: false))
+}
+#endif
 
 #Preview {
     ContentView()
