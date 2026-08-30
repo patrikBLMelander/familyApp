@@ -79,6 +79,16 @@ enum ScreenHarness {
                     .preferredColorScheme(dark ? .dark : .light)
                     .defaultScrollAnchor(anchor, for: .initialOffset)
             ))
+        // Two entries rather than one, for the same reason the harness exists at all:
+        // the Vecka tab cannot be tapped, so without a way to open the screen on it
+        // that half of the screen can never be looked at.
+        case "childtasks", "childtasks-week":
+            return Entry(view: AnyView(
+                ChildTasksView.fixture(tab: name == "childtasks-week" ? .week : .today)
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
         default:
             return nil
         }

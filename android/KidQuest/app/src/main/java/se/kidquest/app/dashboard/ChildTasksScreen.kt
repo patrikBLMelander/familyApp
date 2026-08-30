@@ -59,6 +59,7 @@ import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.theme.LocalSeasonPalette
 import se.kidquest.app.theme.SeasonHeaderBar
+import se.kidquest.app.session.TokenStore
 
 private val CHILD_WEEKDAY_ABBREVS = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 private val CHILD_WEEKDAY_LABELS_SV = listOf("Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön")
@@ -79,6 +80,10 @@ fun ChildTasksScreen(
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalSeasonPalette.current
+    // Read from the session rather than from the route: a child's login can never
+    // administer chores, whichever way they arrived here. The server refuses them
+    // too -- this is so they are not offered a button that answers with an error.
+    val isChildSession = TokenStore.getSession()?.isChild == true
     var tasks by remember { mutableStateOf<List<DailyChoreWithCompletionResponse>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -287,6 +292,7 @@ fun ChildTasksScreen(
                                             }
                                         }
                                         IconButton(
+                                            enabled = !isChildSession,
                                             onClick = { chorePendingDelete = task },
                                             modifier = Modifier.size(36.dp),
                                         ) {
@@ -303,8 +309,10 @@ fun ChildTasksScreen(
                         }
                     }
 
-                    // Add buttons at bottom
-                    Row(
+                    // Adding a chore is parent administration. A child reaches this
+                    // screen from their own dashboard, and could invent chores they
+                    // had already done.
+                    if (!isChildSession) Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 12.dp),

@@ -67,6 +67,7 @@ import se.kidquest.app.session.PrefsStore
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
 import androidx.activity.compose.BackHandler
+import android.content.pm.ApplicationInfo
 
 private sealed class AppScreen {
     data object Loading : AppScreen()
@@ -103,6 +104,14 @@ class MainActivity : ComponentActivity() {
         TokenStore.init(applicationContext)
         PrefsStore.init(applicationContext)
         enableEdgeToEdge()
+        // Debug-only: render one screen without touching the session, so a screen
+        // that sits behind a login can be photographed for review at all. The
+        // alternative is signing the family out to look at their own welcome screen,
+        // which costs a real login to undo.
+        //   adb shell am start -n se.kidquest.app/.MainActivity --es kq_screen welcome
+        val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        val forcedScreen = if (debuggable) intent?.getStringExtra("kq_screen") else null
+
         setContent {
             // Hoisted above the theme because the theme is what consumes it. Null until
             // a parent picks a side, which is what lets a fresh install follow the phone.
@@ -120,6 +129,13 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
 
                 LaunchedEffect(Unit) {
+                    when (forcedScreen) {
+                        "welcome" -> { currentScreen = AppScreen.Welcome; return@LaunchedEffect }
+                        "auth" -> { currentScreen = AppScreen.Auth; return@LaunchedEffect }
+                        "register" -> { currentScreen = AppScreen.Register; return@LaunchedEffect }
+                        "childinvite" -> { currentScreen = AppScreen.ChildInviteLogin; return@LaunchedEffect }
+                    }
+
                     TokenStore.load()
                     // A device token alone does not say who it belongs to. Routing on
                     // its presence alone sent children straight into the adult

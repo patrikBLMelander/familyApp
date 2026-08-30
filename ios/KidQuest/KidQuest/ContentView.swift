@@ -125,8 +125,20 @@ struct ContentView: View {
                     )
 
                 case let .childTasks(childId, childName):
-                    Text("Dagens uppgifter för \(childName) (\(childId))")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ChildTasksView(
+                        childName: childName,
+                        childId: childId,
+                        // Barn når samma skärm från sin egen dashboard. Att alltid gå
+                        // till .home härifrån hade lämnat dem i föräldravyn -- precis
+                        // det routeOnStartup finns för att förhindra.
+                        onBack: {
+                            if TokenStoreIOS.shared.getSession()?.isChild == true {
+                                currentScreen = .childDashboard(childId: childId, childName: childName)
+                            } else {
+                                currentScreen = .home
+                            }
+                        }
+                    )
                 }
             }
         }

@@ -63,7 +63,7 @@ public class DailyChoreController {
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         entitlementGuard.requireEntitled(deviceToken);
-        UUID requesterId = getMemberIdFromToken(deviceToken);
+        UUID requesterId = requireParent(deviceToken);
         DailyChore chore = choreService.createChore(
                 requesterId, request.memberId(), request.title(), request.weekdays(), request.xpPoints()
         );
@@ -77,7 +77,7 @@ public class DailyChoreController {
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         entitlementGuard.requireEntitled(deviceToken);
-        UUID requesterId = getMemberIdFromToken(deviceToken);
+        UUID requesterId = requireParent(deviceToken);
         choreService.deleteChore(requesterId, choreId);
     }
 
@@ -142,6 +142,24 @@ public class DailyChoreController {
     ) {}
 
     // --- Private helpers ---
+
+    /**
+     * Creating and deleting chores is parent administration, and was guarded only by
+     * the entitlement check -- which asks whether the family has PAID, not who is
+     * asking. A child has a device token of their own and reaches this screen from
+     * their own dashboard, so until now they could delete the chores they did not
+     * feel like doing and invent ones they had already done.
+     *
+     * Completing and un-completing a chore stay open to everyone: that is the child
+     * participating, which is the whole point of the app.
+     */
+    private UUID requireParent(String deviceToken) {
+        var requester = memberService.getMemberByDeviceToken(deviceToken);
+        if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
+            throw new IllegalArgumentException("Endast en förälder kan lägga till och ta bort sysslor");
+        }
+        return requester.id();
+    }
 
     private UUID getMemberIdFromToken(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {

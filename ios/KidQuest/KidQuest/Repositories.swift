@@ -138,6 +138,49 @@ enum CalendarRepositoryIOS {
 // MARK: - Daily Chores
 
 enum DailyChoreRepositoryIOS {
+
+    /// Everything a chore list needs, from the two endpoints that hold it.
+    ///
+    /// The screen should not have to know that "what is due today" and "what recurs on
+    /// which weekday" are two different reads. `today` carries the completions and is
+    /// the only list that can be ticked; `all` carries the schedule the week tab draws.
+    struct Chores {
+        var today: [DailyChoreWithCompletionResponseDTO]
+        var all: [DailyChoreResponseDTO]
+    }
+
+    /// Both lists in one call, for one member.
+    static func fetchChores(memberId: String, date: Date = Date()) async throws -> Chores {
+        async let todayTask = fetchChoresForDate(memberId: memberId, date: apiDate(date))
+        async let allTask = fetchAllChores(memberId: memberId)
+        return try await Chores(today: todayTask, all: allTask)
+    }
+
+    /// Every active chore for the member, on every weekday — not only today's.
+    static func fetchAllChores(memberId: String) async throws -> [DailyChoreResponseDTO] {
+        try await ApiClient.shared.send(
+            [DailyChoreResponseDTO].self,
+            path: "daily-chores/members/\(memberId)",
+            method: "GET"
+        )
+    }
+
+    static func deleteChore(choreId: String) async throws {
+        try await ApiClient.shared.sendWithoutResponse(
+            path: "daily-chores/\(choreId)",
+            method: "DELETE"
+        )
+    }
+
+    /// The wire format the daily-chore endpoints expect. POSIX locale so a phone set to
+    /// a non-Gregorian calendar still sends 2026-08-30.
+    static func apiDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
     static func fetchChoresForDate(memberId: String, date: String) async throws -> [DailyChoreWithCompletionResponseDTO] {
         try await ApiClient.shared.send(
             [DailyChoreWithCompletionResponseDTO].self,
