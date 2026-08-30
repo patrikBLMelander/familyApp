@@ -120,6 +120,26 @@ enum ScreenHarness {
                     .preferredColorScheme(dark ? .dark : .light)
                     .defaultScrollAnchor(anchor, for: .initialOffset)
             ))
+        // The paywall sits behind a login and an overflow menu, neither of which the
+        // simulator can tap. Two names: with and without a price, because "without" is
+        // the only state the app can actually reach today.
+        case "paywall", "paywall-noprice":
+            return Entry(view: AnyView(
+                (name == "paywall" ? PaywallView.fixture() : PaywallView.fixtureWithoutPrice())
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+
+        // Every banner state on one screen. None of them can be reached on demand with
+        // a real account: EXPIRED needs a trial to run out, GRACE needs a declined card.
+        case "subscriptionbanner":
+            return Entry(view: AnyView(
+                SubscriptionBannerGallery()
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+            ))
+
         default:
             return nil
         }

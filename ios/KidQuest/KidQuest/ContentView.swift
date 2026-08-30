@@ -14,6 +14,7 @@ enum AppScreen: Equatable {
     case auth
     case home
     case childInviteLogin
+    case paywall
     // Barnens detaljflöden (implementeras senare)
     case childDashboard(childId: String, childName: String)
     case childPet(childId: String, childName: String)
@@ -74,6 +75,17 @@ struct ContentView: View {
                         }
                     )
 
+                case .paywall:
+                    PaywallView(
+                        // No price to show yet: iOS has no store wired in, and a price
+                        // must never be invented. The screen says so itself rather than
+                        // guessing a number.
+                        formattedMonthlyPrice: nil,
+                        onPurchase: nil,
+                        onRestore: nil,
+                        onDismiss: { currentScreen = .home }
+                    )
+
                 case .home:
                     AdultDashboardView(
                         onLogout: {
@@ -88,12 +100,14 @@ struct ContentView: View {
                         },
                         onChildTasks: { id, name in
                             currentScreen = .childTasks(childId: id, childName: name)
-                        }
+                        },
+                        onOpenSubscription: { currentScreen = .paywall }
                     )
 
                 case .childInviteLogin:
                     ChildInviteLoginView(
                         onBack: { currentScreen = .welcome },
+
                         onLoginAsChild: { childId, childName in
                             currentScreen = .childDashboard(childId: childId, childName: childName)
                         },

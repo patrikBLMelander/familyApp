@@ -36,10 +36,8 @@ struct ChildTasksView: View {
     @State private var pendingDelete: ChoreRef?
     @State private var showAddSheet = false
 
-    enum Tab {
-        case today
-        case week
-    }
+    /// The family's list shows the same two tabs, so the type is shared with it.
+    typealias Tab = ChoreTab
 
     private var tab: Tab { chosenTab ?? initialTab ?? .today }
 
@@ -144,42 +142,9 @@ struct ChildTasksView: View {
     // MARK: - Tabs
 
     private var tabs: some View {
-        HStack(spacing: 8) {
-            tabButton(.today, title: "Idag", icon: "checklist")
-            tabButton(.week, title: "Vecka", icon: "calendar")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
-
-    private func tabButton(_ value: Tab, title: String, icon: String) -> some View {
-        let selected = tab == value
-        return Button {
-            chosenTab = value
-        } label: {
-            HStack(spacing: 6) {
-                // Android puts 📝 and 📅 in these labels. An emoji is a piece of
-                // someone else's type design dropped into a control: it keeps its own
-                // colour, ignores the weight of the text beside it and cannot be
-                // tinted when the tab is selected. An SF Symbol is the same picture
-                // drawn in the app's own ink.
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
-            // Two roles a single accent cannot fill: the chosen tab is the accent, the
-            // other is the accent's tinted pair.
-            .foregroundStyle(selected ? palette.onAccent : palette.calInk)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(selected ? palette.accent : palette.calBg)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : [.isButton])
+        // The pair itself lives in ChoreTabPicker: the family's list shows the same two
+        // tabs, and a control copied into both screens is how the two would drift apart.
+        ChoreTabPicker(selected: tab) { chosenTab = $0 }
     }
 
     // MARK: - Today
@@ -396,7 +361,7 @@ private struct ChoreRef: Identifiable, Equatable {
     let title: String
 }
 
-private extension View {
+extension View {
     /// A card in a plain `List`. The list is here for its swipe actions, not its chrome,
     /// so every part of that chrome is turned off in one place.
     func plainChoreRow() -> some View {
@@ -408,7 +373,7 @@ private extension View {
 
 // MARK: - Chore row
 
-private struct ChoreRow: View {
+struct ChoreRow: View {
     @Environment(\.seasonPalette) private var palette
 
     let item: DailyChoreWithCompletionResponseDTO
@@ -602,7 +567,7 @@ private struct WeekDayCard: View {
 // MARK: - Weekdays
 
 /// The week as the backend spells it, as Sweden reads it, and as a chip can show it.
-private struct ChoreWeekday: Identifiable, Hashable {
+struct ChoreWeekday: Identifiable, Hashable {
     /// 0 = Monday … 6 = Sunday, which is the order a Swedish week is read in — not the
     /// order `Calendar` numbers its weekdays.
     let index: Int
