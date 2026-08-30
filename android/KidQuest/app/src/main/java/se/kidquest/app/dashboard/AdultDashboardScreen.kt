@@ -946,6 +946,40 @@ private fun describeAllowance(schedule: RecurringAllowanceResponse): String {
 // child furthest from done and said what was left, directly above the cards that
 // already show both. Two readings of one fact, competing for the same fold.
 
+/**
+ * One shape for every small label on a child's card, so the colour is the only thing
+ * that varies and it varies for a reason.
+ */
+@Composable
+private fun StatusChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    background: Color,
+    ink: Color,
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(background)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = ink,
+            modifier = Modifier.size(12.dp),
+        )
+        Spacer(modifier = Modifier.size(4.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = ink,
+        )
+    }
+}
+
 /** Diameter of the ring drawn around a child's pet portrait. */
 private val PORTRAIT_SIZE = 84.dp
 private val PORTRAIT_PET_SIZE = 72.dp
@@ -1165,63 +1199,49 @@ private fun ChildCard(
                     )
                     // A chip only when there is something worth saying. The ring already
                     // covers every state in between.
-                    if (allDoneToday) {
+                    // The chip under the name always answers the one question this
+                    // screen exists for: is this child done today. It used to appear
+                    // only when they were, and the slot underneath it carried the
+                    // allowance in the same success green -- so a child with chores
+                    // left wore a green badge about pocket money while the child who
+                    // WAS done wore an identical green badge about being done. The
+                    // same colour making opposite claims, and wrong on the only card
+                    // where it mattered.
+                    if (summary != null) {
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(season.goodBg)
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                tint = season.goodInk,
-                                modifier = Modifier.size(12.dp),
-                            )
-                            Spacer(modifier = Modifier.size(4.dp))
-                            Text(
+                        when {
+                            allDoneToday -> StatusChip(
+                                icon = Icons.Default.Check,
                                 text = "Allt klart idag",
+                                background = season.goodBg,
+                                ink = season.goodInk,
+                            )
+                            summary.todaysTotal == 0 -> Text(
+                                text = "Inga sysslor planerade idag",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = season.goodInk,
+                                color = textSecondary,
+                            )
+                            else -> StatusChip(
+                                icon = Icons.Default.Schedule,
+                                text = "${summary.todaysTotal - summary.todaysDone} kvar idag",
+                                background = season.warnBg,
+                                ink = season.warnStrong,
                             )
                         }
-                    } else if (summary != null && summary.todaysTotal == 0) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Inga sysslor planerade idag",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = textSecondary,
-                        )
                     }
                     // Setting it up belongs in the wallet. Seeing that it is on belongs
                     // where a parent already looks every day, so nobody has to remember
                     // what they chose back in the summer.
+                    // Quiet on purpose: a standing arrangement, not anything about
+                    // today. Green here was borrowing a claim it had no right to.
                     summary?.allowanceNote?.let { note ->
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(season.goodBg)
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = null,
-                                tint = season.goodInk,
-                                modifier = Modifier.size(12.dp),
-                            )
-                            Spacer(modifier = Modifier.size(4.dp))
-                            Text(
-                                text = note,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = season.goodInk,
-                            )
-                        }
+                        StatusChip(
+                            icon = Icons.Default.CalendarMonth,
+                            text = note,
+                            background = season.tipBg,
+                            ink = season.inkSoft,
+                        )
                     }
                 }
                 // Kept out of the name row so it stays a full 48.dp touch target
