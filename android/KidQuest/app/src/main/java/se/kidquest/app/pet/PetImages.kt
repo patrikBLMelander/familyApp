@@ -91,8 +91,10 @@ object PetImages {
      * Standalone transparent pet art.
      *
      * Falls back to the nearest lower stage when one is missing, so a gap in the art
-     * shows the previous stage instead of an empty screen. unicorn_stage5 relies on
-     * this today — it does not exist in the source art.
+     * shows the previous stage instead of an empty screen. No species relies on it
+     * today -- unicorn_stage5 was the last gap and is drawn -- but a new species is
+     * added by dropping in files, and this is what keeps a half-delivered set from
+     * showing a child nothing at all.
      */
     fun petDrawable(context: Context, petType: String?, growthStage: Int): Int? {
         val species = petType?.lowercase() ?: return null
