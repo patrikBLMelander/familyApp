@@ -4,8 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,10 +20,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -37,14 +39,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,6 +66,8 @@ import se.kidquest.app.network.EmailLoginRequest
 import se.kidquest.app.network.RegisterFamilyRequest
 import se.kidquest.app.paywall.PaywallScreen
 import se.kidquest.app.session.PrefsStore
+import se.kidquest.app.theme.LocalSeasonPalette
+import se.kidquest.app.theme.SeasonHeaderBar
 import se.kidquest.app.session.TokenStore
 import se.kidquest.app.ui.theme.KidQuestTheme
 import androidx.activity.compose.BackHandler
@@ -255,11 +259,13 @@ class MainActivity : ComponentActivity() {
                                 currentScreen = AppScreen.Home
                             },
                             onBackToLogin = { currentScreen = AppScreen.Auth },
+                            onBack = { backAction?.invoke() },
                         )
                         AppScreen.Auth -> AuthScreen(
                             modifier = Modifier.padding(innerPadding),
                             onLoginSuccess = { currentScreen = AppScreen.Home },
                             onChildInviteLogin = { currentScreen = AppScreen.ChildInviteLogin },
+                            onBack = { backAction?.invoke() },
                         )
                         AppScreen.Home -> AdultDashboardScreen(
                             modifier = Modifier.padding(innerPadding),
@@ -433,8 +439,10 @@ fun AuthScreen(
     modifier: Modifier = Modifier,
     onLoginSuccess: () -> Unit = {},
     onChildInviteLogin: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
+    val palette = LocalSeasonPalette.current
 
     val emailState = remember { mutableStateOf("") }
     val passwordState = remember { mutableStateOf("") }
@@ -442,164 +450,153 @@ fun AuthScreen(
     val showForgotPassword = remember { mutableStateOf(false) }
     val loadingState = remember { mutableStateOf(false) }
 
-    val backgroundBrush = Brush.verticalGradient(
-        listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE))
-    )
-    val cardColor = Color(0xFFFFFBEB)
-    val textPrimary = Color(0xFF1C1917)
-    val textSecondary = Color(0xFF57534E)
-    val buttonColor = Color(0xFFBAE6FD)
-    val buttonOnColor = Color(0xFF0C4A6E)
     val scrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(backgroundBrush)
-            .verticalScroll(scrollState)
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .background(palette.pageBg),
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-        Text(
-            text = "Logga in",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = textPrimary,
-            textAlign = TextAlign.Center,
+        SeasonHeaderBar(
+            title = "Logga in",
+            subtitle = "Förälder eller vårdnadshavare",
+            onBack = onBack,
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Förälder eller vårdnadshavare",
-            style = MaterialTheme.typography.bodyMedium,
-            color = textSecondary,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(24.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                OutlinedTextField(
-                    value = emailState.value,
-                    onValueChange = { emailState.value = it },
-                    label = { Text("E-post") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = buttonOnColor,
-                        unfocusedBorderColor = textSecondary.copy(alpha = 0.5f),
-                        focusedLabelColor = buttonOnColor,
-                        unfocusedLabelColor = textSecondary,
-                        cursorColor = buttonOnColor,
-                        focusedTextColor = textPrimary,
-                        unfocusedTextColor = textPrimary,
-                    ),
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = passwordState.value,
-                    onValueChange = { passwordState.value = it },
-                    label = { Text("Lösenord") },
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = buttonOnColor,
-                        unfocusedBorderColor = textSecondary.copy(alpha = 0.5f),
-                        focusedLabelColor = buttonOnColor,
-                        unfocusedLabelColor = textSecondary,
-                        cursorColor = buttonOnColor,
-                        focusedTextColor = textPrimary,
-                        unfocusedTextColor = textPrimary,
-                    ),
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = {
-                        scope.launch {
-                            loadingState.value = true
-                            statusState.value = "Loggar in..."
-                            try {
-                                val api = ApiClient.authApi
-                                val response = api.loginByEmail(
-                                    EmailLoginRequest(
-                                        email = emailState.value,
-                                        password = passwordState.value,
-                                    ),
-                                )
-                                TokenStore.setSession(
-                                    deviceToken = response.deviceToken,
-                                    memberId = response.member.id,
-                                    memberName = response.member.name,
-                                    role = response.member.role,
-                                    familyId = response.member.familyId,
-                                )
-                                Billing.identify(response.member.familyId)
-                                onLoginSuccess()
-                            } catch (e: Exception) {
-                                statusState.value = ApiErrors.message(e, "Kunde inte logga in.")
-                            } finally {
-                                loadingState.value = false
-                            }
+            EntryTextField(
+                label = "E-post",
+                value = emailState.value,
+                onValueChange = { emailState.value = it },
+                placeholder = "namn@exempel.se",
+            )
+            EntryTextField(
+                label = "Lösenord",
+                value = passwordState.value,
+                onValueChange = { passwordState.value = it },
+                isPassword = true,
+            )
+
+            Button(
+                onClick = {
+                    scope.launch {
+                        loadingState.value = true
+                        statusState.value = "Loggar in..."
+                        try {
+                            val api = ApiClient.authApi
+                            val response = api.loginByEmail(
+                                EmailLoginRequest(
+                                    email = emailState.value,
+                                    password = passwordState.value,
+                                ),
+                            )
+                            TokenStore.setSession(
+                                deviceToken = response.deviceToken,
+                                memberId = response.member.id,
+                                memberName = response.member.name,
+                                role = response.member.role,
+                                familyId = response.member.familyId,
+                            )
+                            Billing.identify(response.member.familyId)
+                            onLoginSuccess()
+                        } catch (e: Exception) {
+                            statusState.value = ApiErrors.message(e, "Kunde inte logga in.")
+                        } finally {
+                            loadingState.value = false
                         }
-                    },
-                    enabled = !loadingState.value,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = buttonColor,
-                        contentColor = buttonOnColor,
-                    ),
-                ) {
-                    Text(text = if (loadingState.value) "Loggar in..." else "Logga in")
-                }
+                    }
+                },
+                enabled = !loadingState.value,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.accent,
+                    contentColor = palette.onAccent,
+                ),
+            ) {
+                Text(
+                    text = if (loadingState.value) "Loggar in..." else "Logga in",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
 
-                // Until this existed, a parent who forgot their password was locked out
-                // for good: another parent could set a new one, which does nothing at
-                // all for a single-parent family.
-                TextButton(
-                    onClick = { showForgotPassword.value = true },
+            // Until this existed, a parent who forgot their password was locked out
+            // for good: another parent could set a new one, which does nothing at
+            // all for a single-parent family.
+            TextButton(
+                onClick = { showForgotPassword.value = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "Glömt lösenordet?",
+                    fontSize = 14.sp,
+                    color = palette.accent,
+                )
+            }
+
+            if (showForgotPassword.value) {
+                ForgotPasswordDialog(onDismiss = { showForgotPassword.value = false })
+            }
+            if (statusState.value != "Loggar in..." && statusState.value != "Inte inloggad") {
+                Text(
+                    text = statusState.value,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = "Glömt lösenordet?",
-                        color = buttonOnColor,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                if (showForgotPassword.value) {
-                    ForgotPasswordDialog(onDismiss = { showForgotPassword.value = false })
-                }
-                if (statusState.value != "Loggar in..." && statusState.value != "Inte inloggad") {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = statusState.value,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.danger,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(text = "Barn i familjen?", style = MaterialTheme.typography.bodyMedium, color = textSecondary)
-        Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = onChildInviteLogin) {
-            Text("Jag är barn och har en kod", color = buttonOnColor)
+
+        // Signing in as a child is a different kind of sign-in, not the next step of
+        // this form -- so it sits below a rule at the foot of the screen instead of
+        // floating in the empty half under the password field.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 22.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(palette.cardEdge),
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Barn i familjen?",
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 13.5.sp,
+                color = palette.inkSoft,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onChildInviteLogin,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.5.dp, palette.accent),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
+            ) {
+                Text(
+                    text = "Jag är barn och har en kod",
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -608,8 +605,10 @@ fun RegisterScreen(
     modifier: Modifier = Modifier,
     onRegisterSuccess: () -> Unit = {},
     onBackToLogin: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
+    val palette = LocalSeasonPalette.current
 
     val familyNameState = remember { mutableStateOf("") }
     val parentNameState = remember { mutableStateOf("") }
@@ -618,189 +617,198 @@ fun RegisterScreen(
     val statusState = remember { mutableStateOf<String?>(null) }
     val loadingState = remember { mutableStateOf(false) }
 
-    val backgroundBrush = Brush.verticalGradient(
-        listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE))
-    )
-    val cardColor = Color(0xFFFFFBEB)
-    val textPrimary = Color(0xFF1C1917)
-    val textSecondary = Color(0xFF57534E)
-    val buttonColor = Color(0xFFBAE6FD)
-    val buttonOnColor = Color(0xFF0C4A6E)
     val scrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(backgroundBrush)
-            .verticalScroll(scrollState)
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .background(palette.pageBg),
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-        Text(
-            text = "Skapa familj",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = textPrimary,
-            textAlign = TextAlign.Center,
+        SeasonHeaderBar(
+            title = "Skapa familj",
+            subtitle = "Registrera dig som förälder och bjud in dina barn",
+            onBack = onBack,
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Registrera dig som förälder och bjud in dina barn.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = textSecondary,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(24.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            // Four unlabelled boxes in a column were four identical boxes: a parent who
+            // put their own name where the family's belongs had nothing to notice it by.
+            EntryTextField(
+                label = "Familjens namn",
+                value = familyNameState.value,
+                onValueChange = { familyNameState.value = it },
+            )
+            EntryTextField(
+                label = "Ditt namn",
+                value = parentNameState.value,
+                onValueChange = { parentNameState.value = it },
+            )
+            EntryTextField(
+                label = "E-post",
+                value = emailState.value,
+                onValueChange = { emailState.value = it },
+                placeholder = "namn@exempel.se",
+            )
+            EntryTextField(
+                label = "Lösenord",
+                value = passwordState.value,
+                onValueChange = { passwordState.value = it },
+                placeholder = "minst 6 tecken",
+                isPassword = true,
+            )
+
+            Button(
+                onClick = {
+                    if (familyNameState.value.isBlank() || parentNameState.value.isBlank() || emailState.value.isBlank() || passwordState.value.isBlank()) {
+                        statusState.value = "Fyll i alla fält."
+                        return@Button
+                    }
+                    scope.launch {
+                        loadingState.value = true
+                        statusState.value = null
+                        try {
+                            val api = ApiClient.authApi
+                            val response = api.registerFamily(
+                                RegisterFamilyRequest(
+                                    familyName = familyNameState.value.trim(),
+                                    adminName = parentNameState.value.trim(),
+                                    adminEmail = emailState.value.trim(),
+                                    password = passwordState.value,
+                                ),
+                            )
+                            TokenStore.setSession(
+                                deviceToken = response.deviceToken,
+                                memberId = response.admin.id,
+                                memberName = response.admin.name,
+                                role = response.admin.role,
+                                familyId = response.family.id,
+                            )
+                            Billing.identify(response.family.id)
+                            onRegisterSuccess()
+                        } catch (e: Exception) {
+                            statusState.value = ApiErrors.message(e, "Kunde inte skapa kontot.")
+                        } finally {
+                            loadingState.value = false
+                        }
+                    }
+                },
+                enabled = !loadingState.value,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.accent,
+                    contentColor = palette.onAccent,
+                ),
             ) {
-                OutlinedTextField(
-                    value = familyNameState.value,
-                    onValueChange = { familyNameState.value = it },
-                    label = { Text("Familjens namn") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = buttonOnColor,
-                        unfocusedBorderColor = textSecondary.copy(alpha = 0.5f),
-                        focusedLabelColor = buttonOnColor,
-                        unfocusedLabelColor = textSecondary,
-                        cursorColor = buttonOnColor,
-                        focusedTextColor = textPrimary,
-                        unfocusedTextColor = textPrimary,
-                    ),
+                Text(
+                    text = if (loadingState.value) "Skapar familj..." else "Skapa familj",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = parentNameState.value,
-                    onValueChange = { parentNameState.value = it },
-                    label = { Text("Ditt namn") },
+            }
+
+            statusState.value?.let { msg ->
+                Text(
+                    text = msg,
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = buttonOnColor,
-                        unfocusedBorderColor = textSecondary.copy(alpha = 0.5f),
-                        focusedLabelColor = buttonOnColor,
-                        unfocusedLabelColor = textSecondary,
-                        cursorColor = buttonOnColor,
-                        focusedTextColor = textPrimary,
-                        unfocusedTextColor = textPrimary,
-                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.danger,
+                    textAlign = TextAlign.Center,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = emailState.value,
-                    onValueChange = { emailState.value = it },
-                    label = { Text("E-post") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = buttonOnColor,
-                        unfocusedBorderColor = textSecondary.copy(alpha = 0.5f),
-                        focusedLabelColor = buttonOnColor,
-                        unfocusedLabelColor = textSecondary,
-                        cursorColor = buttonOnColor,
-                        focusedTextColor = textPrimary,
-                        unfocusedTextColor = textPrimary,
-                    ),
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = passwordState.value,
-                    onValueChange = { passwordState.value = it },
-                    label = { Text("Lösenord") },
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = buttonOnColor,
-                        unfocusedBorderColor = textSecondary.copy(alpha = 0.5f),
-                        focusedLabelColor = buttonOnColor,
-                        unfocusedLabelColor = textSecondary,
-                        cursorColor = buttonOnColor,
-                        focusedTextColor = textPrimary,
-                        unfocusedTextColor = textPrimary,
-                    ),
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = {
-                        if (familyNameState.value.isBlank() || parentNameState.value.isBlank() || emailState.value.isBlank() || passwordState.value.isBlank()) {
-                            statusState.value = "Fyll i alla fält."
-                            return@Button
-                        }
-                        scope.launch {
-                            loadingState.value = true
-                            statusState.value = null
-                            try {
-                                val api = ApiClient.authApi
-                                val response = api.registerFamily(
-                                    RegisterFamilyRequest(
-                                        familyName = familyNameState.value.trim(),
-                                        adminName = parentNameState.value.trim(),
-                                        adminEmail = emailState.value.trim(),
-                                        password = passwordState.value,
-                                    ),
-                                )
-                                TokenStore.setSession(
-                                    deviceToken = response.deviceToken,
-                                    memberId = response.admin.id,
-                                    memberName = response.admin.name,
-                                    role = response.admin.role,
-                                    familyId = response.family.id,
-                                )
-                                Billing.identify(response.family.id)
-                                onRegisterSuccess()
-                            } catch (e: Exception) {
-                                statusState.value = ApiErrors.message(e, "Kunde inte skapa kontot.")
-                            } finally {
-                                loadingState.value = false
-                            }
-                        }
-                    },
-                    enabled = !loadingState.value,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = buttonColor,
-                        contentColor = buttonOnColor,
-                    ),
-                ) {
-                    Text(text = if (loadingState.value) "Skapar familj..." else "Skapa familj")
-                }
-                statusState.value?.let { msg ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = msg,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                    )
-                }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        TextButton(onClick = onBackToLogin) {
-            Text("Har redan konto? Logga in", color = textSecondary)
+        // The way out for someone who is registering by mistake belongs at the foot of
+        // the screen, not between the form and the empty half below it.
+        TextButton(
+            onClick = onBackToLogin,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 22.dp),
+        ) {
+            Text(text = "Har redan konto? ", fontSize = 13.5.sp, color = palette.inkSoft)
+            Text(
+                text = "Logga in",
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = palette.accent,
+            )
         }
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
+
+/**
+ * One field of an entry form: a label that stays put, and the box under it.
+ *
+ * Material's floating label is the same word doing both jobs, so the moment a parent
+ * starts typing the only thing telling them what the field was is gone -- which is
+ * exactly when they need it, halfway through four boxes that otherwise look alike.
+ */
+@Composable
+private fun EntryTextField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    isPassword: Boolean = false,
+) {
+    val palette = LocalSeasonPalette.current
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.24.sp,
+            color = palette.inkFaint,
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            textStyle = LocalTextStyle.current.copy(fontSize = 15.sp),
+            placeholder = if (placeholder != null) {
+                { Text(text = placeholder, fontSize = 15.sp, color = palette.inkFaint) }
+            } else {
+                null
+            },
+            visualTransformation = if (isPassword) {
+                PasswordVisualTransformation()
+            } else {
+                VisualTransformation.None
+            },
+            keyboardOptions = if (isPassword) {
+                KeyboardOptions(keyboardType = KeyboardType.Password)
+            } else {
+                KeyboardOptions.Default
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = palette.surface,
+                unfocusedContainerColor = palette.surface,
+                focusedBorderColor = palette.accent,
+                unfocusedBorderColor = palette.cardEdge,
+                cursorColor = palette.accent,
+                focusedTextColor = palette.ink,
+                unfocusedTextColor = palette.ink,
+            ),
+        )
+    }
+}
+
 
 @Composable
 fun HomeScreen(
