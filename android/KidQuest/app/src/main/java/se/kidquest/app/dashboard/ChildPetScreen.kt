@@ -48,6 +48,8 @@ import se.kidquest.app.pet.PetNameUtils
 import se.kidquest.app.pet.PetVisual
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import se.kidquest.app.theme.SeasonPalette
+import se.kidquest.app.theme.LocalSeasonPalette
 
 @Composable
 fun ChildPetScreen(
@@ -87,7 +89,8 @@ fun ChildPetScreen(
         }
     }
 
-    val backgroundBrush = petGradient(pet?.petType)
+    val palette = LocalSeasonPalette.current
+    val backgroundBrush = petGradient(pet?.petType, palette)
     val cardColor = petCardColor(pet?.petType)
 
     Box(
@@ -328,7 +331,17 @@ private fun NoPetCard(cardColor: Color) {
     }
 }
 
-private fun petGradient(petType: String?): Brush = when (petType?.lowercase()) {
+/**
+ * The animal's own colours, which every label on this screen is drawn in white
+ * against.
+ *
+ * @param palette used only for the fallback. A child who has not chosen an egg has no
+ *   species colour to borrow, and the old stand-in was a pale lavender -- white text
+ *   on it could not be read at all, which is the state every child is in until they
+ *   pick. The season's band is dark at both ends, which is what the white here
+ *   already assumes.
+ */
+private fun petGradient(petType: String?, palette: SeasonPalette): Brush = when (petType?.lowercase()) {
     "dragon" -> Brush.verticalGradient(listOf(Color(0xFF4C1D95), Color(0xFF1E293B)))
     "cat" -> Brush.verticalGradient(listOf(Color(0xFFFDE68A), Color(0xFFF97316)))
     "dog" -> Brush.verticalGradient(listOf(Color(0xFFBBF7D0), Color(0xFF22C55E)))
@@ -341,7 +354,7 @@ private fun petGradient(petType: String?): Brush = when (petType?.lowercase()) {
     "hydra" -> Brush.verticalGradient(listOf(Color(0xFFC4B5FD), Color(0xFF4C1D95)))
     "unicorn" -> Brush.verticalGradient(listOf(Color(0xFFFDE68A), Color(0xFFF9A8D4)))
     "kapybara" -> Brush.verticalGradient(listOf(Color(0xFFDCFCE7), Color(0xFF22C55E)))
-    else -> Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE)))
+    else -> Brush.verticalGradient(listOf(palette.headerTop, palette.headerBottom))
 }
 
 private fun petCardColor(petType: String?): Color = when (petType?.lowercase()) {
