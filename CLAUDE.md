@@ -27,7 +27,7 @@ Family app to motivate children to do daily tasks. Kids earn XP from completing 
 ### Android (`android/KidQuest/`)
 - Kotlin, Jetpack Compose, MVVM
 - Retrofit + OkHttp for API calls
-- EncryptedSharedPreferences for device token storage
+- Device token stored in DataStore, encrypted first with an Android Keystore key (`session/SessionCrypto.kt`) and excluded from auto-backup
 - Same backend as web, auth via `X-Device-Token` header
 
 ### iOS (`ios/`)

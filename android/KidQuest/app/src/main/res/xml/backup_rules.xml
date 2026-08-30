@@ -1,13 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Auto-backup rules for Android 11 and older. Android 12+ reads
+    data_extraction_rules.xml instead, which must be kept in step with this file.
+
+    Everything is backed up except the signed-in session. A device token is a bearer
+    key to a family member's account. For children it is the whole login, since they
+    have no password. It has no business sitting in a cloud backup, and the value would
+    not open on the restored phone anyway: it is encrypted with a key held in this
+    device's keystore, which never leaves it.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="file" path="datastore/kidquest_session.preferences_pb" />
 </full-backup-content>

@@ -1,19 +1,19 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup and transfer rules for Android 12+. Keep in step with backup_rules.xml,
+    which covers older versions.
+
+    The signed-in session is excluded from both paths. Cloud backup is the one that
+    matters: a child's device token is their entire login, and copying it off the phone
+    turns "someone read a backup" into "someone is signed in as that child". It is left
+    out of device-to-device transfer for the same reason, and because the key that
+    could decrypt it stays behind on the old phone regardless.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="datastore/kidquest_session.preferences_pb" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="datastore/kidquest_session.preferences_pb" />
     </device-transfer>
-    -->
 </data-extraction-rules>
