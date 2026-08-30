@@ -1,6 +1,14 @@
 import SwiftUI
 
 struct SelectEggSheet: View {
+    /// Vem ägget väljs åt. Nil = den som håller telefonen.
+    ///
+    /// `pets/select-egg` resolves the member from the device token, which is right for
+    /// a child on their own phone and wrong for a parent in "Visa som barn": it would
+    /// create a pet for the PARENT and leave the child without one. When this is set
+    /// the member-scoped route is used instead. Optional with a default so the child's
+    /// own dashboard keeps calling this sheet exactly as before.
+    var memberId: String?
     var onDismiss: () -> Void = {}
     var onEggSelected: (PetResponseDTO) -> Void = { _ in }
 
@@ -145,8 +153,18 @@ struct SelectEggSheet: View {
     private func save() async {
         guard let egg = selectedEgg else { return }
         saving = true
+        let trimmedName = petName.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let pet = try await ChildDashboardRepository.selectEgg(eggType: egg, name: petName.trimmingCharacters(in: .whitespacesAndNewlines))
+            let pet: PetResponseDTO
+            if let memberId {
+                pet = try await MemberScopedRepository.selectEgg(
+                    memberId: memberId,
+                    eggType: egg,
+                    name: trimmedName
+                )
+            } else {
+                pet = try await ChildDashboardRepository.selectEgg(eggType: egg, name: trimmedName)
+            }
             await MainActor.run {
                 saving = false
                 onEggSelected(pet)
@@ -155,7 +173,7 @@ struct SelectEggSheet: View {
         } catch {
             await MainActor.run {
                 saving = false
-                errorMessage = "Kunde inte välja ägg."
+                errorMessage = ApiErrors.message(error, fallback: "Kunde inte välja ägg.")
             }
         }
     }

@@ -24,6 +24,8 @@ enum AppScreen: Equatable {
     /// pengar" and the way through to the allowance schedule appear at all.
     case childWallet(childId: String, childName: String, isOwnWallet: Bool, fromChildView: Bool)
     case recurringAllowance(childId: String, childName: String)
+    /// "Visa som barn": barnets egen vy, sedd från en förälders telefon.
+    case childView(childId: String, childName: String)
     case childTasks(childId: String, childName: String)
 }
 
@@ -94,10 +96,18 @@ struct ContentView: View {
                         childId: childId,
                         isOwnWallet: isOwnWallet,
                         onBack: {
-                            // Back from a parent's preview belongs in that preview, not
-                            // in the family overview -- same rule as childTasks.
+                            // Back from a preview belongs in that preview, not in the
+                            // family overview -- but WHICH preview depends on who is
+                            // holding the phone. A child returns to their own dashboard;
+                            // a parent must return to the member-scoped host, because
+                            // .childDashboard reads the session token and would show the
+                            // parent's own pet and balance under the child's name.
                             if fromChildView {
-                                currentScreen = .childDashboard(childId: childId, childName: childName)
+                                if TokenStoreIOS.shared.getSession()?.isChild == true {
+                                    currentScreen = .childDashboard(childId: childId, childName: childName)
+                                } else {
+                                    currentScreen = .childView(childId: childId, childName: childName)
+                                }
                             } else {
                                 currentScreen = .home
                             }
@@ -107,6 +117,28 @@ struct ContentView: View {
                             currentScreen = .recurringAllowance(childId: childId, childName: childName)
                         }
                     )
+    }
+
+    /// Split out because SwiftUI's view builder cannot type-check the whole screen
+    /// switch in one expression once the app has this many screens.
+    @ViewBuilder
+    private func childViewScreen(childId: String, childName: String) -> some View {
+        ChildDashboardHost(
+            child: ChildDashboardHost.ChildRef(id: childId, name: childName),
+            onExit: { currentScreen = .home },
+            onOpenTasks: { child in
+                currentScreen = .childTasks(childId: child.id, childName: child.name)
+            },
+            onOpenWallet: { child in
+                // The parent is holding the phone, so the wallet has to be member-scoped.
+                currentScreen = .childWallet(
+                    childId: child.id,
+                    childName: child.name,
+                    isOwnWallet: false,
+                    fromChildView: true
+                )
+            }
+        )
     }
 
     @ViewBuilder
@@ -187,7 +219,10 @@ struct ContentView: View {
                         // SeasonHeaderBand does not draw "Alla uppgifter ›" at all
                         // when onTap is nil.
                         onFamilyTasks: { currentScreen = .familyTasks },
-                        onOpenSubscription: { currentScreen = .paywall }
+                        onOpenSubscription: { currentScreen = .paywall },
+                        onChildView: { id, name in
+                            currentScreen = .childView(childId: id, childName: name)
+                        }
                     )
 
                 case .familyTasks:
@@ -228,6 +263,9 @@ struct ContentView: View {
 
                 case let .childWallet(childId, childName, isOwnWallet, fromChildView):
                     childWalletScreen(childId: childId, childName: childName, isOwnWallet: isOwnWallet, fromChildView: fromChildView)
+
+                case let .childView(childId, childName):
+                    childViewScreen(childId: childId, childName: childName)
 
                 case let .recurringAllowance(childId, childName):
                     RecurringAllowanceView(
@@ -1037,6 +1075,7 @@ struct ChildInviteLoginView: View {
     @State private var inviteCode: String = ""
     @State private var status: String?
     @State private var isLoading: Bool = false
+    @State private var isScannerPresented: Bool = false
 
     @Environment(\.seasonPalette) private var palette
 
@@ -1050,10 +1089,9 @@ struct ChildInviteLoginView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
-                    // Kvar som platshållare tills skanningen finns: knappen visar att
-                    // vägen är planerad, men den går inte att trycka på.
-                    // TODO: Lägg till riktig QR-skanning med AVFoundation.
-                    OutlinedActionButton(title: "Skanna QR‑kod", isEnabled: false) {}
+                    OutlinedActionButton(title: "Skanna QR‑kod", isEnabled: !isLoading) {
+                        isScannerPresented = true
+                    }
 
                     Text("eller skriv in koden")
                         .font(.system(size: 13.5))
@@ -1089,10 +1127,18 @@ struct ChildInviteLoginView: View {
             guard let prefill, inviteCode.isEmpty else { return }
             inviteCode = prefill.inviteCode
         }
+        .sheet(isPresented: $isScannerPresented) {
+            InviteQRScannerView { token in
+                // Fyll fältet också: misslyckas kopplingen har barnet koden kvar att
+                // rätta för hand i stället för att behöva skanna om.
+                inviteCode = token
+                Task { await performLink(token: token) }
+            }
+        }
     }
 
-    private func performLink() async {
-        let trimmed = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func performLink(token: String? = nil) async {
+        let trimmed = (token ?? inviteCode).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             status = "Ange en kod"
             return

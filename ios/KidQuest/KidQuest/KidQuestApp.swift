@@ -127,6 +127,33 @@ enum ScreenHarness {
         // tapped, so without a way in, that half can never be photographed.
         // The wallet is three screens wearing one name, and which one you get depends
         // on the way in -- so each way in gets its own entry.
+        // "Visa som barn" sits behind a login and a child card's overflow menu, neither
+        // of which the simulator can tap. Two names: hungry with food waiting, which is
+        // the state a parent opens it to fix, and already fed.
+        case "childview", "childview-fed":
+            return Entry(view: AnyView(
+                ChildDashboardHost.fixture(fed: name == "childview-fed")
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+
+        // Only .noCamera is reachable in a real simulator run -- there is no capture
+        // device -- so the rest exist as fixtures or they could never be looked at.
+        case "invitescan-nocamera", "invitescan-denied", "invitescan-restricted", "invitescan-unreadable":
+            let phase: InviteQRScannerModel.Phase
+            switch name {
+            case "invitescan-denied": phase = .blocked(.permissionDenied)
+            case "invitescan-restricted": phase = .blocked(.permissionRestricted)
+            case "invitescan-unreadable": phase = .unreadable
+            default: phase = .blocked(.noCamera)
+            }
+            return Entry(view: AnyView(
+                InviteQRScannerView.fixture(phase: phase)
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+            ))
+
         case "wallet", "wallet-child", "wallet-childview":
             let viewer: ChildWalletView.FixtureViewer
             switch name {
