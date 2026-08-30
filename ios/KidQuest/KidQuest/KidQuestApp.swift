@@ -125,6 +125,37 @@ enum ScreenHarness {
         // the only state the app can actually reach today.
         // Two entries for the same reason as childtasks: the Vecka tab cannot be
         // tapped, so without a way in, that half can never be photographed.
+        // The wallet is three screens wearing one name, and which one you get depends
+        // on the way in -- so each way in gets its own entry.
+        case "wallet", "wallet-child", "wallet-childview":
+            let viewer: ChildWalletView.FixtureViewer
+            switch name {
+            case "wallet-child": viewer = .child
+            case "wallet-childview": viewer = .childPreview
+            default: viewer = .parentAdmin
+            }
+            return Entry(view: AnyView(
+                ChildWalletView.fixture(viewer: viewer)
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+
+        // One per kind: the other two cards are folded shut and no tap can open them.
+        case "allowance", "allowance-monthly", "allowance-level":
+            let kind: RecurringAllowanceView.Kind
+            switch name {
+            case "allowance-monthly": kind = .monthly
+            case "allowance-level": kind = .level
+            default: kind = .weekly
+            }
+            return Entry(view: AnyView(
+                RecurringAllowanceView.fixture(kind: kind)
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+
         case "familytasks", "familytasks-week":
             return Entry(view: AnyView(
                 FamilyTasksView.fixture(tab: name == "familytasks-week" ? .week : .today)

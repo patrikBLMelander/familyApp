@@ -19,7 +19,11 @@ enum AppScreen: Equatable {
     // Barnens detaljflöden (implementeras senare)
     case childDashboard(childId: String, childName: String)
     case childPet(childId: String, childName: String)
-    case childWallet(childId: String, childName: String, isOwnWallet: Bool)
+    /// `fromChildView` = opened from inside the child's own dashboard rather than
+    /// from the family overview. It decides the wallet's colours, and whether "Ge
+    /// pengar" and the way through to the allowance schedule appear at all.
+    case childWallet(childId: String, childName: String, isOwnWallet: Bool, fromChildView: Bool)
+    case recurringAllowance(childId: String, childName: String)
     case childTasks(childId: String, childName: String)
 }
 
@@ -30,7 +34,84 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             Group {
-                switch currentScreen {
+                // Split in two only because SwiftUI's view builder gives up type-checking
+                // a switch this wide -- a compile-time limit, not a limit on how many
+                // screens the app may have. Order and behaviour are unchanged.
+                entryScreens
+                appScreens
+            }
+        }
+        // Injiceras här, en gång, i stället för i varje skärm. Utan det här faller
+        // hela appen tillbaka på standardvärdet i SeasonTheme -- sommar, ljust -- och
+        // årstiden syntes bara i debug-riggen.
+        .environment(\.seasonPalette, SeasonTheme.current(dark: colorScheme == .dark))
+        .task {
+            guard currentScreen == .loading else { return }
+            await routeOnStartup()
+        }
+    }
+
+    /// Väljer startskärm utifrån vem sessionen tillhör.
+    ///
+    /// En device-token säger i sig inte vem den tillhör. Att routa enbart på att den
+    /// finns skickade barn rakt in i föräldravyn, där de kunde lägga till och ta bort
+    /// uppgifter och öppna familjens plånbok. Därför routar vi på rollen.
+    /// Split out because SwiftUI's view builder cannot type-check the whole screen
+    /// switch in one expression once the app has this many screens.
+    @ViewBuilder
+    private func childDashboardScreen(childId: String, childName: String) -> some View {
+                    ChildDashboardView(
+                        childId: childId,
+                        childName: childName,
+                        onBack: {
+                            TokenStoreIOS.shared.clearToken()
+                            currentScreen = .auth
+                        },
+                        onOpenTasks: {
+                            currentScreen = .childTasks(childId: childId, childName: childName)
+                        },
+                        onOpenWallet: {
+                            // Route on who is holding the phone, not on which screen we
+                            // came from: a parent previewing a child lands here too, and
+                            // isOwnWallet would then fetch the parent's own balance.
+                            let viewerIsChild = TokenStoreIOS.shared.getSession()?.isChild == true
+                            currentScreen = .childWallet(
+                                childId: childId,
+                                childName: childName,
+                                isOwnWallet: viewerIsChild,
+                                fromChildView: true
+                            )
+                        }
+                    )
+    }
+
+    /// Split out because SwiftUI's view builder cannot type-check the whole screen
+    /// switch in one expression once the app has this many screens.
+    @ViewBuilder
+    private func childWalletScreen(childId: String, childName: String, isOwnWallet: Bool, fromChildView: Bool) -> some View {
+                    ChildWalletView(
+                        childName: childName,
+                        childId: childId,
+                        isOwnWallet: isOwnWallet,
+                        onBack: {
+                            // Back from a parent's preview belongs in that preview, not
+                            // in the family overview -- same rule as childTasks.
+                            if fromChildView {
+                                currentScreen = .childDashboard(childId: childId, childName: childName)
+                            } else {
+                                currentScreen = .home
+                            }
+                        },
+                        fromChildView: fromChildView,
+                        onOpenRecurringAllowance: {
+                            currentScreen = .recurringAllowance(childId: childId, childName: childName)
+                        }
+                    )
+    }
+
+    @ViewBuilder
+    private var entryScreens: some View {
+        switch currentScreen {
                 case .loading:
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -97,7 +178,7 @@ struct ContentView: View {
                             currentScreen = .childPet(childId: id, childName: name)
                         },
                         onChildWallet: { id, name in
-                            currentScreen = .childWallet(childId: id, childName: name, isOwnWallet: false)
+                            currentScreen = .childWallet(childId: id, childName: name, isOwnWallet: false, fromChildView: false)
                         },
                         onChildTasks: { id, name in
                             currentScreen = .childTasks(childId: id, childName: name)
@@ -127,21 +208,16 @@ struct ContentView: View {
                         }
                     )
 
+        default:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var appScreens: some View {
+        switch currentScreen {
                 case let .childDashboard(childId, childName):
-                    ChildDashboardView(
-                        childId: childId,
-                        childName: childName,
-                        onBack: {
-                            TokenStoreIOS.shared.clearToken()
-                            currentScreen = .auth
-                        },
-                        onOpenTasks: {
-                            currentScreen = .childTasks(childId: childId, childName: childName)
-                        },
-                        onOpenWallet: {
-                            currentScreen = .childWallet(childId: childId, childName: childName, isOwnWallet: true)
-                        }
-                    )
+                    childDashboardScreen(childId: childId, childName: childName)
 
                 case let .childPet(childId, childName):
                     ChildPetView(
@@ -150,13 +226,20 @@ struct ContentView: View {
                         onBack: { currentScreen = .home }
                     )
 
-                case let .childWallet(childId, childName, isOwnWallet):
-                    ChildWalletView(
+                case let .childWallet(childId, childName, isOwnWallet, fromChildView):
+                    childWalletScreen(childId: childId, childName: childName, isOwnWallet: isOwnWallet, fromChildView: fromChildView)
+
+                case let .recurringAllowance(childId, childName):
+                    RecurringAllowanceView(
                         childName: childName,
                         childId: childId,
-                        isOwnWallet: isOwnWallet,
                         onBack: {
-                            currentScreen = .home
+                            // Straight back to the administering wallet, which reloads
+                            // and so shows the schedule that was just saved.
+                            currentScreen = .childWallet(
+                                childId: childId, childName: childName,
+                                isOwnWallet: false, fromChildView: false
+                            )
                         }
                     )
 
@@ -175,24 +258,12 @@ struct ContentView: View {
                             }
                         }
                     )
-                }
-            }
-        }
-        // Injiceras här, en gång, i stället för i varje skärm. Utan det här faller
-        // hela appen tillbaka på standardvärdet i SeasonTheme -- sommar, ljust -- och
-        // årstiden syntes bara i debug-riggen.
-        .environment(\.seasonPalette, SeasonTheme.current(dark: colorScheme == .dark))
-        .task {
-            guard currentScreen == .loading else { return }
-            await routeOnStartup()
+                
+        default:
+            EmptyView()
         }
     }
 
-    /// Väljer startskärm utifrån vem sessionen tillhör.
-    ///
-    /// En device-token säger i sig inte vem den tillhör. Att routa enbart på att den
-    /// finns skickade barn rakt in i föräldravyn, där de kunde lägga till och ta bort
-    /// uppgifter och öppna familjens plånbok. Därför routar vi på rollen.
     private func routeOnStartup() async {
         TokenStoreIOS.shared.load()
         var session = TokenStoreIOS.shared.getSession()
