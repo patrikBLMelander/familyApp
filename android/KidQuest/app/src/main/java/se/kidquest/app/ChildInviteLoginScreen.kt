@@ -1,14 +1,19 @@
 package se.kidquest.app
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -17,13 +22,9 @@ import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,11 +35,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import java.util.UUID
@@ -50,6 +50,8 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.LinkDeviceByTokenRequest
 import se.kidquest.app.session.TokenStore
+import se.kidquest.app.theme.LocalSeasonPalette
+import se.kidquest.app.theme.SeasonHeaderBar
 
 @Composable
 fun ChildInviteLoginScreen(
@@ -115,134 +117,154 @@ fun ChildInviteLoginScreen(
         }
     }
 
-    val backgroundBrush = Brush.verticalGradient(
-        listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE))
-    )
-    val cardColor = Color(0xFFFFFBEB)
-    val textPrimary = Color(0xFF1C1917)
-    val textSecondary = Color(0xFF57534E)
-    val buttonColor = Color(0xFFBAE6FD)
-    val buttonOnColor = Color(0xFF0C4A6E)
+    val palette = LocalSeasonPalette.current
     val scrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(backgroundBrush)
-            .verticalScroll(scrollState)
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .background(palette.pageBg),
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = "Koppla din enhet",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = textPrimary,
-            textAlign = TextAlign.Center,
+        // The same band as the welcome and login screens either side of this one: a
+        // child taps through from one of them, and the app should not change colour
+        // under them on the way.
+        SeasonHeaderBar(
+            title = "Koppla din enhet",
+            onBack = onBack,
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Be någon i familjen visa koden eller QR-koden – eller skanna den här nedan.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = textSecondary,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(24.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-        OutlinedButton(
-            onClick = {
-                scanLauncher.launch(
-                    ScanOptions().apply {
-                        setPrompt("Skanna inbjudningskoden")
-                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                    }
-                )
-            },
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            enabled = !loading,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = buttonOnColor),
-        ) {
-            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.size(8.dp))
-            Text("Skanna QR-kod")
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "eller skriv in koden",
-            style = MaterialTheme.typography.bodySmall,
-            color = textSecondary,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = inviteCode,
-            onValueChange = { inviteCode = it.trim(); status = null },
-            label = { Text("Inbjudningskod") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = buttonOnColor,
-                unfocusedBorderColor = textSecondary.copy(alpha = 0.5f),
-                focusedLabelColor = buttonOnColor,
-                unfocusedLabelColor = textSecondary,
-                cursorColor = buttonOnColor,
-                focusedTextColor = textPrimary,
-                unfocusedTextColor = textPrimary,
-            ),
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = {
-                if (inviteCode.isBlank()) {
-                    status = "Ange en kod"
-                    return@Button
-                }
-                performLink(inviteCode)
-            },
-            enabled = !loading,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = buttonColor,
-                contentColor = buttonOnColor,
-            ),
-        ) {
-            Icon(Icons.Default.Smartphone, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.size(8.dp))
-            Text(if (loading) "Kopplar…" else "Koppla denna enhet")
-        }
-
-        status?.let { msg ->
-            Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = msg,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
+                text = "Be någon i familjen visa koden eller QR-koden – eller skanna den här nedan.",
+                fontSize = 14.sp,
+                lineHeight = 19.sp,
+                color = palette.inkSoft,
             )
-        }
+
+            // Scanning is the way in this screen is built around -- a child with a phone
+            // pointed at a parent's screen never has to read a code at all -- so it takes
+            // the filled weight the sibling screens give their primary action.
+            Button(
+                onClick = {
+                    scanLauncher.launch(
+                        ScanOptions().apply {
+                            setPrompt("Skanna inbjudningskoden")
+                            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                        }
+                    )
+                },
+                enabled = !loading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.accent,
+                    contentColor = palette.onAccent,
+                ),
+            ) {
+                Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(22.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Skanna QR-kod", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            // A rule through the words, so typing reads as the alternative to scanning
+            // rather than as the next step after it.
+            OrDivider(text = "eller skriv in koden")
+
+            EntryTextField(
+                label = "Inbjudningskod",
+                value = inviteCode,
+                onValueChange = { inviteCode = it.trim(); status = null },
+            )
+
+            OutlinedButton(
+                onClick = {
+                    if (inviteCode.isBlank()) {
+                        status = "Ange en kod"
+                        return@OutlinedButton
+                    }
+                    performLink(inviteCode)
+                },
+                enabled = !loading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.5.dp, palette.accent),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
+            ) {
+                Icon(Icons.Default.Smartphone, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (loading) "Kopplar…" else "Koppla denna enhet",
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            status?.let { msg ->
+                Text(
+                    text = msg,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.danger,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
-        Spacer(modifier = Modifier.height(20.dp))
-        TextButton(onClick = onBack) {
-            Text("Tillbaka", color = textSecondary)
+
+        // The way out stays at the foot as a word, matching the login screen's footer:
+        // the arrow in the band is the same route, but it is a small target for a child
+        // who has just failed to scan and is looking for a way back, not up.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 22.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(palette.cardEdge),
+            )
+            TextButton(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = "Tillbaka", fontSize = 14.sp, color = palette.accent)
+            }
         }
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
+@Composable
+private fun OrDivider(text: String) {
+    val palette = LocalSeasonPalette.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(palette.cardEdge),
+        )
+        Text(text = text, fontSize = 13.sp, color = palette.inkSoft)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(palette.cardEdge),
+        )
+    }
+}

@@ -752,9 +752,12 @@ fun RegisterScreen(
  * Material's floating label is the same word doing both jobs, so the moment a parent
  * starts typing the only thing telling them what the field was is gone -- which is
  * exactly when they need it, halfway through four boxes that otherwise look alike.
+ *
+ * Internal rather than file-private so the invite screen wears the same field as the
+ * two screens it sits between, instead of a second one that drifts from them.
  */
 @Composable
-private fun EntryTextField(
+internal fun EntryTextField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
