@@ -92,6 +92,10 @@ android {
     }
     buildFeatures {
         compose = true
+        // Needed for BuildConfig.DEBUG, which decides whether HTTP traffic is logged
+        // at all. See ApiClient: a release build must not narrate device tokens and
+        // login requests into logcat.
+        buildConfig = true
     }
 }
 

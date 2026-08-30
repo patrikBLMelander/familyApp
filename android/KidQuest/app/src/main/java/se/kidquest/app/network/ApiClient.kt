@@ -1,5 +1,6 @@
 package se.kidquest.app.network
 
+import se.kidquest.app.BuildConfig
 import se.kidquest.app.session.TokenStore
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -24,9 +25,28 @@ object ApiClient {
         chain.proceed(newRequest)
     }
 
+    /**
+     * Debug builds only, and never the body.
+     *
+     * This used to log at BODY in every build, which put two things into logcat that
+     * have no business being there: the X-Device-Token header -- a bearer key, and a
+     * child's entire login -- and the sign-in request body, which carries a parent's
+     * password in the clear. Logcat is not private enough for either: it is read by
+     * anyone with USB debugging, ends up in bug reports, and is collected by OEM
+     * diagnostics.
+     *
+     * HEADERS keeps what is actually useful when debugging -- method, URL, status,
+     * timing, content types -- and [HttpLoggingInterceptor.redactHeader] covers the
+     * token even there, so a screenshot of a debug session is not a working login.
+     */
     private val loggingInterceptor: HttpLoggingInterceptor by lazy {
         HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.HEADERS
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+            redactHeader("X-Device-Token")
         }
     }
 
