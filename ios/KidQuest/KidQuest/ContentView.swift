@@ -15,6 +15,7 @@ enum AppScreen: Equatable {
     case home
     case childInviteLogin
     case paywall
+    case familyTasks
     // Barnens detaljflöden (implementeras senare)
     case childDashboard(childId: String, childName: String)
     case childPet(childId: String, childName: String)
@@ -101,8 +102,18 @@ struct ContentView: View {
                         onChildTasks: { id, name in
                             currentScreen = .childTasks(childId: id, childName: name)
                         },
+                        // Without this the band on the overview is inert:
+                        // SeasonHeaderBand does not draw "Alla uppgifter ›" at all
+                        // when onTap is nil.
+                        onFamilyTasks: { currentScreen = .familyTasks },
                         onOpenSubscription: { currentScreen = .paywall }
                     )
+
+                case .familyTasks:
+                    // Only the parent's view offers the way here, and children are
+                    // never routed to it at start-up. The screen offers nothing to add
+                    // or remove, only ticking off, which everyone may do.
+                    FamilyTasksView(onBack: { currentScreen = .home })
 
                 case .childInviteLogin:
                     ChildInviteLoginView(

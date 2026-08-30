@@ -123,6 +123,16 @@ enum ScreenHarness {
         // The paywall sits behind a login and an overflow menu, neither of which the
         // simulator can tap. Two names: with and without a price, because "without" is
         // the only state the app can actually reach today.
+        // Two entries for the same reason as childtasks: the Vecka tab cannot be
+        // tapped, so without a way in, that half can never be photographed.
+        case "familytasks", "familytasks-week":
+            return Entry(view: AnyView(
+                FamilyTasksView.fixture(tab: name == "familytasks-week" ? .week : .today)
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+
         case "paywall", "paywall-noprice":
             return Entry(view: AnyView(
                 (name == "paywall" ? PaywallView.fixture() : PaywallView.fixtureWithoutPrice())
