@@ -126,14 +126,26 @@ struct AdultDashboardView: View {
             }
             .padding(.bottom, 8)
         }
-        // The SwiftUI answer to reading a LazyListState's scroll offset. contentInsets
-        // is added back so the fraction starts at 0 at rest, whatever safe-area inset
-        // the scroll view was given.
+        // contentInsets is added back so the fraction starts at 0 at rest, whatever
+        // safe-area inset the scroll view was given.
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.contentOffset.y + geometry.contentInsets.top
         } action: { _, offset in
             scrollOffset = offset
         }
+        #if DEBUG
+        // The harness opens a screen already scrolled, and a geometry change only
+        // fires when something changes -- so nothing ever reported and the bar
+        // photographed itself expanded, a picture of a state the app never shows.
+        // This feeds the bar the same number a real scroll would, rather than drawing
+        // a collapsed bar by some other route: the appearance is still computed by
+        // the shipping code from a real input.
+        .onAppear {
+            if ProcessInfo.processInfo.environment["KQ_SCROLL"] == "bottom" {
+                scrollOffset = headerHeight
+            }
+        }
+        #endif
     }
 
     /// Binds one child to the caller's "visa som barn" handler, or nil when there is
@@ -400,7 +412,14 @@ private struct DashboardTopBar: View {
         .padding(.leading, 16)
         .padding(.trailing, 4)
         .frame(height: height)
-        .background(palette.pageBg.opacity(collapsed))
+
+        .background(
+            // Through the safe area, not merely up to it. A bar that stops below the
+            // status bar leaves the clock and the Dynamic Island printing onto
+            // whatever the list has scrolled underneath them.
+            palette.pageBg.opacity(collapsed)
+                .ignoresSafeArea(edges: .top)
+        )
     }
 }
 

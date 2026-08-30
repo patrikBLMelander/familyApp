@@ -77,7 +77,7 @@ enum ScreenHarness {
                 AdultDashboardView.fixture(pets: name == "dashboard")
                     .environment(\.seasonPalette, palette)
                     .preferredColorScheme(dark ? .dark : .light)
-                    .defaultScrollAnchor(anchor)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
             ))
         default:
             return nil
