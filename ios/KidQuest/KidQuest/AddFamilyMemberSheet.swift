@@ -20,6 +20,9 @@ struct AddFamilyMemberSheet: View {
     @State private var ageRange: AgeRange?
     @State private var isSaving: Bool = false
     @State private var errorMessage: String?
+    /// Sant när medlemmen skapades men de färdiga sysslorna inte gjorde det. Bladet
+    /// stannar då kvar med ett besked, och knappen byter till att bara stänga.
+    @State private var createdWithoutChores: Bool = false
 
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
@@ -54,10 +57,14 @@ struct AddFamilyMemberSheet: View {
                     Button("Avbryt") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Lägger till…" : "Lägg till") {
-                        Task { await save() }
+                    if createdWithoutChores {
+                        Button("Klar") { dismiss() }
+                    } else {
+                        Button(isSaving ? "Lägger till…" : "Lägg till") {
+                            Task { await save() }
+                        }
+                        .disabled(!canSave)
                     }
-                    .disabled(!canSave)
                 }
             }
         }
@@ -154,13 +161,32 @@ struct AddFamilyMemberSheet: View {
             // Sysslorna skapas efter medlemmen och en i taget. Skulle någon av dem falla
             // står medlemmen kvar -- en familj utan färdiga sysslor är ett mindre problem
             // än ett barn som inte blev skapat.
+            //
+            // Men felet sväljs inte. Det gjorde det förut, med ett `try?`, och då såg en
+            // trasig veckodagskod ut som en funktion som inte fanns: barnet skapades,
+            // sysslorna gjorde det också men osynliga, och ingenting sa något.
+            var choreProblem: String?
             if !isParent, let ageRange {
-                try? await createDefaultChores(memberId: member.id, ageRange: ageRange)
+                do {
+                    try await createDefaultChores(memberId: member.id, ageRange: ageRange)
+                } catch {
+                    choreProblem = ApiErrors.message(
+                        error,
+                        fallback: "Barnet är tillagt, men de färdiga sysslorna kunde inte skapas."
+                    )
+                }
             }
             await MainActor.run {
                 isSaving = false
                 onCreated()
-                dismiss()
+                if let choreProblem {
+                    // Bladet stannar öppet så att föräldern faktiskt ser det. Barnet finns
+                    // redan, och listan bakom har hämtat om sig.
+                    createdWithoutChores = true
+                    errorMessage = choreProblem
+                } else {
+                    dismiss()
+                }
             }
         } catch {
             await MainActor.run {
@@ -171,8 +197,12 @@ struct AddFamilyMemberSheet: View {
     }
 
     private func createDefaultChores(memberId: String, ageRange: AgeRange) async throws {
-        // Backendens veckodagar: 1 = måndag ... 7 = söndag.
-        let allWeekdays = ["1", "2", "3", "4", "5", "6", "7"]
+        // ChoreWeekday är den enda källan för de koder endpointen förstår: MON, TUE,
+        // WED, THU, FRI, SAT, SUN. Backend filtrerar på
+        // date.getDayOfWeek().name().substring(0, 3) och validerar ingenting -- den
+        // sparar vad den får. En egen lista här skickade "1"..."7", vilket accepterades
+        // och sedan aldrig matchade någon dag.
+        let allWeekdays = ChoreWeekday.all.map(\.code)
         for title in ageRange.defaultChores {
             try await DailyChoreRepositoryIOS.createChore(
                 memberId: memberId,
@@ -186,7 +216,7 @@ struct AddFamilyMemberSheet: View {
 
 /// Samma fyra spann och samma sysslor som Android, ord för ord. En familj som byter
 /// telefon ska inte mötas av en annan uppsättning.
-private enum AgeRange: String, CaseIterable, Identifiable {
+enum AgeRange: String, CaseIterable, Identifiable {
     case fourToSix
     case sevenToNine
     case tenToTwelve
