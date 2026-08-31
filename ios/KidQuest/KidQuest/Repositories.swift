@@ -46,6 +46,62 @@ enum FamilyRepository {
         return member
     }
 
+    /// Roll är "CHILD" eller "PARENT". ASSISTANT finns kvar i backend för medlemmar
+    /// som skapades förr, men delas inte ut längre -- samma val som Android gör.
+    static func createMember(name: String, role: String) async throws -> FamilyMemberResponseDTO {
+        try await ApiClient.shared.send(
+            FamilyMemberResponseDTO.self,
+            path: "family-members",
+            method: "POST",
+            body: CreateFamilyMemberRequestDTO(name: name, role: role)
+        )
+    }
+
+    static func updateMemberName(memberId: String, name: String) async throws -> FamilyMemberResponseDTO {
+        try await ApiClient.shared.send(
+            FamilyMemberResponseDTO.self,
+            path: "family-members/\(memberId)",
+            method: "PATCH",
+            body: UpdateFamilyMemberRequestDTO(name: name)
+        )
+    }
+
+    /// Sätter en medlems lösenord. En förälder får göra det åt vilken vuxen som helst i
+    /// familjen, vilket är hela vägen tillbaka in för den som låst ute sig -- det finns
+    /// ingen återställning via e-post i appen.
+    ///
+    /// Befintliga sessioner avslutas inte: den som är utelåst har ingen, och att logga
+    /// ut den andra förälderns telefon vore omotiverat.
+    static func updatePassword(memberId: String, password: String) async throws {
+        _ = try await ApiClient.shared.send(
+            FamilyMemberResponseDTO.self,
+            path: "family-members/\(memberId)/password",
+            method: "PATCH",
+            body: UpdatePasswordRequestDTO(password: password)
+        )
+    }
+
+    /// Oåterkalleligt: tar medlemmens sysslor, avklaranden, XP, djur och plånbokshistorik
+    /// med sig. Anroparen måste be om bekräftelse innan den här nås.
+    static func deleteMember(memberId: String) async throws {
+        try await ApiClient.shared.sendWithoutResponse(
+            path: "family-members/\(memberId)",
+            method: "DELETE"
+        )
+    }
+
+    /// Raderar hela familjen och allt som hänger på den.
+    ///
+    /// Ligger medvetet inte bakom prenumerationsspärren -- en familj måste alltid kunna
+    /// lämna, oavsett om de betalat eller inte. Apple kräver dessutom en väg till
+    /// radering inifrån appen och avvisar utan.
+    static func deleteFamily(familyId: String) async throws {
+        try await ApiClient.shared.sendWithoutResponse(
+            path: "families/\(familyId)",
+            method: "DELETE"
+        )
+    }
+
     static func generateInviteToken(forMemberId memberId: String) async throws -> String {
         let response = try await ApiClient.shared.send(
             InviteTokenResponseDTO.self,

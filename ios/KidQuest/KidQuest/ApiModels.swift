@@ -67,6 +67,14 @@ struct LinkDeviceByTokenRequestDTO: Encodable {
     let deviceToken: String
 }
 
+struct UpdateFamilyMemberRequestDTO: Encodable {
+    let name: String
+}
+
+struct UpdatePasswordRequestDTO: Encodable {
+    let password: String
+}
+
 // MARK: - Calendar / Tasks
 
 enum RecurringTypeDTO: String, Decodable, Encodable {

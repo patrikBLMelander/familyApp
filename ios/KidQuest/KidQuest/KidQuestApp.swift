@@ -103,6 +103,14 @@ enum ScreenHarness {
                     .preferredColorScheme(dark ? .dark : .light)
                     .defaultScrollAnchor(anchor, for: .initialOffset)
             ))
+        case "dashboard-new":
+            return Entry(view: AnyView(
+                AdultDashboardView.fixtureNewFamily()
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+                    .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+
         case "dashboard", "dashboard-nopets":
             return Entry(view: AnyView(
                 AdultDashboardView.fixture(pets: name == "dashboard")
@@ -204,6 +212,38 @@ enum ScreenHarness {
         case "subscriptionbanner":
             return Entry(view: AnyView(
                 SubscriptionBannerGallery()
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+            ))
+
+        // De tre bladen som bara nås genom att trycka sig fram. Simulatorn tar inte
+        // emot tryck, så utan de här går de inte att titta på alls.
+        case "addmember", "addmember-parent":
+            return Entry(view: AnyView(
+                AddFamilyMemberSheet(onCreated: {})
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+            ))
+
+        case "membersettings", "membersettings-child", "membersettings-self":
+            let target: MemberSettingsTarget
+            switch name {
+            case "membersettings-child":
+                target = MemberSettingsTarget(id: "1", name: "Signe", role: "CHILD", isCurrentUser: false)
+            case "membersettings-self":
+                target = MemberSettingsTarget(id: "2", name: "Patrik", role: "PARENT", isCurrentUser: true)
+            default:
+                target = MemberSettingsTarget(id: "3", name: "Anna", role: "PARENT", isCurrentUser: false)
+            }
+            return Entry(view: AnyView(
+                MemberSettingsSheet(target: target, onChanged: {}, onDeleted: {})
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
+            ))
+
+        case "deletefamily":
+            return Entry(view: AnyView(
+                DeleteFamilySheet(onDeleted: {})
                     .environment(\.seasonPalette, palette)
                     .preferredColorScheme(dark ? .dark : .light)
             ))

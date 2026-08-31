@@ -17,7 +17,6 @@ import SwiftUI
 /// the point where it does.
 struct AdultDashboardView: View {
     var onLogout: () -> Void = {}
-    var onAddFamilyMember: () -> Void = {}
     var onChildPet: (String, String) -> Void = { _, _ in }
     var onChildWallet: (String, String) -> Void = { _, _ in }
     var onChildTasks: (String, String) -> Void = { _, _ in }
@@ -42,6 +41,13 @@ struct AdultDashboardView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var inviteMember: InviteTarget?
+    @State private var showAddMember = false
+    @State private var settingsTarget: MemberSettingsTarget?
+    @State private var showDeleteFamily = false
+    @State private var onboardingDismissed = PrefsStoreIOS.isOnboardingDismissed
+    /// Nil betyder "inte bestämt av användaren än", och då avgör hur långt familjen
+    /// kommit om guiden visas hel eller ihopvikt.
+    @State private var checklistExpanded: Bool?
     /// How far the list has scrolled, which is the only thing the top bar needs.
     @State private var scrollOffset: CGFloat = 0
 
@@ -69,6 +75,19 @@ struct AdultDashboardView: View {
         .sheet(item: $inviteMember) { target in
             ChildInviteSheet(childName: target.name, memberId: target.id)
         }
+        .sheet(isPresented: $showAddMember) {
+            AddFamilyMemberSheet(onCreated: { Task { await reload() } })
+        }
+        .sheet(isPresented: $showDeleteFamily) {
+            DeleteFamilySheet(onDeleted: { onDeleteFamily?() })
+        }
+        .sheet(item: $settingsTarget) { target in
+            MemberSettingsSheet(
+                target: target,
+                onChanged: { Task { await reload() } },
+                onDeleted: { Task { await reload() } }
+            )
+        }
     }
 
     // MARK: - The list
@@ -83,6 +102,14 @@ struct AdultDashboardView: View {
                     onTap: onFamilyTasks
                 )
 
+                if let overview, !onboardingDismissed {
+                    let state = getStartedState(overview)
+                    if !state.isComplete {
+                        getStartedSection(state, overview: overview)
+                            .padding(.horizontal, 16)
+                    }
+                }
+
                 if let overview {
                     if overview.children.isEmpty {
                         emptyChildrenCard
@@ -94,7 +121,15 @@ struct AdultDashboardView: View {
                                 onPet: { onChildPet(child.id, child.name) },
                                 onWallet: { onChildWallet(child.id, child.name) },
                                 onInvite: { inviteMember = InviteTarget(id: child.id, name: child.name) },
-                                onChildView: childViewAction(for: child)
+                                onChildView: childViewAction(for: child),
+                                onManage: {
+                                    settingsTarget = MemberSettingsTarget(
+                                        id: child.id,
+                                        name: child.name,
+                                        role: "CHILD",
+                                        isCurrentUser: false
+                                    )
+                                }
                             )
                             .padding(.horizontal, 16)
                         }
@@ -111,7 +146,15 @@ struct AdultDashboardView: View {
                         ForEach(overview.adults) { adult in
                             AdultRow(
                                 adult: adult,
-                                onInvite: { inviteMember = InviteTarget(id: adult.id, name: adult.name) }
+                                onInvite: { inviteMember = InviteTarget(id: adult.id, name: adult.name) },
+                                onManage: {
+                                    settingsTarget = MemberSettingsTarget(
+                                        id: adult.id,
+                                        name: adult.name,
+                                        role: adult.role,
+                                        isCurrentUser: adult.isCurrentUser
+                                    )
+                                }
                             )
                             .padding(.horizontal, 16)
                         }
@@ -169,7 +212,8 @@ struct AdultDashboardView: View {
             height: topBarHeight,
             onOpenSubscription: onOpenSubscription,
             onLogout: onLogout,
-            onDeleteFamily: onDeleteFamily
+            onDeleteFamily: onDeleteFamily,
+            onOpenDeleteFamily: { showDeleteFamily = true }
         )
     }
 
@@ -191,7 +235,7 @@ struct AdultDashboardView: View {
     }
 
     private var addMemberButton: some View {
-        Button(action: onAddFamilyMember) {
+        Button { showAddMember = true } label: {
             HStack(spacing: 8) {
                 Image(systemName: "plus")
                     .font(.system(size: 17, weight: .semibold))
@@ -226,6 +270,56 @@ struct AdultDashboardView: View {
 
     // MARK: - Loading
 
+    private func getStartedState(
+        _ overview: AdultDashboardRepository.Overview
+    ) -> GetStartedState {
+        GetStartedState(
+            hasChild: !overview.children.isEmpty,
+            hasChores: overview.children.contains { $0.todaysTotal > 0 },
+            hasPairedDevice: overview.children.contains { $0.hasPairedDevice },
+            hasPet: overview.children.contains { $0.petType != nil }
+        )
+    }
+
+    @ViewBuilder
+    private func getStartedSection(
+        _ state: GetStartedState,
+        overview: AdultDashboardRepository.Overview
+    ) -> some View {
+        let expanded = checklistExpanded ?? (state.doneCount == 0)
+        if expanded {
+            GetStartedCard(
+                state: state,
+                onAddChild: { showAddMember = true },
+                onAddChores: {
+                    if let first = overview.children.first {
+                        onChildTasks(first.id, first.name)
+                    }
+                },
+                onPairDevice: {
+                    if let first = overview.children.first {
+                        inviteMember = InviteTarget(id: first.id, name: first.name)
+                    }
+                },
+                // Barnets vy, inte djurskärmen. Djurskärmen är läsbar men inte
+                // handlingsbar för en förälder -- den säger att barnet inte valt ägg
+                // och erbjuder ingen väg att göra det. Äggväljaren bor i barnets vy.
+                onSeePet: {
+                    if let first = overview.children.first, let onChildView {
+                        onChildView(first.id, first.name)
+                    }
+                },
+                onCollapse: { checklistExpanded = false },
+                onDismiss: {
+                    onboardingDismissed = true
+                    PrefsStoreIOS.isOnboardingDismissed = true
+                }
+            )
+        } else {
+            GetStartedStrip(state: state, onExpand: { checklistExpanded = true })
+        }
+    }
+
     private func loadIfNeeded() async {
         if let preloaded {
             overview = preloaded
@@ -234,6 +328,17 @@ struct AdultDashboardView: View {
         }
         guard overview == nil else { return }
         await load()
+    }
+
+    /// Hämtar om utan att slå på laddningsläget. Ett blad som just stängts ska inte
+    /// lämna efter sig en helskärmssnurra där listan nyss låg.
+    private func reload() async {
+        do {
+            overview = try await AdultDashboardRepository.fetchOverview()
+            errorMessage = nil
+        } catch {
+            errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda familjemedlemmar.")
+        }
     }
 
     private func load() async {
@@ -370,6 +475,7 @@ private struct DashboardTopBar: View {
     let onOpenSubscription: (() -> Void)?
     let onLogout: () -> Void
     let onDeleteFamily: (() -> Void)?
+    let onOpenDeleteFamily: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -390,12 +496,15 @@ private struct DashboardTopBar: View {
                     Button("Prenumeration", action: onOpenSubscription)
                 }
                 Button("Logga ut", action: onLogout)
-                if let onDeleteFamily {
+                if onDeleteFamily != nil {
                     // Both stores require this to be reachable in the app, and Apple
                     // enforces it. Last in the menu and destructive, because it is the
-                    // one entry here that cannot be undone.
+                    // one entry here that cannot be undone. Öppnar ett blad som kräver
+                    // att man skriver ordet, inte en knapp som bara raderar.
                     Section {
-                        Button("Ta bort familjen", role: .destructive, action: onDeleteFamily)
+                        Button("Ta bort familjen", role: .destructive) {
+                            onOpenDeleteFamily()
+                        }
                     }
                 }
             } label: {
@@ -444,6 +553,7 @@ private struct ChildCard: View {
     let onWallet: () -> Void
     let onInvite: () -> Void
     let onChildView: (() -> Void)?
+    let onManage: () -> Void
 
     private var species: PetThemeIOS.Palette { PetThemeIOS.forPet(child.petType) }
 
@@ -547,6 +657,7 @@ private struct ChildCard: View {
                     Button("Visa som barn", action: onChildView)
                 }
                 Button("Bjud in till appen", action: onInvite)
+                Button("Inställningar", action: onManage)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
@@ -783,6 +894,7 @@ private struct AdultRow: View {
 
     let adult: AdultDashboardRepository.Adult
     let onInvite: () -> Void
+    let onManage: () -> Void
 
     private var initial: String {
         String(adult.name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
@@ -838,6 +950,7 @@ private struct AdultRow: View {
                 if !adult.isCurrentUser {
                     Button("Koppla telefon", action: onInvite)
                 }
+                Button("Inställningar", action: onManage)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
@@ -846,14 +959,10 @@ private struct AdultRow: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel("Fler val för \(adult.name)")
-            // The signed-in parent has nothing to choose from yet -- renaming yourself
-            // and changing your own password both need endpoints iOS has not built --
-            // so the button would open an empty sheet. It is absent rather than
-            // disabled, and the "Du" pill takes its place so the edge still lines up.
-            // When those two actions exist this goes away and everyone gets a menu.
-            .opacity(adult.isCurrentUser ? 0 : 1)
-            .allowsHitTesting(!adult.isCurrentUser)
-            .frame(width: adult.isCurrentUser ? 0 : 44)
+            // Alla får en meny numera. Den inloggade föräldern har något att välja
+            // här: byta sitt eget namn och sätta sitt eget lösenord. Det som inte
+            // gäller dem -- koppla telefon, ta bort sig själv -- utelämnas inne i
+            // menyn i stället för att menyn försvinner.
         }
         .padding(.leading, 14)
         .padding(.trailing, 4)
@@ -890,6 +999,23 @@ extension AdultDashboardView {
     /// The two children are deliberately different shapes: one part-way through the
     /// day with a pet and a standing allowance, one finished but with no phone paired,
     /// which is the pair of states the card has to hold at once.
+    /// En helt ny familj: inga barn, inga sysslor, inget djur. Det är enda läget där
+    /// kom igång-guiden visas hel, och därmed enda sättet att titta på den -- guiden
+    /// viker ihop sig så snart något steg är klart.
+    static func fixtureNewFamily() -> AdultDashboardView {
+        AdultDashboardView(
+            onFamilyTasks: {},
+            onOpenSubscription: {},
+            onDeleteFamily: {},
+            onChildView: { _, _ in },
+            preloaded: AdultDashboardRepository.Overview(
+                familyName: "Melander",
+                children: [],
+                adults: []
+            )
+        )
+    }
+
     static func fixture(pets: Bool = true) -> AdultDashboardView {
         AdultDashboardView(
             // Wired to no-ops rather than left nil: every affordance the Android

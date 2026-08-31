@@ -220,6 +220,12 @@ struct ContentView: View {
                         // when onTap is nil.
                         onFamilyTasks: { currentScreen = .familyTasks },
                         onOpenSubscription: { currentScreen = .paywall },
+                        // Tillbaka till välkomstskärmen och inte till inloggningen:
+                        // kontot finns inte längre att logga in på.
+                        onDeleteFamily: {
+                            TokenStoreIOS.shared.clearToken()
+                            currentScreen = .welcome
+                        },
                         onChildView: { id, name in
                             currentScreen = .childView(childId: id, childName: name)
                         }
