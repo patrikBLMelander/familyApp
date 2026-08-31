@@ -26,6 +26,9 @@ struct KidQuestApp: App {
     private var root: some View {
         ContentView()
             .onAppear {
+                // Före sessionen: load() identifierar familjen mot RevenueCat, och
+                // det kräver att SDK:n är konfigurerad.
+                Billing.configure()
                 TokenStoreIOS.shared.load()
             }
     }
@@ -197,6 +200,15 @@ enum ScreenHarness {
                     .environment(\.seasonPalette, palette)
                     .preferredColorScheme(dark ? .dark : .light)
                     .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+
+        // Den riktiga värden, inte fixturen: enda sättet att se att vägen utan nyckel
+        // säger något vettigt i stället för att krascha på en okonfigurerad SDK.
+        case "paywall-host":
+            return Entry(view: AnyView(
+                PaywallHost(onDismiss: {})
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(dark ? .dark : .light)
             ))
 
         case "paywall", "paywall-noprice":

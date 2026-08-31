@@ -190,15 +190,7 @@ struct ContentView: View {
                     )
 
                 case .paywall:
-                    PaywallView(
-                        // No price to show yet: iOS has no store wired in, and a price
-                        // must never be invented. The screen says so itself rather than
-                        // guessing a number.
-                        formattedMonthlyPrice: nil,
-                        onPurchase: nil,
-                        onRestore: nil,
-                        onDismiss: { currentScreen = .home }
-                    )
+                    PaywallHost(onDismiss: { currentScreen = .home })
 
                 case .home:
                     AdultDashboardView(
@@ -219,7 +211,12 @@ struct ContentView: View {
                         // SeasonHeaderBand does not draw "Alla uppgifter ›" at all
                         // when onTap is nil.
                         onFamilyTasks: { currentScreen = .familyTasks },
-                        onOpenSubscription: { currentScreen = .paywall },
+                        // Nil göms av menyn. Samma resonemang som Androids
+                        // BillingConfig.isConfigured-grind: utan nyckel ska posten inte
+                        // finnas, i stället för att leda till en betalvägg utan pris.
+                        onOpenSubscription: BillingConfig.isConfigured
+                            ? { currentScreen = .paywall }
+                            : nil,
                         // Tillbaka till välkomstskärmen och inte till inloggningen:
                         // kontot finns inte längre att logga in på.
                         onDeleteFamily: {

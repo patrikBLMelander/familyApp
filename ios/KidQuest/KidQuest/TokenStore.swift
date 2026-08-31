@@ -61,6 +61,7 @@ final class TokenStoreIOS {
     private(set) var current: Session?
 
     func load() {
+        defer { Billing.identify(familyId: current?.familyId) }
         if !defaults.bool(forKey: installMarkerKey) {
             // Ny installation: allt i nyckelringen är rester från en tidigare.
             KeychainSessionStore.delete()
@@ -107,6 +108,7 @@ final class TokenStoreIOS {
         )
         persist(session)
         current = session
+        Billing.identify(familyId: familyId)
     }
 
     /// Finns kvar för anropsställen som bara har en token; slänger samtidigt gammal identitet.
@@ -118,6 +120,8 @@ final class TokenStoreIOS {
         KeychainSessionStore.delete()
         clearLegacyKeys()
         current = nil
+        // Annars ärver nästa inloggning på samma telefon den förra familjens köp.
+        Billing.forget()
     }
 
     private func persist(_ session: Session) {
