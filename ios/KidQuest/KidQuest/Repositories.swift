@@ -305,6 +305,19 @@ enum ChildDashboardRepository {
         )
     }
 
+    /// Djuren barnet haft tidigare, nyast först.
+    ///
+    /// Sväljer felet: samlingen är en trevlighet, och en historik som inte svarar ska
+    /// inte hindra barnet från att mata dagens djur.
+    static func fetchPetHistory() async -> [PetHistoryResponseDTO] {
+        let all = (try? await ApiClient.shared.send(
+            [PetHistoryResponseDTO].self,
+            path: "pets/history",
+            method: "GET"
+        )) ?? []
+        return all.sorted { ($0.year, $0.month) > ($1.year, $1.month) }
+    }
+
     static func feedPet(xpAmount: Int) async throws {
         let body = FeedPetRequestDTO(xpAmount: xpAmount)
         try await ApiClient.shared.sendWithoutResponse(

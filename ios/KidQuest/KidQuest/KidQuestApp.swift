@@ -141,6 +141,18 @@ enum ScreenHarness {
         // "Visa som barn" sits behind a login and a child card's overflow menu, neither
         // of which the simulator can tap. Two names: hungry with food waiting, which is
         // the state a parent opens it to fix, and already fed.
+        // Barnets egen skärm. Tre lägen, för bandet växer när dagen är klar och
+        // samlingens läsläge nås bara genom att trycka -- vilket simulatorn inte kan.
+        case "child", "child-done", "child-past":
+            return Entry(view: AnyView(
+                ChildDashboardView.fixture(
+                    allDone: name == "child-done",
+                    past: name == "child-past"
+                )
+                .preferredColorScheme(.light)
+                .defaultScrollAnchor(anchor, for: .initialOffset)
+            ))
+
         case "childview", "childview-fed":
             return Entry(view: AnyView(
                 ChildDashboardHost.fixture(fed: name == "childview-fed")

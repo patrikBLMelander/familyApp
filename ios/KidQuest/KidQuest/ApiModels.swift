@@ -166,6 +166,19 @@ struct PetResponseDTO: Decodable {
     let updatedAt: String
 }
 
+/// Ett djur barnet haft tidigare. Bär inte namnet -- historiken har det inte -- och
+/// `finalGrowthStage` i stället för `growthStage`, eftersom en avslutad månad inte
+/// växer mer.
+struct PetHistoryResponseDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let memberId: String
+    let year: Int
+    let month: Int
+    let selectedEggType: String
+    let petType: String
+    let finalGrowthStage: Int
+}
+
 struct CollectedFoodResponseDTO: Decodable {
     let foodItems: [FoodItemResponseDTO]
     let totalCount: Int
