@@ -51,6 +51,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -73,6 +75,7 @@ import kotlinx.coroutines.withContext
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.DailyChoreResponse
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.network.FeedPetRequest
 import se.kidquest.app.network.PetResponse
@@ -84,6 +87,26 @@ import se.kidquest.app.pet.PetImages
 import se.kidquest.app.pet.PetNameUtils
 import se.kidquest.app.pet.PetTheme
 import se.kidquest.app.pet.PetVisual
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextDecoration
+import se.kidquest.app.network.PetHistoryResponse
+import se.kidquest.app.theme.LocalSeasonPalette
+import se.kidquest.app.theme.SeasonPalette
+import se.kidquest.app.theme.SeasonTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,6 +130,14 @@ fun ChildDashboardScreen(
     actingAsParent: Boolean = false,
     onExitChildView: (() -> Unit)? = null,
     onSwitchChild: (() -> Unit)? = null,
+    /**
+     * Icke-null renderar de här värdena i stället för att anropa nätet.
+     *
+     * Finns för att skärmen ska gå att fotografera. Bandet som växer när dagen är klar
+     * och samlingens läsläge nås bara genom att trycka, och de två lägena är precis
+     * de som en skärmbild behövs för. Sätts bara av harnesket i MainActivity.
+     */
+    fixture: ChildDashboardFixture? = null,
 ) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -129,8 +160,23 @@ fun ChildDashboardScreen(
     val taskToggleMutex = remember { Mutex() }
     var refreshDebounceJob by remember { mutableStateOf<Job?>(null) }
     val todayString = LocalDate.now().toString()
+    // Barnets tidigare djur, och vilket som visas. Nil betyder dagens.
+    var petHistory by remember { mutableStateOf<List<PetHistoryResponse>>(emptyList()) }
+    var viewingPast by remember { mutableStateOf<PetHistoryResponse?>(null) }
 
     LaunchedEffect(childId, refreshKey) {
+        if (fixture != null) {
+            pet = fixture.pet
+            xp = fixture.xp
+            balance = fixture.balance
+            todaysTasks = fixture.tasks
+            collectedFoodCount = fixture.foodCount
+            petHistory = fixture.history
+            viewingPast = if (fixture.viewingPast) fixture.history.firstOrNull() else null
+            loading = false
+            isInitialLoad = false
+            return@LaunchedEffect
+        }
         if (isInitialLoad) {
             loading = true
         }
@@ -212,8 +258,72 @@ fun ChildDashboardScreen(
         }
     }
 
+    LaunchedEffect(childId) {
+        if (fixture != null) return@LaunchedEffect
+        petHistory = withContext(Dispatchers.IO) {
+            kotlin.runCatching {
+                if (actingAsParent) ApiClient.petsApi.getMemberPetHistory(childId)
+                else ApiClient.petsApi.getPetHistory()
+            }.getOrDefault(emptyList())
+        }.sortedWith(compareByDescending<PetHistoryResponse> { it.year }.thenByDescending { it.month })
+    }
+
+    // Matningen och bockningen låg förut inne i knapparnas onClick. De ligger här nu
+    // eftersom layouten inte längre äger dem -- beteendet är oförändrat, inklusive
+    // mutexen som hindrar två bockningar från att trampa på varandra och debouncen som
+    // gör att snabba klick inte avbryter omladdningen om och om igen.
+    val feed: (Int) -> Unit = { amount ->
+        if (amount > 0 && !isFeeding) {
+            isFeeding = true
+            coroutineScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        if (actingAsParent) {
+                            ApiClient.petsApi.feedMemberPet(childId, FeedPetRequest(xpAmount = amount))
+                        } else {
+                            ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = amount))
+                        }
+                    }
+                    lastFedDate = todayString
+                    refreshKey++
+                } finally {
+                    isFeeding = false
+                }
+            }
+        }
+    }
+
+    val toggleTask: (DailyChoreWithCompletionResponse) -> Unit = { task ->
+        taskToggleScope.launch {
+            taskToggleMutex.withLock {
+                val wasCompleted = task.completed
+                val choreId = task.chore.id
+                // Optimistiskt: bocken vänder direkt, innan servern svarat.
+                todaysTasks = todaysTasks.map {
+                    if (it.chore.id == choreId) it.copy(completed = !wasCompleted) else it
+                }
+                try {
+                    DailyChoreRepository.toggleChoreCompletion(
+                        choreId = choreId,
+                        isCurrentlyCompleted = wasCompleted,
+                    )
+                    refreshDebounceJob?.cancel()
+                    refreshDebounceJob = taskToggleScope.launch {
+                        delay(400)
+                        refreshKey++
+                    }
+                } catch (e: Exception) {
+                    todaysTasks = todaysTasks.map {
+                        if (it.chore.id == choreId) it.copy(completed = wasCompleted) else it
+                    }
+                }
+            }
+        }
+    }
+
     var hasAutoOpenedEggDialog by remember { mutableStateOf(false) }
     LaunchedEffect(loading, pet, error, petLoadFailed) {
+        if (fixture != null) return@LaunchedEffect
         if (!loading && error == null && !petLoadFailed && pet == null && !hasAutoOpenedEggDialog) {
             hasAutoOpenedEggDialog = true
             showSelectEggDialog = true
@@ -223,549 +333,252 @@ fun ChildDashboardScreen(
     // Every species colour lives in PetTheme, shared with the parent dashboard. It
     // used to be spelled out here as two `when` blocks, which is how shark and lion
     // ended up missing from both and falling through to the neutral pastel.
-    val petPalette = PetTheme.forPet(pet?.petType)
-    val backgroundBrush = PetTheme.background(pet?.petType)
-    val cardColor = petPalette.cardTint
-    val cardColorInner = petPalette.cardTintInner
+    // Årstidens ljusa palett. Mörkt läge är föräldrarnas inställning -- de sitter i
+    // appen på kvällen -- och barnets skärm ska vara ljus och ha en årstid i den.
+    // Förut stod här PetTheme.background(), en gradient per djurtyp som var helt utanför
+    // temat resten av appen fick.
+    val season = remember { SeasonTheme.current(dark = false) }
+    val context = LocalContext.current
 
-    // Textfärger på kort – mörka så att texten alltid är läsbar mot ljusa kort
-    val cardTextPrimary = Color(0xFF1C1917)
-    val cardTextSecondary = Color(0xFF57534E)
+    val doneCount = todaysTasks.count { it.completed }
+    val allDone = todaysTasks.isNotEmpty() && doneCount == todaysTasks.size
+    val shownPet = viewingPast?.let { it.petType to it.finalGrowthStage }
+        ?: pet?.let { it.petType to it.growthStage }
+    // Bandet är kort så länge det finns arbete kvar och växer när dagen är klar:
+    // belöningen kommer efter arbetet, inte före.
+    val bandHeight by animateDpAsState(
+        targetValue = if (allDone && viewingPast == null) 400.dp else 258.dp,
+        animationSpec = tween(durationMillis = 450),
+        label = "band",
+    )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(childName, fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-            )
-        },
-        containerColor = Color.Transparent,
-    ) { innerPadding ->
-        if (loading) {
-            Box(
+    CompositionLocalProvider(LocalSeasonPalette provides season) {
+        Box(modifier = Modifier.fillMaxSize().background(season.pageBg)) {
+            if (loading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                return@Box
+            }
+
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(backgroundBrush)
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center,
+                    .verticalScroll(rememberScrollState()),
             ) {
-                CircularProgressIndicator()
-            }
-            return@Scaffold
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundBrush)
-                .padding(innerPadding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            if (actingAsParent) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "Du ser $childName" + "s vy",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF78350F),
-                            modifier = Modifier.weight(1f),
+                // ---- Bandet ----
+                Box(modifier = Modifier.fillMaxWidth().height(bandHeight)) {
+                    if (shownPet != null) {
+                        PetVisual(
+                            petType = shownPet.first,
+                            growthStage = shownPet.second,
+                            modifier = Modifier.fillMaxSize(),
+                            cornerRadius = 0,
+                            scale = if (allDone && viewingPast == null) 0.82f else 0.52f,
+                            alignment = if (allDone && viewingPast == null) {
+                                Alignment.BottomCenter
+                            } else {
+                                Alignment.BottomEnd
+                            },
                         )
-                        if (onSwitchChild != null) {
-                            TextButton(onClick = onSwitchChild) {
-                                Text("Byt barn", color = Color(0xFF78350F))
-                            }
-                        }
-                        if (onExitChildView != null) {
-                            TextButton(onClick = onExitChildView) {
-                                Text("Tillbaka", color = Color(0xFF78350F))
-                            }
+                    } else {
+                        PetImages.seasonalBackgroundDrawable(context)?.let { bg ->
+                            Image(
+                                painter = painterResource(id = bg),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
                         }
                     }
-                }
-            }
 
-            if (error != null) {
-                Text(text = error!!, color = MaterialTheme.colorScheme.error)
-                return@Scaffold
-            }
+                    // Läsbarhet: nedre kanten tonar in i sidans färg, toppen mörknar så
+                    // att raden med knappar syns mot vilken årstid som helst.
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0f to Color.Black.copy(alpha = 0.34f),
+                                    0.22f to Color.Transparent,
+                                    0.72f to Color.Transparent,
+                                    0.92f to season.pageBg.copy(alpha = 0.55f),
+                                    1f to season.pageBg,
+                                )
+                            )
+                    )
 
-            // Pet + XP-kort – stor bild, humör och cirkel-progress
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                colors = CardDefaults.cardColors(containerColor = cardColor.copy(alpha = 0.95f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (pet != null) {
-                        val petName = pet!!.name ?: PetNameUtils.getPetNameSwedish(pet!!.petType)
-                        val hasFedToday = lastFedDate == todayString
-                        val isHungry = !hasFedToday
-                        val moodEmoji = if (isHungry) "🥺" else "😊"
-                        val moodText = if (isHungry) {
-                            "Jag är hungrig... kan du ge mig mat?"
-                        } else {
-                            "Mmm! Tack för maten idag, $childName!"
+                    // Djursamlingen och plånboken.
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .fillMaxWidth()
+                            // enableEdgeToEdge ritar innehållet ända upp, så utan det här
+                            // hamnar cirklarna ovanpå klockan.
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        if (petHistory.isNotEmpty() && pet != null) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                PetCircle(
+                                    petType = pet!!.petType,
+                                    stage = pet!!.growthStage,
+                                    active = viewingPast == null,
+                                    season = season,
+                                ) { viewingPast = null }
+                                petHistory.take(5).forEach { past ->
+                                    PetCircle(
+                                        petType = past.petType,
+                                        stage = past.finalGrowthStage,
+                                        active = viewingPast?.id == past.id,
+                                        season = season,
+                                    ) { viewingPast = past }
+                                }
+                            }
                         }
-
-                        // Pratbubbla över bilden – pastellfärger som syns bra mot alla djur
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center,
+                        Spacer(modifier = Modifier.weight(1f))
+                        // Saldot, och vägen till plånboken. Ett tryck och inte ett kort:
+                        // bandet ska inte konkurrera med listan om uppmärksamheten.
+                        Surface(
+                            onClick = onOpenWallet,
+                            shape = RoundedCornerShape(50),
+                            color = Color.White.copy(alpha = 0.92f),
                         ) {
                             Text(
-                                text = moodText,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = cardTextPrimary,
-                                modifier = Modifier
-                                    .background(
-                                        color = if (isHungry) {
-                                            Color(0xFFFFE4D6) // mjuk persiko/beige – hungrig
-                                        } else {
-                                            Color(0xFFD1FAE5) // mjuk mint – nöjd
-                                        },
-                                        shape = RoundedCornerShape(16.dp),
-                                    )
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                text = balance?.let { "${it.balance} kr ›" } ?: "Plånbok ›",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = season.accent,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Stor pet-bild med cirkulär XP-progress och humörikon i mitten
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            PetVisual(
-                                petType = pet!!.petType,
-                                growthStage = pet!!.growthStage,
-                                contentDescription = petName,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-
-                            xp?.let { progress ->
-                                val xpThresholds = listOf(0, 10, 35, 70, 125)
-                                val maxLevel = xpThresholds.lastIndex
-                                val safeLevel = progress.currentLevel.coerceIn(1, maxLevel)
-                                val currentIndex = safeLevel - 1
-                                val currentThreshold = xpThresholds[currentIndex]
-                                val nextThreshold = xpThresholds.getOrNull(safeLevel) ?: xpThresholds.last()
-                                val range = (nextThreshold - currentThreshold).coerceAtLeast(1)
-                                val percentage = (progress.xpInCurrentLevel.toFloat() / range.toFloat()).coerceIn(0f, 1f)
-
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(96.dp)
-                                            .offset(y = 32.dp), // mindre cirkel som hänger ned lite under bilden
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        CircularProgressIndicator(
-                                            progress = { percentage },
-                                            modifier = Modifier.fillMaxSize(),
-                                            strokeWidth = 6.dp,
-                                        )
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                        ) {
-                                            Text(
-                                                text = moodEmoji,
-                                                style = MaterialTheme.typography.titleLarge,
-                                            )
-                                            Text(
-                                                text = progress.currentLevel.toString(),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = cardTextPrimary,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = petName,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = cardTextPrimary,
-                        )
-                    } else if (petLoadFailed) {
-                        // Offering "Välj ägg" here would be wrong: the child may well
-                        // already have a pet that we simply failed to load.
-                        Text(
-                            text = "Kunde inte hämta ditt djur just nu",
-                            color = cardTextSecondary,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { refreshKey++ },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(40.dp),
-                        ) {
-                            Text("Försök igen")
-                        }
-                    } else {
-                        Text(text = "Inget djur denna månad", color = cardTextSecondary)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { showSelectEggDialog = true },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(40.dp),
-                        ) {
-                            Text("Välj ägg")
-                        }
-                    }
-                    // Ingen extra rak progress-bar – allt visas i den runda indikatorn
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Mat att ge – visuell pott + mata djuret
-            val foodEmoji = PetFoodUtils.getPetFoodEmoji(pet?.petType)
-            val foodName = PetFoodUtils.getPetFoodName(pet?.petType)
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = cardColor.copy(alpha = 0.92f),
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    // Titelrad
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "🍽️ Mat att ge",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = cardTextPrimary,
-                        )
-                        Text(
-                            text = "$collectedFoodCount $foodName",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (collectedFoodCount > 0) {
-                                cardTextPrimary
-                            } else {
-                                cardTextSecondary
-                            },
-                        )
                     }
 
-                    // Skål och emojis – helt egen sektion utan överlapp
-                    if (collectedFoodCount == 0) {
-                        Text(
-                            text = "Ingen mat ännu... Utför uppgifter för att samla $foodName!",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = cardTextSecondary,
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            // Skål sedd uppifrån – oval med tjock kant
-                            Box(
-                                modifier = Modifier
-                                    .width(220.dp)
-                                    .height(70.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                // Yttre kant på skålen
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .background(
-                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                                            shape = RoundedCornerShape(50.dp),
-                                        ),
-                                )
-                                // Skålens insida
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.78f)
-                                        .fillMaxHeight(0.65f)
-                                        .background(
-                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-                                            shape = RoundedCornerShape(50.dp),
-                                        ),
-                                )
-                                // Maten i skålen
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    repeat(kotlin.math.min(collectedFoodCount, 10)) {
-                                        Text(
-                                            text = foodEmoji,
-                                            style = MaterialTheme.typography.headlineSmall,
-                                            modifier = Modifier.padding(horizontal = 2.dp),
-                                        )
-                                    }
-                                    if (collectedFoodCount > 10) {
-                                        Text(
-                                            text = "+${collectedFoodCount - 10}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = cardTextSecondary,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Button(
-                            onClick = {
-                                if (collectedFoodCount < 1 || isFeeding) return@Button
-                                isFeeding = true
-                                coroutineScope.launch {
-                                    try {
-                                        withContext(Dispatchers.IO) {
-                                            if (actingAsParent) {
-                                                ApiClient.petsApi.feedMemberPet(childId, FeedPetRequest(xpAmount = 1))
-                                            } else {
-                                                ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = 1))
-                                            }
-                                        }
-                                            lastFedDate = todayString
-                                        refreshKey++
-                                    } finally {
-                                        isFeeding = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = collectedFoodCount >= 1 && !isFeeding,
-                        ) {
-                            Text(if (isFeeding) "..." else "Mata 1 $foodName")
-                        }
-                        Button(
-                            onClick = {
-                                if (collectedFoodCount == 0 || isFeeding) return@Button
-                                isFeeding = true
-                                coroutineScope.launch {
-                                    try {
-                                        withContext(Dispatchers.IO) {
-                                            if (actingAsParent) {
-                                                ApiClient.petsApi.feedMemberPet(childId, FeedPetRequest(xpAmount = collectedFoodCount))
-                                            } else {
-                                                ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = collectedFoodCount))
-                                            }
-                                        }
-                                        lastFedDate = todayString
-                                        refreshKey++
-                                    } finally {
-                                        isFeeding = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = collectedFoodCount > 0 && !isFeeding,
-                        ) {
-                            Text(if (isFeeding) "Ger mat..." else "Mata allt ($collectedFoodCount)")
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Dagens uppgifter – synliga direkt under djuret
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = cardColor.copy(alpha = 0.92f),
-                ),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                ) {
-                    Text(text = "Dagens uppgifter", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = cardTextPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (todaysTasks.isEmpty()) {
-                        Text(
-                            text = "Inga uppgifter idag.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = cardTextSecondary,
-                        )
-                    } else {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.heightIn(max = 260.dp),
-                        ) {
-                            items(todaysTasks, key = { it.chore.id }) { task ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = cardColorInner.copy(alpha = 0.98f),
-                                    ),
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Checkbox(
-                                            checked = task.completed,
-                                            onCheckedChange = {
-                                                taskToggleScope.launch {
-                                                    taskToggleMutex.withLock {
-                                                        val currentCompleted = task.completed
-                                                        val choreId = task.chore.id
-
-                                                        todaysTasks = todaysTasks.map {
-                                                            if (it.chore.id == choreId) {
-                                                                it.copy(completed = !currentCompleted)
-                                                            } else {
-                                                                it
-                                                            }
-                                                        }
-
-                                                        try {
-                                                            DailyChoreRepository.toggleChoreCompletion(
-                                                                choreId = choreId,
-                                                                isCurrentlyCompleted = currentCompleted,
-                                                            )
-                                                            // Debounce: en omladdning ~400 ms efter senaste toggle så att snabba klick inte avbryter LaunchedEffect upprepade gånger
-                                                            refreshDebounceJob?.cancel()
-                                                            refreshDebounceJob = taskToggleScope.launch {
-                                                                delay(400)
-                                                                refreshKey++
-                                                            }
-                                                        } catch (e: Exception) {
-                                                            todaysTasks = todaysTasks.map {
-                                                                if (it.chore.id == choreId) {
-                                                                    it.copy(completed = currentCompleted)
-                                                                } else {
-                                                                    it
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            colors = CheckboxDefaults.colors(
-                                                checkedColor = Color(0xFFFFCC00),
-                                                checkmarkColor = Color(0xFF5B21B6),
-                                                uncheckedColor = Color(0xFFFFE082),
-                                            ),
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text(
-                                                text = task.chore.title,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = cardTextPrimary,
-                                            )
-                                            if (task.chore.xpPoints > 0) {
-                                                Text(
-                                                    text = "${task.chore.xpPoints} mat",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = cardTextSecondary,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Plånbokskort
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = cardColor.copy(alpha = 0.92f),
-                ),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                ) {
-                    Text(text = "Plånbok", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = cardTextPrimary)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    if (balance != null) {
-                        Text(
-                            text = "Saldo: ${balance!!.balance} kr",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = cardTextPrimary,
-                        )
-                    } else {
-                        Text(
-                            text = "Saldo okänt.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = cardTextSecondary,
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = onOpenWallet,
+                    val labelShadow = Shadow(
+                        color = Color.Black.copy(alpha = 0.55f),
+                        offset = Offset(0f, 1f),
+                        blurRadius = 8f,
+                    )
+                    // Namn, nivå och matantal.
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp),
+                            .align(Alignment.BottomStart)
+                            .padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text("Öppna plånbok")
+                        val past = viewingPast
+                        if (past != null) {
+                            Text(
+                                text = monthLabel(past.year, past.month).uppercase(),
+                                style = MaterialTheme.typography.labelSmall.copy(shadow = labelShadow),
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.9f),
+                            )
+                            Text(
+                                text = PetNameUtils.getPetNameSwedish(past.petType),
+                                style = MaterialTheme.typography.titleLarge.copy(shadow = labelShadow),
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                            )
+                        } else if (pet != null) {
+                            val displayName = pet!!.name?.takeIf { it.isNotBlank() }
+                                ?: PetNameUtils.getPetNameSwedish(pet!!.petType)
+                            Text(
+                                text = "$displayName · NIVÅ ${xp?.currentLevel ?: 1}".uppercase(),
+                                style = MaterialTheme.typography.labelSmall.copy(shadow = labelShadow),
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.92f),
+                            )
+                            if (allDone) {
+                                Text(
+                                    text = "Allt klart idag!",
+                                    style = MaterialTheme.typography.headlineSmall.copy(shadow = labelShadow),
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                )
+                            }
+                            if (collectedFoodCount > 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.White.copy(alpha = 0.94f),
+                                ) {
+                                    Text(
+                                        text = "${PetFoodUtils.getPetFoodEmoji(pet!!.petType)} " +
+                                            "$collectedFoodCount mat att ge",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = season.tipStrong,
+                                        modifier = Modifier
+                                            .padding(horizontal = 11.dp, vertical = 6.dp),
+                                    )
+                                }
+                            }
+                        }
                     }
+                }
+
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    if (actingAsParent) {
+                        ActingAsParentBanner(
+                            childName = childName,
+                            onSwitchChild = onSwitchChild,
+                            onExit = onExitChildView,
+                        )
+                    }
+
+                    val error0 = error
+                    if (error0 != null) {
+                        ErrorCard(message = error0, season = season) { refreshKey++ }
+                    } else if (viewingPast != null) {
+                        BackToNowCard(season = season) { viewingPast = null }
+                    } else {
+                        TasksSection(
+                            tasks = todaysTasks,
+                            doneCount = doneCount,
+                            allDone = allDone,
+                            hasPet = pet != null,
+                            petLoadFailed = petLoadFailed,
+                            season = season,
+                            onToggle = { toggleTask(it) },
+                            onSelectEgg = { showSelectEggDialog = true },
+                        )
+
+                        if (pet != null) {
+                            val displayName = pet!!.name?.takeIf { it.isNotBlank() }
+                                ?: PetNameUtils.getPetNameSwedish(pet!!.petType)
+                            FeedButtons(
+                                foodCount = collectedFoodCount,
+                                petName = displayName,
+                                isFeeding = isFeeding,
+                                season = season,
+                                onFeed = { amount -> feed(amount) },
+                            )
+                        }
+                    }
+
+                    if (!actingAsParent) {
+                        // Långt ner och litet. Det är vägen ut, inte något ett barn ska
+                        // trycka på av misstag mitt i sin lista.
+                        TextButton(
+                            onClick = onBack,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = "Logga ut $childName",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = season.inkFaint,
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
                 }
             }
         }
     }
+
 
     if (showSelectEggDialog) {
         SelectEggDialog(
@@ -1108,3 +921,447 @@ private fun getEggHint(eggType: String): String =
         else -> "Jag längtar efter att få träffa dig."
     }
 
+
+// MARK: - Byggstenar för barnets dag
+
+/**
+ * Ett djur i samlingen. Dagens först, sedan tidigare månader.
+ *
+ * Visas bara när det finns något att växla mellan -- en enda cirkel är ingen växling,
+ * bara en prick.
+ */
+@Composable
+private fun PetCircle(
+    petType: String,
+    stage: Int,
+    active: Boolean,
+    season: SeasonPalette,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val drawable = PetImages.petDrawable(context, petType, stage)
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.92f))
+            .border(
+                width = if (active) 2.5.dp else 1.5.dp,
+                color = if (active) season.warnStrong else Color.White.copy(alpha = 0.9f),
+                shape = CircleShape,
+            )
+            .alpha(if (active) 1f else 0.72f)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (drawable != null) {
+            Image(
+                painter = painterResource(id = drawable),
+                contentDescription = PetNameUtils.getPetNameSwedish(petType),
+                modifier = Modifier.fillMaxSize().padding(2.dp),
+                contentScale = ContentScale.Fit,
+            )
+        }
+    }
+}
+
+/**
+ * Dagens uppgifter -- det som är störst på skärmen.
+ *
+ * Ordningen är vald efter vilken fråga ett barn öppnar appen med på en tisdagmorgon:
+ * vad ska jag göra nu? Därför ligger listan på vitt så den går att läsa, medan djuret
+ * bor i bandet ovanför.
+ */
+@Composable
+private fun TasksSection(
+    tasks: List<DailyChoreWithCompletionResponse>,
+    doneCount: Int,
+    allDone: Boolean,
+    hasPet: Boolean,
+    petLoadFailed: Boolean,
+    season: SeasonPalette,
+    onToggle: (DailyChoreWithCompletionResponse) -> Unit,
+    onSelectEgg: () -> Unit,
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Dagens uppgifter",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = season.ink,
+                modifier = Modifier.weight(1f),
+            )
+            if (tasks.isNotEmpty()) {
+                Text(
+                    text = "$doneCount / ${tasks.size}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (allDone) season.goodInk else season.inkSoft,
+                )
+            }
+        }
+
+        if (tasks.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = season.surface),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 26.dp, horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    when {
+                        petLoadFailed -> {
+                            Text(
+                                "Kunde inte läsa djuret",
+                                fontWeight = FontWeight.SemiBold,
+                                color = season.ink,
+                            )
+                            Text(
+                                "Försök igen om en stund. Inget har gått förlorat.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = season.inkSoft,
+                            )
+                        }
+                        !hasPet -> {
+                            Text(
+                                "Välj ett ägg först",
+                                fontWeight = FontWeight.SemiBold,
+                                color = season.ink,
+                            )
+                            Text(
+                                "Då får du ett djur att ta hand om.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = season.inkSoft,
+                            )
+                            Button(
+                                onClick = onSelectEgg,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = season.accent,
+                                    contentColor = season.onAccent,
+                                ),
+                            ) {
+                                Text("Välj ägg", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        else -> {
+                            Text(
+                                "Inga uppgifter idag",
+                                fontWeight = FontWeight.SemiBold,
+                                color = season.ink,
+                            )
+                            Text(
+                                "Njut av dagen!",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = season.inkSoft,
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = season.surface),
+                border = BorderStroke(1.dp, season.cardEdge),
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                    tasks.forEachIndexed { index, task ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggle(task) }
+                                .padding(vertical = 13.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(if (task.completed) season.goodInk else season.pageBg)
+                                    .border(
+                                        width = if (task.completed) 0.dp else 2.dp,
+                                        color = season.cardEdge,
+                                        shape = CircleShape,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (task.completed) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(17.dp),
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = task.chore.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (task.completed) season.inkFaint else season.ink,
+                                textDecoration = if (task.completed) {
+                                    TextDecoration.LineThrough
+                                } else {
+                                    null
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (task.chore.xpPoints > 0) {
+                                Text(
+                                    text = "+${task.chore.xpPoints} mat",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (task.completed) season.inkFaint else season.tipStrong,
+                                )
+                            }
+                        }
+                        if (index < tasks.size - 1) {
+                            HorizontalDivider(color = season.cardEdge.copy(alpha = 0.7f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Matningen. Ligger i flödet under listan och inte fastlåst längst ner -- samma beslut
+ * som i föräldravyn, av samma skäl: en knapp som alltid ligger över innehållet gör
+ * skärmen trängre än den behöver vara.
+ */
+@Composable
+private fun FeedButtons(
+    foodCount: Int,
+    petName: String,
+    isFeeding: Boolean,
+    season: SeasonPalette,
+    onFeed: (Int) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(
+            onClick = { onFeed(foodCount) },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            enabled = foodCount > 0 && !isFeeding,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = season.accent,
+                contentColor = season.onAccent,
+                disabledContainerColor = season.outlineBg,
+                disabledContentColor = season.inkFaint,
+            ),
+        ) {
+            Text(
+                text = when {
+                    isFeeding -> "Ger mat…"
+                    foodCount > 0 -> "Mata $petName med $foodCount mat"
+                    else -> "Ingen mat att ge än"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        if (foodCount > 1) {
+            TextButton(onClick = { onFeed(1) }, enabled = !isFeeding) {
+                Text("Mata bara 1", color = season.inkSoft, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/** Ett tidigare djur går inte att mata, och skärmen säger det i stället för att erbjuda en knapp som inte gör något. */
+@Composable
+private fun BackToNowCard(season: SeasonPalette, onBack: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = season.surface),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                "Det här djuret är färdigväxt",
+                fontWeight = FontWeight.SemiBold,
+                color = season.ink,
+            )
+            Text(
+                "Du kan inte mata det längre, men det stannar i din samling.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = season.inkSoft,
+            )
+            Button(
+                onClick = onBack,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = season.accent,
+                    contentColor = season.onAccent,
+                ),
+            ) {
+                Text("Tillbaka till nu", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErrorCard(message: String, season: SeasonPalette, onRetry: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = season.surface),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(message, color = season.danger)
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = season.accent,
+                    contentColor = season.onAccent,
+                ),
+            ) {
+                Text("Försök igen")
+            }
+        }
+    }
+}
+
+/**
+ * Den gula banderollen är bärande, inte dekoration: en förälder som lägger ifrån sig
+ * telefonen mitt i och tar upp den igen har inget annat sätt att se vems skärm det är.
+ * Den bär också vägen ut, sedan skärmen slutade ha en egen rubrikrad.
+ */
+@Composable
+private fun ActingAsParentBanner(
+    childName: String,
+    onSwitchChild: (() -> Unit)?,
+    onExit: (() -> Unit)?,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Du ser ${possessiveSwedish(childName)} vy",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF78350F),
+                modifier = Modifier.weight(1f),
+            )
+            if (onSwitchChild != null) {
+                TextButton(onClick = onSwitchChild) {
+                    Text("Byt barn", color = Color(0xFF78350F), fontWeight = FontWeight.SemiBold)
+                }
+            }
+            if (onExit != null) {
+                TextButton(onClick = onExit) {
+                    Text("Tillbaka", color = Color(0xFF78350F), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+/** Svensk genitiv: "Signes vy", men "Lukas vy" -- namn på s, x eller z får inget extra s. */
+private fun possessiveSwedish(name: String): String {
+    val last = name.lowercase().lastOrNull() ?: return name
+    return if (last in "sxz") name else name + "s"
+}
+
+private fun monthLabel(year: Int, month: Int): String {
+    val names = listOf(
+        "januari", "februari", "mars", "april", "maj", "juni",
+        "juli", "augusti", "september", "oktober", "november", "december",
+    )
+    return "${names[month.coerceIn(1, 12) - 1]} $year"
+}
+
+/**
+ * Provvärden för [ChildDashboardScreen], så att skärmen går att fotografera.
+ *
+ * Samma siffror som iOS-fixturen: Signe en vardag i september, med uppgifterna ur den
+ * färdiga listan för 7-9 år. Poängen är att de två plattformarna går att jämföra sida
+ * vid sida -- skiljer de sig ska det bero på layouten, inte på olika data.
+ */
+data class ChildDashboardFixture(
+    val pet: PetResponse?,
+    val xp: XpProgressResponse?,
+    val balance: WalletBalanceResponse?,
+    val tasks: List<DailyChoreWithCompletionResponse>,
+    val foodCount: Int,
+    val history: List<PetHistoryResponse>,
+    val viewingPast: Boolean = false,
+) {
+    companion object {
+        fun signe(allDone: Boolean = false, viewingPast: Boolean = false): ChildDashboardFixture {
+            fun chore(id: String, title: String, food: Int, done: Boolean) =
+                DailyChoreWithCompletionResponse(
+                    chore = DailyChoreResponse(
+                        id = id,
+                        memberId = "child-1",
+                        title = title,
+                        weekdays = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"),
+                        xpPoints = food,
+                        isActive = true,
+                    ),
+                    completed = done,
+                    completionId = if (done) "c-$id" else null,
+                )
+
+            return ChildDashboardFixture(
+                pet = PetResponse(
+                    id = "p1", memberId = "child-1", year = 2026, month = 9,
+                    selectedEggType = "yellow_egg", petType = "bird", name = "Kvitter",
+                    growthStage = 4, hatchedAt = null,
+                    createdAt = "2026-09-01T08:00:00Z", updatedAt = "2026-09-01T08:00:00Z",
+                ),
+                xp = XpProgressResponse(
+                    id = "x1", memberId = "child-1", year = 2026, month = 9,
+                    currentXp = 42, currentLevel = 3, totalTasksCompleted = 28,
+                    xpForNextLevel = 70, xpInCurrentLevel = 7,
+                ),
+                balance = WalletBalanceResponse(id = "w1", memberId = "child-1", balance = 85),
+                tasks = listOf(
+                    chore("1", "Bädda sängen", 1, true),
+                    chore("2", "Packa skolväskan", 1, true),
+                    chore("3", "Plocka undan efter mellis", 1, allDone),
+                    chore("4", "Kvällsrutin utan tjat", 2, allDone),
+                    chore("5", "Hjälpa till med disken", 1, allDone),
+                ),
+                foodCount = if (allDone) 5 else 2,
+                history = listOf(
+                    PetHistoryResponse(
+                        id = "h1", memberId = "child-1", year = 2026, month = 8,
+                        selectedEggType = "blue_egg", petType = "dragon", finalGrowthStage = 5,
+                    ),
+                    PetHistoryResponse(
+                        id = "h2", memberId = "child-1", year = 2026, month = 7,
+                        selectedEggType = "pink_egg", petType = "unicorn", finalGrowthStage = 4,
+                    ),
+                ),
+                viewingPast = viewingPast,
+            )
+        }
+    }
+}

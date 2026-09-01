@@ -45,6 +45,22 @@ data class FeedPetRequest(
     val xpAmount: Int,
 )
 
+/**
+ * Ett djur barnet haft tidigare.
+ *
+ * Bär inte namnet -- historiken har det inte -- och `finalGrowthStage` i stället för
+ * `growthStage`, eftersom en avslutad månad inte växer mer.
+ */
+data class PetHistoryResponse(
+    val id: String,
+    val memberId: String,
+    val year: Int,
+    val month: Int,
+    val selectedEggType: String,
+    val petType: String,
+    val finalGrowthStage: Int,
+)
+
 interface PetsApi {
     @GET("pets/current")
     suspend fun getCurrentPet(): Response<PetResponse>
@@ -57,6 +73,16 @@ interface PetsApi {
 
     @GET("pets/members/{memberId}/current")
     suspend fun getMemberPet(@Path("memberId") memberId: String): Response<PetResponse>
+
+    /** Barnets tidigare djur, för samlingen på barnets skärm. */
+    @GET("pets/history")
+    suspend fun getPetHistory(): List<PetHistoryResponse>
+
+    /** Samma, men när en förälder tittar: `pets/history` hade gett förälderns egna. */
+    @GET("pets/members/{memberId}/history")
+    suspend fun getMemberPetHistory(
+        @Path("memberId") memberId: String,
+    ): List<PetHistoryResponse>
 
     @GET("pets/collected-food")
     suspend fun getCollectedFood(): CollectedFoodResponse

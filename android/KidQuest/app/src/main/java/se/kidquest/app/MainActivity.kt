@@ -53,6 +53,7 @@ import kotlinx.coroutines.withContext
 import se.kidquest.app.billing.Billing
 import se.kidquest.app.dashboard.AddFamilyMemberDialog
 import se.kidquest.app.dashboard.AdultDashboardScreen
+import se.kidquest.app.dashboard.ChildDashboardFixture
 import se.kidquest.app.dashboard.ChildDashboardScreen
 import se.kidquest.app.dashboard.ChildPetScreen
 import se.kidquest.app.dashboard.ChildTasksScreen
@@ -124,6 +125,26 @@ class MainActivity : ComponentActivity() {
             val themeScope = rememberCoroutineScope()
 
             KidQuestTheme(dark = darkMode) {
+                // Barnets skärm hämtar allt från nätet, så den går inte att titta på utan
+                // en riktig session. Med en fixtur går den det -- och de två lägena som
+                // spelar mest roll, bandet som växer när dagen är klar och samlingens
+                // läsläge, nås bara genom att trycka.
+                //   --es kq_screen child | child-done | child-past
+                if (forcedScreen?.startsWith("child-") == true || forcedScreen == "child") {
+                    ChildDashboardScreen(
+                        childName = "Signe",
+                        childId = "child-1",
+                        onBack = {},
+                        onOpenTasks = {},
+                        onOpenWallet = {},
+                        fixture = ChildDashboardFixture.signe(
+                            allDone = forcedScreen == "child-done",
+                            viewingPast = forcedScreen == "child-past",
+                        ),
+                    )
+                    return@KidQuestTheme
+                }
+
                 var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Loading) }
                 var showAddMemberDialog by remember { mutableStateOf(false) }
                 var dashboardRefreshKey by remember { mutableStateOf(0) }
