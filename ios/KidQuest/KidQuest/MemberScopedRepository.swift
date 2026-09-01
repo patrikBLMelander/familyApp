@@ -115,6 +115,19 @@ enum MemberScopedRepository {
     /// Only the chore list is allowed to fail the whole read: a child with no pet, no
     /// wallet row yet and no XP row yet is three ordinary states, not three errors, and
     /// each one has a card that says so on its own.
+    /// Djuren barnet haft tidigare. Namnger barnet i sökvägen, som allt annat här --
+    /// `pets/history` hade gett förälderns egna djur.
+    ///
+    /// Sväljer felet: samlingen är en trevlighet och ska inte stoppa resten av skärmen.
+    static func fetchPetHistory(memberId: String) async -> [PetHistoryResponseDTO] {
+        let all = (try? await ApiClient.shared.send(
+            [PetHistoryResponseDTO].self,
+            path: "pets/members/\(memberId)/history",
+            method: "GET"
+        )) ?? []
+        return all.sorted { ($0.year, $0.month) > ($1.year, $1.month) }
+    }
+
     static func fetchSnapshot(memberId: String, date: Date = Date()) async throws -> Snapshot {
         let day = DailyChoreRepositoryIOS.apiDate(date)
 

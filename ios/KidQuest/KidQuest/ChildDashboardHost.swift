@@ -51,6 +51,12 @@ struct ChildDashboardHost: View {
     @State private var showSelectEgg = false
     @State private var showSwitchChild = false
     @State private var siblings: [ChildRef] = []
+    /// Barnets tidigare djur, och vilket som visas. Samma samling barnet ser.
+    @State private var history: [PetHistoryResponseDTO] = []
+    @State private var viewingPast: PetHistoryResponseDTO?
+
+    /// Icke-tom hoppar över nätanropet. Bara fixturen sätter den.
+    var preloadedHistory: [PetHistoryResponseDTO] = []
 
     /// Dark ink on pale cards, as on the child's own screen. The page behind them is a
     /// species gradient that runs from pastel to near-black depending on the animal, so
@@ -62,50 +68,36 @@ struct ChildDashboardHost: View {
     private var activeChild: ChildRef { viewing ?? child }
 
     var body: some View {
-        VStack(spacing: 0) {
-            SeasonHeaderBar(
-                title: activeChild.name,
-                subtitle: "Barnvy",
-                onBack: onExit
-            )
-
-            ZStack {
-                pageBackground.ignoresSafeArea(edges: .bottom)
-
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            actingAsParentBanner
-
-                            if let notice {
-                                noticeBanner(notice)
-                            }
-
-                            if let errorMessage {
-                                errorCard(errorMessage)
-                            } else if let snapshot {
-                                petCard(snapshot)
-                                foodCard(snapshot)
-                                choresCard(snapshot)
-                                walletCard(snapshot)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        .padding(.bottom, 24)
-                    }
+        Group {
+            if isLoading {
+                ZStack {
+                    palette.pageBg.ignoresSafeArea()
+                    ProgressView().tint(palette.accent)
                 }
+            } else if let errorMessage {
+                ZStack {
+                    palette.pageBg.ignoresSafeArea()
+                    errorCard(errorMessage).padding(16)
+                }
+            } else if let snapshot {
+                layout(snapshot)
+            } else {
+                palette.pageBg.ignoresSafeArea()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // The bar draws its own back control, so the navigation bar would only be an
-        // empty strip of a second colour above it.
+        // Ingen egen toppbar längre. Poängen med "Visa som barn" är att se det barnet
+        // ser, och en rubrikrad som barnet inte har gör skärmarna olika igen. Identitet,
+        // "Byt barn" och vägen ut bär den gula banderollen i stället -- den låg redan
+        // där och gjorde två av de tre sakerna.
         .toolbar(.hidden, for: .navigationBar)
         .task(id: activeChild.id) {
             await loadIfNeeded()
+            if !preloadedHistory.isEmpty {
+                history = preloadedHistory
+            } else {
+                history = await MemberScopedRepository.fetchPetHistory(memberId: activeChild.id)
+            }
         }
         .sheet(isPresented: $showSelectEgg) {
             // The member id is what makes this the CHILD's egg and not the parent's.
@@ -123,22 +115,42 @@ struct ChildDashboardHost: View {
         }
     }
 
-    // MARK: - Chrome
-
-    private var pageBackground: LinearGradient {
-        let species = PetThemeIOS.forPet(snapshot?.pet?.petType)
-        return LinearGradient(
-            colors: [species.from, species.to],
-            startPoint: .top,
-            endPoint: .bottom
+    /// Samma vy barnet ser. Skillnaden är var siffrorna kommer ifrån: varje anrop här
+    /// namnger barnet i sökvägen, medan barnets egen skärm läser med sin egen token.
+    private func layout(_ snapshot: MemberScopedRepository.Snapshot) -> some View {
+        ChildDayLayout(
+            childName: activeChild.name,
+            pet: snapshot.pet,
+            petLoadFailed: snapshot.petLoadFailed,
+            level: max(1, min(5, snapshot.xp?.currentLevel ?? 1)),
+            foodCount: snapshot.foodCount,
+            balance: snapshot.balance?.balance,
+            tasks: snapshot.todaysChores,
+            history: history,
+            viewingPast: $viewingPast,
+            isFeeding: isFeeding,
+            onToggleTask: { item in Task { await toggle(item) } },
+            onFeed: { amount in Task { await feed(amount: amount) } },
+            onOpenWallet: { onOpenWallet(activeChild) },
+            onSelectEgg: { showSelectEgg = true },
+            // Nil: en förälder lägger till sysslor i sin egen vy, inte härifrån.
+            onAddChore: nil,
+            banner: {
+                VStack(spacing: 10) {
+                    actingAsParentBanner
+                    if let notice {
+                        noticeBanner(notice)
+                    }
+                }
+            },
+            footer: { EmptyView() }
         )
     }
 
-    /// "Du ser Signes vy" with the two ways out of it.
-    ///
-    /// Amber and always at the top of the scroll, as on Android. It is the one piece of
-    /// this screen that is not part of the child's own view, and it is the only reason
-    /// the screen is safe to leave open.
+    private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
+
+    // MARK: - Chrome
+
     private var actingAsParentBanner: some View {
         HStack(spacing: 8) {
             Image(systemName: "eye")
@@ -209,236 +221,6 @@ struct ChildDashboardHost: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color.white.opacity(0.82))
             )
-    }
-
-    // MARK: - Pet
-
-    private func petCard(_ snapshot: MemberScopedRepository.Snapshot) -> some View {
-        card {
-            VStack(alignment: .leading, spacing: 12) {
-                if let pet = snapshot.pet {
-                    petBody(pet: pet, snapshot: snapshot)
-                } else if snapshot.petLoadFailed {
-                    // Offering "Välj ägg" here would be wrong: the child may well
-                    // already have a pet that we simply failed to load, and picking a
-                    // second one is refused by the server anyway.
-                    Text("Kunde inte hämta \(possessive(activeChild.name)) djur just nu")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(cardInk)
-                    Button("Försök igen") {
-                        Task { await load() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                } else {
-                    Text("Inget djur denna månad")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(cardInk)
-                    Text("Välj ett ägg åt \(activeChild.name) för att komma igång.")
-                        .font(.subheadline)
-                        .foregroundStyle(cardInkSoft)
-                    Button("Välj ägg") {
-                        showSelectEgg = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func petBody(pet: PetResponseDTO, snapshot: MemberScopedRepository.Snapshot) -> some View {
-        let petName = pet.name ?? PetNameUtilsIOS.getPetNameSwedish(pet.petType)
-        let isHungry = !hasFedToday(snapshot)
-
-        Text(isHungry
-             ? "Jag är hungrig... kan du ge mig mat?"
-             : "Mmm! Tack för maten idag, \(activeChild.name)! 🥰")
-            .font(.body)
-            .foregroundStyle(cardInk)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isHungry
-                          ? Color(red: 1.0, green: 228 / 255, blue: 214 / 255)
-                          : Color(red: 209 / 255, green: 250 / 255, blue: 229 / 255))
-            )
-            .frame(maxWidth: .infinity, alignment: .center)
-
-        VStack(spacing: 8) {
-            PetVisual(petType: pet.petType, growthStage: pet.growthStage)
-                .frame(maxWidth: .infinity)
-                .frame(height: 220)
-
-            levelRing(snapshot: snapshot, isHungry: isHungry)
-        }
-
-        Text(petName)
-            .font(.title3.weight(.bold))
-            .foregroundStyle(cardInk)
-    }
-
-    /// Level and progress towards the next one, as the child sees it.
-    private func levelRing(snapshot: MemberScopedRepository.Snapshot, isHungry: Bool) -> some View {
-        // Same thresholds as the child's screen and Android's.
-        let thresholds = [0, 10, 35, 70, 125]
-        let level = snapshot.xp?.currentLevel ?? 1
-        let safeLevel = max(1, min(thresholds.count - 1, level))
-        let span = max(1, thresholds[safeLevel] - thresholds[safeLevel - 1])
-        let inLevel = snapshot.xp?.xpInCurrentLevel ?? 0
-        let progress = CGFloat(min(max(0, inLevel), span)) / CGFloat(span)
-
-        return ZStack {
-            Circle()
-                .stroke(Color.gray.opacity(0.3), lineWidth: 6)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(Color.purple, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            VStack(spacing: 0) {
-                Text(isHungry ? "🥺" : "😊")
-                    .font(.title2)
-                Text("\(level)")
-                    .font(.footnote)
-                    .foregroundStyle(cardInk)
-            }
-        }
-        .frame(width: 96, height: 96)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Nivå \(level)")
-    }
-
-    private func hasFedToday(_ snapshot: MemberScopedRepository.Snapshot) -> Bool {
-        snapshot.lastFedDate == DailyChoreRepositoryIOS.apiDate(Date())
-    }
-
-    // MARK: - Food
-
-    private func foodCard(_ snapshot: MemberScopedRepository.Snapshot) -> some View {
-        let total = snapshot.foodCount
-        let foodName = PetFoodUtilsIOS.name(for: snapshot.pet?.petType)
-        let foodEmoji = PetFoodUtilsIOS.emoji(for: snapshot.pet?.petType)
-
-        return card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Mat att ge")
-                    .font(.headline)
-                    .foregroundStyle(cardInk)
-
-                Text("\(activeChild.name) har \(total) \(foodName) att ge. \(foodEmoji)")
-                    .font(.subheadline)
-                    .foregroundStyle(cardInkSoft)
-
-                HStack(spacing: 8) {
-                    Button {
-                        Task { await feed(amount: 1) }
-                    } label: {
-                        Text(isFeeding ? "…" : "Mata 1")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.yellow)
-                    .disabled(total < 1 || isFeeding || snapshot.pet == nil)
-
-                    Button {
-                        Task { await feed(amount: total) }
-                    } label: {
-                        Text(isFeeding ? "Ger mat…" : "Mata allt (\(total))")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .disabled(total < 1 || isFeeding || snapshot.pet == nil)
-                }
-            }
-        }
-    }
-
-    // MARK: - Chores
-
-    private func choresCard(_ snapshot: MemberScopedRepository.Snapshot) -> some View {
-        card {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Dagens uppgifter")
-                        .font(.headline)
-                        .foregroundStyle(cardInk)
-                    Spacer()
-                    Button("Alla ›") {
-                        onOpenTasks(activeChild)
-                    }
-                    .font(.subheadline)
-                }
-
-                if snapshot.todaysChores.isEmpty {
-                    Text("Inga uppgifter idag.")
-                        .font(.subheadline)
-                        .foregroundStyle(cardInkSoft)
-                } else {
-                    ForEach(snapshot.todaysChores, id: \.chore.id) { item in
-                        choreRow(item)
-                    }
-                }
-            }
-        }
-    }
-
-    private func choreRow(_ item: DailyChoreWithCompletionResponseDTO) -> some View {
-        Button {
-            Task { await toggle(item) }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: item.completed ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(item.completed ? Color.green : Color.gray)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.chore.title)
-                        .foregroundStyle(item.completed ? cardInkSoft : cardInk)
-                        .strikethrough(item.completed, color: cardInkSoft)
-                        .multilineTextAlignment(.leading)
-                    if item.chore.xpPoints > 0 {
-                        Text("\(item.chore.xpPoints) mat")
-                            .font(.caption)
-                            .foregroundStyle(cardInkSoft)
-                    }
-                }
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(item.completed ? [.isButton, .isSelected] : [.isButton])
-    }
-
-    // MARK: - Wallet
-
-    private func walletCard(_ snapshot: MemberScopedRepository.Snapshot) -> some View {
-        card {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Plånbok")
-                    .font(.headline)
-                    .foregroundStyle(cardInk)
-
-                if let balance = snapshot.balance {
-                    Text("Saldo: \(balance.balance) kr")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(cardInk)
-                } else {
-                    Text("Saldo okänt.")
-                        .foregroundStyle(cardInkSoft)
-                }
-
-                Button {
-                    onOpenWallet(activeChild)
-                } label: {
-                    Text("Öppna plånbok")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
     }
 
     // MARK: - Byt barn
@@ -600,24 +382,23 @@ extension ChildDashboardHost {
     static func fixture(fed: Bool = false) -> ChildDashboardHost {
         ChildDashboardHost(
             child: ChildRef(id: "child-1", name: "Signe"),
+            // Samma siffror som barnets egen skärm, ur ChildFixtures. Poängen är att de
+            // två går att jämföra sida vid sida i harnesket: skiljer de sig ska det bero
+            // på layouten, inte på att de fick olika data.
             preloaded: MemberScopedRepository.Snapshot(
-                pet: fixturePet(),
+                pet: ChildFixtures.pet,
                 petLoadFailed: false,
-                xp: fixtureXp(),
-                balance: WalletBalanceResponseDTO(id: "w1", memberId: "child-1", balance: 245),
-                foodCount: fed ? 0 : 4,
+                xp: ChildFixtures.xp,
+                balance: WalletBalanceResponseDTO(id: "w1", memberId: "child-1", balance: 85),
+                foodCount: fed ? 0 : 2,
                 lastFedDate: fed ? DailyChoreRepositoryIOS.apiDate(Date()) : nil,
-                todaysChores: [
-                    fixtureChore(id: "c1", title: "Borsta tänderna morgon och kväll", xp: 2, done: true),
-                    fixtureChore(id: "c2", title: "Bädda sängen", xp: 1, done: true),
-                    fixtureChore(id: "c3", title: "Städa lekrummet", xp: 1, done: false),
-                    fixtureChore(id: "c4", title: "Häng upp ytterkläder", xp: 1, done: false),
-                ].compactMap { $0 }
+                todaysChores: ChildFixtures.tasks(allDone: false)
             ),
             preloadedSiblings: [
                 ChildRef(id: "child-1", name: "Signe"),
                 ChildRef(id: "child-2", name: "Walter"),
-            ]
+            ],
+            preloadedHistory: ChildFixtures.history
         )
     }
 
