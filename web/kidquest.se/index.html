@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KidQuest – sysslor som barn faktiskt vill göra</title>
+<meta name="description" content="KidQuest gör dagliga sysslor till något barn vill göra. Barnen samlar mat till ett djur som växer — ett nytt djur varje månad.">
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="_style.css">
+<style>
+  /* Startsidan har lite mer luft och en bildrad som de juridiska sidorna inte behöver. */
+  .hero { text-align: center; padding: 1rem 0 .5rem; }
+  .hero img.logo { width: 88px; height: 88px; border-radius: 20px; display: block; margin: 0 auto 1.25rem; }
+  .hero h1 { font-size: clamp(1.9rem, 6vw, 2.6rem); margin-bottom: .75rem; }
+  .hero .lead { font-size: 1.1rem; max-width: 32rem; margin: 0 auto 1.5rem; }
+
+  .shots {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1.5rem; margin: 2.5rem 0 1rem;
+  }
+  .shot { text-align: center; }
+  .shot img {
+    width: 100%; max-width: 240px; height: auto; border-radius: 18px;
+    border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0,0,0,.09);
+  }
+  .shot p { font-size: .875rem; margin: .75rem 0 0; }
+
+  .steps { counter-reset: s; padding: 0; list-style: none; margin: 1rem 0; }
+  .steps li {
+    counter-increment: s; position: relative; padding-left: 2.4rem; margin: 1rem 0;
+  }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 0; top: -.1rem;
+    width: 1.7rem; height: 1.7rem; border-radius: 50%;
+    background: var(--accent); color: #fff; font-size: .85rem; font-weight: 700;
+    display: grid; place-items: center;
+  }
+  .steps strong { display: block; }
+
+  .cta { background: #F1F6F0; border-color: #D6E4D2; text-align: center; }
+  .cta h2 { margin-top: 0; }
+  .btn {
+    display: inline-block; background: var(--accent); color: #fff; text-decoration: none;
+    padding: .8rem 1.5rem; border-radius: 10px; font-weight: 600; margin-top: .5rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+  <img class="logo" src="img/ikon.png" alt="">
+  <h1>Sysslor som barn faktiskt vill göra</h1>
+  <p class="lead">
+    Barnen bockar av dagens sysslor och samlar mat till ett djur som växer.
+    Varje månad kläcks ett nytt.
+  </p>
+</div>
+
+<div class="shots">
+  <div class="shot">
+    <img src="img/foralder.jpg" alt="Föräldravyn med två barn, deras djur och dagens framsteg" loading="lazy">
+    <p>Föräldern ser hela familjen på en skärm</p>
+  </div>
+  <div class="shot">
+    <img src="img/barn.jpg" alt="Barnets vy med dagens uppgifter att bocka av" loading="lazy">
+    <p>Barnet ser vad som ska göras idag</p>
+  </div>
+  <div class="shot">
+    <img src="img/klart.jpg" alt="Barnets vy när alla uppgifter är klara och djuret står i mitten" loading="lazy">
+    <p>Och vad som händer när allt är klart</p>
+  </div>
+</div>
+
+<h2>Så fungerar det</h2>
+<ol class="steps">
+  <li>
+    <strong>Föräldern lägger upp sysslorna</strong>
+    Välj barnets ålder så föreslås fem sysslor direkt — bädda sängen, packa
+    skolväskan, plocka undan efter mellis. Ändra fritt.
+  </li>
+  <li>
+    <strong>Barnet bockar av dem</strong>
+    Varje syssla ger mat. Barnet har sin egen skärm i appen och loggar in med en
+    QR-kod från föräldern — inget lösenord, ingen e-post.
+  </li>
+  <li>
+    <strong>Djuret växer</strong>
+    Maten går till månadens djur, som går igenom fem stadier. När månaden är slut
+    stannar det i barnets samling och ett nytt ägg väntar.
+  </li>
+</ol>
+
+<h2>Vad mer som finns</h2>
+<ul>
+  <li><strong>Fickpengar.</strong> Vecko- eller månadspeng som betalas ut automatiskt,
+      sparmål barnet kan spara till, och utgifter att registrera.</li>
+  <li><strong>Flera barn och flera vuxna.</strong> Hela hushållet i samma familj.</li>
+  <li><strong>Barnen blockeras aldrig.</strong> Ett barn kan alltid bocka av sina sysslor
+      och mata sitt djur, oavsett om familjen betalar.</li>
+</ul>
+
+<div class="card cta">
+  <h2>Appen är inte släppt än</h2>
+  <p>
+    KidQuest är i sluttestning och kommer till App Store och Google Play inom kort.
+  </p>
+  <p>
+    Vill du använda appen redan nu? Hör av dig, så ordnar jag en testinbjudan.
+  </p>
+  <a class="btn" href="mailto:support@kidquest.se?subject=Jag%20vill%20testa%20KidQuest">
+    Be om en testinbjudan
+  </a>
+</div>
+
+<h2>Vem som ligger bakom</h2>
+<p>
+  Jag är en pappa som byggde KidQuest till mina egna barn. Det började som ett sätt att
+  slippa tjata om tandborstning varje morgon. Appen utvecklas på kvällar och helger, och
+  frågor besvaras av mig själv.
+</p>
+
+<footer>
+  <a href="/support.html">Support</a>
+  <a href="/privacy.html">Integritetspolicy</a>
+  <a href="/villkor.html">Villkor</a>
+  <a href="/radera-konto.html">Radera konto</a>
+</footer>
+
+</div>
+</body>
+</html>

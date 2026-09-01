@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support – KidQuest</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="_style.css">
+<style>
+  details {
+    border-bottom: 1px solid var(--line); padding: .9rem 0;
+  }
+  details summary {
+    cursor: pointer; font-weight: 600; color: var(--ink); list-style: none;
+    display: flex; align-items: baseline; gap: .6rem;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before {
+    content: "+"; color: var(--accent); font-weight: 700; width: .8rem; flex: 0 0 auto;
+  }
+  details[open] summary::before { content: "–"; }
+  details p { margin: .7rem 0 0 1.4rem; }
+  details ul { margin: .7rem 0 0 1.4rem; }
+  .mail { background: #F1F6F0; border-color: #D6E4D2; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand"><a href="/">KidQuest</a></div>
+</header>
+
+<h1>Support</h1>
+<p class="updated">Frågor besvaras av mig som byggt appen</p>
+
+<div class="card mail">
+  <p>
+    <strong>Mejla <a href="mailto:support@kidquest.se">support@kidquest.se</a></strong>
+  </p>
+  <p>
+    Jag svarar så fort jag hinner, oftast inom ett par dagar. Skriv gärna vilken telefon du
+    har och vad du gjorde när det gick fel — det halverar antalet mejl fram och tillbaka.
+  </p>
+</div>
+
+<h2>Vanliga frågor</h2>
+
+<details>
+  <summary>Hur loggar barnet in?</summary>
+  <p>
+    Barnet loggar aldrig in med lösenord. Föräldern trycker på barnets kort i appen och
+    väljer <strong>Bjud in till appen</strong>, vilket ger en QR-kod. Barnet skannar den med
+    sin egen telefon.
+  </p>
+  <p>
+    Har barnet ingen egen telefon går det bra ändå — föräldern kan välja
+    <strong>Visa som barn</strong> och bocka av tillsammans med barnet.
+  </p>
+</details>
+
+<details>
+  <summary>Barnet har bytt telefon, vad gör jag?</summary>
+  <p>
+    Generera en ny QR-kod på samma sätt och skanna med den nya telefonen. Den gamla loggas
+    ut automatiskt.
+  </p>
+</details>
+
+<details>
+  <summary>Jag har glömt mitt lösenord</summary>
+  <p>
+    Använd <strong>Glömt lösenord</strong> på inloggningsskärmen. Ett mejl skickas till
+    adressen du registrerade dig med.
+  </p>
+  <p>
+    Kommer inget mejl: kolla skräpposten, och kontrollera att du använder samma adress som
+    vid registreringen. Fungerar det ändå inte kan en annan vuxen i familjen sätta ett nytt
+    lösenord åt dig i appen.
+  </p>
+</details>
+
+<details>
+  <summary>Vad är "mat" och hur växer djuret?</summary>
+  <p>
+    Varje syssla ger ett antal mat när barnet bockar av den. Maten ges till månadens djur,
+    som växer genom fem stadier. När månaden är slut stannar djuret i barnets samling och
+    ett nytt ägg väntar.
+  </p>
+</details>
+
+<details>
+  <summary>Är fickpengarna riktiga pengar?</summary>
+  <p>
+    Nej. Plånboken i appen är bokföring av siffror som föräldern själv matar in. Den är inte
+    kopplad till något bankkonto och flyttar inga riktiga pengar. Vad som faktiskt betalas
+    ut är en sak mellan barnet och föräldern.
+  </p>
+</details>
+
+<details>
+  <summary>Vad kostar appen?</summary>
+  <p>
+    Appen kan provas gratis. Därefter kostar den 29 kronor per månad för hela familjen — en
+    betalning täcker alla barn och alla vuxna.
+  </p>
+  <p>
+    <strong>Barnen blockeras aldrig.</strong> Även utan prenumeration kan ett barn bocka av
+    sina sysslor och mata sitt djur. Det som kräver betalning är förälderns möjlighet att
+    lägga upp och ändra sysslor.
+  </p>
+</details>
+
+<details>
+  <summary>Hur säger jag upp prenumerationen?</summary>
+  <p>
+    Prenumerationen ligger hos Apple eller Google, inte hos mig, så den sägs upp där:
+  </p>
+  <ul>
+    <li><strong>iPhone:</strong> Inställningar → ditt namn → Prenumerationer</li>
+    <li><strong>Android:</strong> Google Play → din profil → Betalningar och prenumerationer</li>
+  </ul>
+  <p>
+    Att radera appen eller kontot avslutar <em>inte</em> prenumerationen.
+  </p>
+</details>
+
+<details>
+  <summary>Hur raderar jag vår data?</summary>
+  <p>
+    I appen: menyn med tre punkter uppe till höger på översikten, sedan
+    <strong>Ta bort familjen</strong>. Allt raderas för hela familjen och det går inte att
+    ångra.
+  </p>
+  <p>
+    Har du inte appen kvar, se <a href="/radera-konto.html">Radera konto</a>.
+  </p>
+</details>
+
+<details>
+  <summary>Varför vill appen använda kameran?</summary>
+  <p>
+    Bara för att läsa QR-koden som kopplar ett barns telefon till familjen. Bilden lämnar
+    aldrig telefonen och ingenting sparas.
+  </p>
+</details>
+
+<details>
+  <summary>Kan flera vuxna dela på familjen?</summary>
+  <p>
+    Ja. Lägg till den andra vuxna som familjemedlem och koppla deras telefon med QR-koden på
+    deras kort. Båda ser och hanterar samma familj.
+  </p>
+</details>
+
+<h2>Hittat en bugg?</h2>
+<p>
+  Skriv till <a href="mailto:support@kidquest.se?subject=Bugg">support@kidquest.se</a>. Det
+  som hjälper mest är vad du gjorde, vad du förväntade dig, och vad som hände i stället —
+  gärna med en skärmbild.
+</p>
+
+<footer>
+  <a href="/support.html">Support</a>
+  <a href="/privacy.html">Integritetspolicy</a>
+  <a href="/villkor.html">Villkor</a>
+  <a href="/radera-konto.html">Radera konto</a>
+</footer>
+
+</div>
+</body>
+</html>
