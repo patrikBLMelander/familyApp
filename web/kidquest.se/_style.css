@@ -1,0 +1,49 @@
+/* Delad stil för de tre sidorna. Ljus och enkel med flit: de här öppnas oftast
+   på en telefon av en förälder som vill kontrollera något, inte läsas igenom. */
+:root {
+  --bg: #FBFAF7;
+  --ink: #1F2421;
+  --soft: #5A6360;
+  --faint: #8A928E;
+  --line: #E4E7E2;
+  --accent: #0F6B4F;
+  --card: #FFFFFF;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+header { border-bottom: 1px solid var(--line); padding-bottom: 1.25rem; margin-bottom: 2rem; }
+.brand { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+.brand a { color: var(--ink); text-decoration: none; }
+h1 { font-size: 1.9rem; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+.updated { color: var(--faint); font-size: .875rem; margin: 0; }
+h2 { font-size: 1.2rem; margin: 2.25rem 0 .6rem; letter-spacing: -0.01em; }
+h3 { font-size: 1rem; margin: 1.5rem 0 .4rem; }
+p, li { color: var(--soft); }
+p { margin: 0 0 .9rem; }
+ul { margin: 0 0 .9rem; padding-left: 1.2rem; }
+li { margin: .25rem 0; }
+strong { color: var(--ink); }
+a { color: var(--accent); }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 1.1rem 1.25rem; margin: 1.25rem 0;
+}
+.card p:last-child, .card ul:last-child { margin-bottom: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .93rem; }
+th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--faint); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+td { color: var(--soft); }
+td:first-child { color: var(--ink); font-weight: 500; white-space: nowrap; }
+.tbl { overflow-x: auto; }
+footer {
+  margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+  font-size: .875rem; color: var(--faint);
+}
+footer a { margin-right: 1rem; }
+.todo { background: #FFF7E6; border-color: #F0DFB8; }
+.todo strong { color: #8A5A00; }
