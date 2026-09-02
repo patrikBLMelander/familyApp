@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Återställ lösenord – KidQuest</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.png">
+<link rel="stylesheet" href="/_style.css">
+<style>
+  /* Den enda sidan på webbplatsen med ett formulär, så stilen bor här i stället
+     för i _style.css där ingen annan sida skulle använda den. */
+  form { display: flex; flex-direction: column; gap: 1.1rem; max-width: 24rem; }
+  label { display: flex; flex-direction: column; gap: .35rem; }
+  label > span { font-size: .875rem; font-weight: 600; color: var(--ink); }
+  input[type=password] {
+    padding: .75rem .875rem;
+    border: 1px solid var(--line);
+    border-radius: .75rem;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+  }
+  input[type=password]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+  }
+  input[type=password]:disabled { background: #F2F3F1; color: var(--faint); }
+  button {
+    padding: .875rem 1rem;
+    border: 0;
+    border-radius: .75rem;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { background: #C9CFCB; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .fel { color: #9B1C1C; font-size: .9rem; margin: 0; }
+  .hint { color: var(--faint); font-size: .85rem; margin: 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand"><a href="/">KidQuest</a></div>
+</header>
+
+<!-- Tre tillstånd, ett synligt i taget. Ingen ramverkskod: en utelåst förälder
+     ska inte behöva ladda ner en JavaScript-bundle för att byta lösenord. -->
+
+<div id="steg-formular" hidden>
+  <h1>Välj ett nytt lösenord</h1>
+  <p class="updated">Minst 6 tecken.</p>
+
+  <form id="formular" novalidate>
+    <label>
+      <span>Nytt lösenord</span>
+      <input id="losenord" type="password" autocomplete="new-password" required minlength="6">
+      <small class="fel" id="fel-kort" hidden>Minst 6 tecken.</small>
+    </label>
+
+    <label>
+      <span>Upprepa lösenordet</span>
+      <input id="upprepa" type="password" autocomplete="new-password" required>
+      <small class="fel" id="fel-olika" hidden>Lösenorden är inte lika.</small>
+    </label>
+
+    <p class="fel" id="fel-server" hidden></p>
+
+    <button type="submit" id="spara" disabled>Spara lösenordet</button>
+  </form>
+</div>
+
+<div id="steg-klart" hidden>
+  <h1>Klart</h1>
+  <p>
+    Ditt lösenord är uppdaterat. Nu kan du logga in i KidQuest-appen med det nya.
+  </p>
+</div>
+
+<div id="steg-ingen-kod" hidden>
+  <h1>Länken saknar en kod</h1>
+  <p>
+    Adressen ska innehålla en kod från mejlet. Kopiera hela länken från
+    återställningsmejlet, eller begär en ny återställning i appen.
+  </p>
+  <p>
+    Fungerar det inte, mejla <a href="mailto:support@kidquest.se">support@kidquest.se</a>.
+  </p>
+</div>
+
+<noscript>
+  <h1>Välj ett nytt lösenord</h1>
+  <p>
+    Den här sidan behöver JavaScript för att kunna spara ett nytt lösenord. Slå på
+    det och ladda om sidan, eller mejla
+    <a href="mailto:support@kidquest.se">support@kidquest.se</a> så hjälper jag dig.
+  </p>
+</noscript>
+
+<script>
+(function () {
+  "use strict";
+
+  // Samma bas som apparna använder. Sidan serveras av samma server på både
+  // Railway-adressen och kidquest.se, men backendens CORS känner bara
+  // Railway-adressen -- och det är dit återställningsmejlet pekar.
+  var API = "https://backend-production-5c57.up.railway.app/api/v1";
+
+  var token = new URLSearchParams(window.location.search).get("token");
+
+  var steg = {
+    formular: document.getElementById("steg-formular"),
+    klart: document.getElementById("steg-klart"),
+    ingenKod: document.getElementById("steg-ingen-kod")
+  };
+
+  function visa(namn) {
+    Object.keys(steg).forEach(function (k) { steg[k].hidden = k !== namn; });
+  }
+
+  if (!token) {
+    visa("ingenKod");
+    return;
+  }
+  visa("formular");
+
+  var losenord = document.getElementById("losenord");
+  var upprepa = document.getElementById("upprepa");
+  var spara = document.getElementById("spara");
+  var felKort = document.getElementById("fel-kort");
+  var felOlika = document.getElementById("fel-olika");
+  var felServer = document.getElementById("fel-server");
+  var sparar = false;
+
+  // Felen visas först när fältet har innehåll. Ett tomt fält som redan skriker
+  // "för kort" läser som ett fel man gjort, inte som en regel man ska följa.
+  function validera() {
+    var a = losenord.value;
+    var b = upprepa.value;
+    felKort.hidden = !(a.length > 0 && a.length < 6);
+    felOlika.hidden = !(b.length > 0 && a !== b);
+    spara.disabled = sparar || a.length < 6 || a !== b;
+  }
+
+  losenord.addEventListener("input", validera);
+  upprepa.addEventListener("input", validera);
+
+  document.getElementById("formular").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (spara.disabled) return;
+
+    sparar = true;
+    spara.disabled = true;
+    spara.textContent = "Sparar…";
+    felServer.hidden = true;
+
+    fetch(API + "/families/password-reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token, password: losenord.value })
+    })
+      .then(function (svar) {
+        if (svar.ok) return null;
+        return svar.json().catch(function () { return null; }).then(function (kropp) {
+          // Backend svarar med ett och samma meddelande för utgången, använd och
+          // påhittad kod -- med flit, så att ingen kan gissa vilka koder som finns.
+          var text = (kropp && (kropp.error || kropp.message)) || "";
+          throw new Error(text);
+        });
+      })
+      .then(function () {
+        visa("klart");
+      })
+      .catch(function (err) {
+        var text = String(err && err.message || "");
+        if (text.indexOf("invalid or has expired") !== -1) {
+          felServer.textContent =
+            "Länken har gått ut eller är redan använd. Begär en ny återställning i appen.";
+        } else if (text.indexOf("at least 6") !== -1) {
+          felServer.textContent = "Lösenordet måste vara minst 6 tecken.";
+        } else if (text) {
+          felServer.textContent = text;
+        } else {
+          // Ett nätverksfel ser likadant ut som ett CORS-avslag i webbläsaren, så
+          // meddelandet får täcka båda utan att gissa vilket det var.
+          felServer.textContent =
+            "Kunde inte spara lösenordet. Kontrollera att du öppnat länken precis som " +
+            "den står i mejlet, och försök igen.";
+        }
+        felServer.hidden = false;
+      })
+      .then(function () {
+        sparar = false;
+        spara.textContent = "Spara lösenordet";
+        validera();
+      });
+  });
+})();
+</script>
+
+</div>
+</body>
+</html>
