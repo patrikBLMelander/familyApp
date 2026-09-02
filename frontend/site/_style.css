@@ -29,6 +29,9 @@ ul { margin: 0 0 .9rem; padding-left: 1.2rem; }
 li { margin: .25rem 0; }
 strong { color: var(--ink); }
 a { color: var(--accent); }
+.varning { background: #FFF7E6; border-color: #F0DFB8; }
+.varning strong { color: #8A5A00; }
+
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   padding: 1.1rem 1.25rem; margin: 1.25rem 0;
@@ -45,5 +48,3 @@ footer {
   font-size: .875rem; color: var(--faint);
 }
 footer a { margin-right: 1rem; }
-.todo { background: #FFF7E6; border-color: #F0DFB8; }
-.todo strong { color: #8A5A00; }
