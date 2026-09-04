@@ -103,6 +103,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.key
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.positionInRoot
 import se.kidquest.app.network.PetHistoryResponse
 import se.kidquest.app.theme.LocalSeasonPalette
 import se.kidquest.app.theme.SeasonPalette
@@ -163,6 +170,27 @@ fun ChildDashboardScreen(
     // Barnets tidigare djur, och vilket som visas. Nil betyder dagens.
     var petHistory by remember { mutableStateOf<List<PetHistoryResponse>>(emptyList()) }
     var viewingPast by remember { mutableStateOf<PetHistoryResponse?>(null) }
+
+    // Matningens synliga del. Barnen som testade sa att man inte ser att man matar och
+    // inte ser progressen -- bägge stämde: maten försvann ur en siffra och nivån var en
+    // textsträng. Sekvensen bor i FeedAnimation, tillståndet här.
+    val feedAnim = remember { FeedAnimation() }
+    // Bandets och matlungans läge i rotens koordinater. Maten ska flyga från räknaren
+    // till djuret, och lungans y flyttar sig när "Allt klart idag!" lägger till en rad,
+    // så den kan inte hårdkodas.
+    // Båda sparas i rotens pixlar och dras ifrån varandra först vid renderingen.
+    // onGloballyPositioned garanterar ingen ordning mellan förälder och barn, så om
+    // lungan mättes först vore bandOrigin noll och lungans läge räknat mot roten i
+    // stället för mot bandet. Att spara råa lägen och räkna differensen där den
+    // används gör ordningen betydelselös.
+    var bandOrigin by remember { mutableStateOf(Offset.Zero) }
+    var foodPillRoot by remember { mutableStateOf<Offset?>(null) }
+    // positionInRoot() ger pixlar medan bandets maxWidth ger dp, och bären placeras med
+    // Modifier.offset i dp. Omräkningen sker vid renderingen, på ett ställe.
+    val density = LocalDensity.current
+    // Nivån som firas, fångad när höjningen sker. Att läsa xp?.currentLevel + 1 medan
+    // fanfaren står kvar hade visat fel siffra så fort omladdningen kommit in.
+    var celebrateLevel by remember { mutableStateOf(0) }
 
     LaunchedEffect(childId, refreshKey) {
         if (fixture != null) {
@@ -275,20 +303,95 @@ fun ChildDashboardScreen(
     val feed: (Int) -> Unit = { amount ->
         if (amount > 0 && !isFeeding) {
             isFeeding = true
+            // Sparade för att kunna läggas tillbaka om anropet misslyckas.
+            val xpBefore = xp
+            val petBefore = pet
+            val foodBefore = collectedFoodCount
+
+            // Vilket bär som tar barnet över tröskeln. xpForNextLevel är hur många XP
+            // som fattas, alltså korsar det (xpForNextLevel - 1):te bäret. Noll betyder
+            // högsta nivån, där det inte finns någon höjning att spela.
+            val needed = xpBefore?.xpForNextLevel ?: 0
+            val crossing = if (needed in 1..amount) needed - 1 else null
+            val emoji = PetFoodUtils.getPetFoodEmoji(pet?.petType)
+
             coroutineScope.launch {
-                try {
-                    withContext(Dispatchers.IO) {
+                // I en fixtur finns ingen session att mata mot. Animationen körs ändå,
+                // och ingen omladdning sker efteråt -- den skulle lägga tillbaka
+                // fixturens ursprungliga siffror och radera det man just tittade på.
+                if (fixture != null) {
+                    feedAnim.run(
+                        amount = amount,
+                        emoji = emoji,
+                        crossingBerry = crossing,
+                        onBerryLifted = {
+                            collectedFoodCount = (collectedFoodCount - 1).coerceAtLeast(0)
+                        },
+                        onBerryLanded = { xp = xp?.plusOneXp() },
+                        onLevelUp = {
+                            celebrateLevel = ((xpBefore?.currentLevel ?: 1) + 1).coerceAtMost(5)
+                            xp = xp?.let { it.copy(currentLevel = celebrateLevel) }
+                            pet = pet?.let {
+                                it.copy(growthStage = (it.growthStage + 1).coerceAtMost(5))
+                            }
+                        },
+                    )
+                    isFeeding = false
+                    return@launch
+                }
+
+                // Anropet går iväg nu, men skärmen väntar inte in det. toggleTask några
+                // rader ner har varit optimistisk hela tiden; matningen laddade om och
+                // stod stilla under nätverkstiden, vilket är halva skälet att barnen
+                // sa att det inte händer något.
+                val call = async(Dispatchers.IO) {
+                    kotlin.runCatching {
                         if (actingAsParent) {
                             ApiClient.petsApi.feedMemberPet(childId, FeedPetRequest(xpAmount = amount))
                         } else {
                             ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = amount))
                         }
                     }
+                }
+
+                feedAnim.run(
+                    amount = amount,
+                    emoji = emoji,
+                    crossingBerry = crossing,
+                    onBerryLifted = {
+                        collectedFoodCount = (collectedFoodCount - 1).coerceAtLeast(0)
+                    },
+                    onBerryLanded = { xp = xp?.plusOneXp() },
+                    onLevelUp = {
+                        celebrateLevel = ((xpBefore?.currentLevel ?: 1) + 1).coerceAtMost(5)
+                        // Namnraden visar nivån, och utan det här sa den "NIVÅ 3" i
+                        // 2,4 sekunder medan banderollen sa "Nivå 4!". Omladdningen
+                        // rättar den ändå, men motsägelsen syntes hela firandet.
+                        xp = xp?.let { it.copy(currentLevel = celebrateLevel) }
+                        // Stadiet är nivån (calculateGrowthStage mappar 1:1), så det går
+                        // att visa direkt. Bytet sker under blänket och läser därför som
+                        // att djuret växer och inte som att en bild ersattes.
+                        pet = pet?.let { it.copy(growthStage = (it.growthStage + 1).coerceAtMost(5)) }
+                    },
+                )
+
+                val result = call.await()
+                if (result.isSuccess) {
                     lastFedDate = todayString
                     refreshKey++
-                } finally {
-                    isFeeding = false
+                } else {
+                    // Maten kommer tillbaka. Ett barn som ser bären flyga och sedan
+                    // ligga kvar i räknaren har fått veta att det inte gick.
+                    feedAnim.reset()
+                    collectedFoodCount = foodBefore
+                    xp = xpBefore
+                    pet = petBefore
+                    error = ApiErrors.message(
+                        result.exceptionOrNull() ?: Exception("okänt fel"),
+                        "Kunde inte ge maten",
+                    )
                 }
+                isFeeding = false
             }
         }
     }
@@ -365,19 +468,46 @@ fun ChildDashboardScreen(
                     .verticalScroll(rememberScrollState()),
             ) {
                 // ---- Bandet ----
-                Box(modifier = Modifier.fillMaxWidth().height(bandHeight)) {
+                // BoxWithConstraints och inte Box: maten ska flyga till djuret, och
+                // djuret flyttar sig. Det står i BottomEnd på 0,52 normalt och i
+                // BottomCenter på 0,82 när dagen är klar, i ett band som är 400dp eller
+                // 258dp. Målet måste alltså räknas ur bandets faktiska mått.
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(bandHeight)
+                        // Konfettin faller nedåt och ritades utanför bandet, ner över
+                        // uppgiftskortet -- det läste som en bugg och inte som ett
+                        // firande. Bandet klipper sitt eget innehåll nu.
+                        .clipToBounds()
+                        .onGloballyPositioned { bandOrigin = it.positionInRoot() },
+                ) {
+                    val bigPet = allDone && viewingPast == null
+                    val petScale = if (bigPet) 0.82f else 0.52f
+                    // ContentScale.Fit centrerar konsten i sin box, så boxens mitt är
+                    // konstens mitt -- det är dit bären ska.
+                    val petBoxW = maxWidth.value * petScale
+                    val petBoxH = maxHeight.value * petScale
+                    val petCenter = Offset(
+                        x = if (bigPet) maxWidth.value / 2f else maxWidth.value - petBoxW / 2f,
+                        y = maxHeight.value - petBoxH / 2f,
+                    )
+
                     if (shownPet != null) {
                         PetVisual(
                             petType = shownPet.first,
                             growthStage = shownPet.second,
                             modifier = Modifier.fillMaxSize(),
                             cornerRadius = 0,
-                            scale = if (allDone && viewingPast == null) 0.82f else 0.52f,
-                            alignment = if (allDone && viewingPast == null) {
+                            scale = petScale,
+                            alignment = if (bigPet) {
                                 Alignment.BottomCenter
                             } else {
                                 Alignment.BottomEnd
                             },
+                            // Bara djuret pulsar. Skalar man hela PetVisual zoomar
+                            // landskapet med.
+                            petScaleMultiplier = feedAnim.petPulse,
                         )
                     } else {
                         PetImages.seasonalBackgroundDrawable(context)?.let { bg ->
@@ -488,6 +618,18 @@ fun ChildDashboardScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White.copy(alpha = 0.92f),
                             )
+                            // Mätaren. Ett barn på 17 av 25 xp såg förut exakt samma
+                            // text som ett barn på 1 av 25 -- nivån var en sträng och
+                            // xpInCurrentLevel låg oanvänd i modellen.
+                            val xp0 = xp
+                            if (xp0 != null) {
+                                XpMeter(
+                                    xpInLevel = xp0.xpInCurrentLevel,
+                                    span = xpSpanFor(xp0.xpInCurrentLevel, xp0.xpForNextLevel),
+                                    level = xp0.currentLevel,
+                                    modifier = Modifier.width(172.dp),
+                                )
+                            }
                             if (allDone) {
                                 Text(
                                     text = "Allt klart idag!",
@@ -500,6 +642,17 @@ fun ChildDashboardScreen(
                                 Surface(
                                     shape = RoundedCornerShape(50),
                                     color = Color.White.copy(alpha = 0.94f),
+                                    modifier = Modifier.onGloballyPositioned { c ->
+                                        // Läget sparas medan lungan syns. Den försvinner
+                                        // när maten tar slut, och ett borttaget element
+                                        // har ingen position att flyga från -- det sista
+                                        // bäret hade startat i skärmens hörn.
+                                        val p = c.positionInRoot()
+                                        foodPillRoot = Offset(
+                                            x = p.x + c.size.width / 2f,
+                                            y = p.y + c.size.height / 2f,
+                                        )
+                                    },
                                 ) {
                                     Text(
                                         text = "${PetFoodUtils.getPetFoodEmoji(pet!!.petType)} " +
@@ -512,6 +665,55 @@ fun ChildDashboardScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    // ---- Matningens effekter ----
+                    // Sist bland bandets barn, alltså ovanpå djuret och texterna.
+                    val pillRoot = foodPillRoot
+                    val flyFrom = pillRoot?.let {
+                        with(density) {
+                            Offset(
+                                x = (it.x - bandOrigin.x).toDp().value,
+                                y = (it.y - bandOrigin.y).toDp().value,
+                            )
+                        }
+                    }
+                    if (flyFrom != null) {
+                        feedAnim.berries.forEach { berry ->
+                            // key på id:t: utan den återanvänder Compose samma
+                            // BerryInFlight för nästa bär, och animationen börjar
+                            // aldrig om från noll.
+                            key(berry.id) {
+                                BerryInFlight(
+                                    emoji = berry.emoji,
+                                    from = flyFrom,
+                                    to = petCenter,
+                                )
+                            }
+                        }
+                    }
+
+                    if (feedAnim.levelUp > 0f) {
+                        LevelUpFlash(feedAnim.levelUp)
+                        ConfettiBurst(
+                            progress = feedAnim.levelUp,
+                            origin = petCenter,
+                            season = season,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .padding(top = 54.dp, start = 14.dp, end = 14.dp),
+                        ) {
+                            LevelUpBanner(
+                                level = celebrateLevel,
+                                petName = pet?.name?.takeIf { it.isNotBlank() }
+                                    ?: PetNameUtils.getPetNameSwedish(pet?.petType),
+                                progress = feedAnim.levelUp,
+                                season = season,
+                            )
                         }
                     }
                 }
@@ -1314,7 +1516,17 @@ data class ChildDashboardFixture(
     val viewingPast: Boolean = false,
 ) {
     companion object {
-        fun signe(allDone: Boolean = false, viewingPast: Boolean = false): ChildDashboardFixture {
+        /**
+         * @param nearLevelUp tre XP från tröskeln med fem mat i räknaren, så att
+         *   nivåhöjningen går att se utan en riktig session. Höjningen spelas bara som
+         *   följd av en matning och aldrig ur inläst tillstånd, vilket är rätt men också
+         *   betyder att den annars inte kan fotograferas.
+         */
+        fun signe(
+            allDone: Boolean = false,
+            viewingPast: Boolean = false,
+            nearLevelUp: Boolean = false,
+        ): ChildDashboardFixture {
             fun chore(id: String, title: String, food: Int, done: Boolean) =
                 DailyChoreWithCompletionResponse(
                     chore = DailyChoreResponse(
@@ -1333,13 +1545,23 @@ data class ChildDashboardFixture(
                 pet = PetResponse(
                     id = "p1", memberId = "child-1", year = 2026, month = 9,
                     selectedEggType = "yellow_egg", petType = "bird", name = "Kvitter",
-                    growthStage = 4, hatchedAt = null,
+                    // Stadiet är nivån (calculateGrowthStage mappar 1:1), så en
+                    // fixtur med stadie 4 och nivå 3 beskriver ett tillstånd som inte
+                    // kan uppstå.
+                    growthStage = 3, hatchedAt = null,
                     createdAt = "2026-09-01T08:00:00Z", updatedAt = "2026-09-01T08:00:00Z",
                 ),
                 xp = XpProgressResponse(
                     id = "x1", memberId = "child-1", year = 2026, month = 9,
-                    currentXp = 42, currentLevel = 3, totalTasksCompleted = 28,
-                    xpForNextLevel = 70, xpInCurrentLevel = 7,
+                    // xpForNextLevel är hur många XP som FATTAS, inte tröskeln --
+                    // servern returnerar tröskel minus currentXp. Fixturen hade 70,
+                    // alltså tröskeln, vilket gav mätaren spannet 77 i stället för 35.
+                    // Felet syntes inte förrän något faktiskt läste fältet.
+                    currentXp = if (nearLevelUp) 67 else 42,
+                    currentLevel = 3,
+                    totalTasksCompleted = 28,
+                    xpForNextLevel = if (nearLevelUp) 3 else 28,
+                    xpInCurrentLevel = if (nearLevelUp) 32 else 7,
                 ),
                 balance = WalletBalanceResponse(id = "w1", memberId = "child-1", balance = 85),
                 tasks = listOf(
@@ -1349,7 +1571,7 @@ data class ChildDashboardFixture(
                     chore("4", "Kvällsrutin utan tjat", 2, allDone),
                     chore("5", "Hjälpa till med disken", 1, allDone),
                 ),
-                foodCount = if (allDone) 5 else 2,
+                foodCount = if (nearLevelUp) 5 else if (allDone) 5 else 2,
                 history = listOf(
                     PetHistoryResponse(
                         id = "h1", memberId = "child-1", year = 2026, month = 8,

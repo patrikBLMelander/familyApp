@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -74,6 +76,12 @@ fun petScaleFor(petType: String?, growthStage: Int): Float {
  *   a small portrait needs less or the animal all but disappears.
  * @param alignment where the pet sits once scaled. Bottom reads as standing on the
  *   ground, which suits a landscape background; Center keeps it floating mid-frame.
+ * @param petScaleMultiplier a transient scale on the animal only, for a chew bounce or
+ *   the growth pulse when it levels up. It has to live here rather than on the caller's
+ *   Modifier: this composable draws the background and the animal in one box, so scaling
+ *   the box scales the landscape too -- the pet would appear to zoom the world. Anchored
+ *   at bottom centre so the animal grows up from the ground it stands on. 1f is
+ *   unchanged, which is what every caller that does not animate gets.
  */
 @Composable
 fun PetVisual(
@@ -86,6 +94,7 @@ fun PetVisual(
     scale: Float = petScaleFor(petType, growthStage),
     alignment: Alignment = Alignment.Center,
     petPadding: Dp = 8.dp,
+    petScaleMultiplier: Float = 1f,
 ) {
     val context = LocalContext.current
     val petId = PetImages.petDrawable(context, petType, growthStage)
@@ -109,7 +118,12 @@ fun PetVisual(
                 contentDescription = contentDescription,
                 modifier = Modifier
                     .fillMaxSize(scale.coerceIn(0.1f, 1f))
-                    .padding(petPadding),
+                    .padding(petPadding)
+                    .graphicsLayer {
+                        scaleX = petScaleMultiplier
+                        scaleY = petScaleMultiplier
+                        transformOrigin = TransformOrigin(0.5f, 1f)
+                    },
                 contentScale = ContentScale.Fit,
             )
         } else {

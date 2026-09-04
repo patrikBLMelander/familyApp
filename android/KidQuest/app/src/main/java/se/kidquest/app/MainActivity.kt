@@ -129,17 +129,28 @@ class MainActivity : ComponentActivity() {
                 // en riktig session. Med en fixtur går den det -- och de två lägena som
                 // spelar mest roll, bandet som växer när dagen är klar och samlingens
                 // läsläge, nås bara genom att trycka.
-                //   --es kq_screen child | child-done | child-past
+                // child-asparent är förälderns vy av barnets skärm. Den nås bara genom
+                // att trycka sig in från översikten, och eftersom den delar hela
+                // skärmen med barnets egen vy är det just delningen som behöver
+                // fotograferas -- annars är "den är också uppdaterad" ett antagande.
+                // Den ligger nära tröskeln så att höjningen går att se i den vägen med.
+                //   --es kq_screen child | child-done | child-past | child-levelup
+                //                 | child-asparent
                 if (forcedScreen?.startsWith("child-") == true || forcedScreen == "child") {
+                    val asParent = forcedScreen == "child-asparent"
                     ChildDashboardScreen(
                         childName = "Signe",
                         childId = "child-1",
                         onBack = {},
                         onOpenTasks = {},
                         onOpenWallet = {},
+                        actingAsParent = asParent,
+                        onExitChildView = if (asParent) ({}) else null,
+                        onSwitchChild = if (asParent) ({}) else null,
                         fixture = ChildDashboardFixture.signe(
                             allDone = forcedScreen == "child-done",
                             viewingPast = forcedScreen == "child-past",
+                            nearLevelUp = forcedScreen == "child-levelup" || asParent,
                         ),
                     )
                     return@KidQuestTheme
