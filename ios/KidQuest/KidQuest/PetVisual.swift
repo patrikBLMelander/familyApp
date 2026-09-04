@@ -19,6 +19,12 @@ struct PetVisual: View {
     var cornerRadius: CGFloat = 16
     var scale: CGFloat? = nil
     var alignment: Alignment = .center
+    /// En övergående skala på enbart djuret, för tuggstudsen och tillväxten vid
+    /// nivåhöjning. Den måste bo här och inte på anroparens modifierare: den här vyn
+    /// ritar bakgrunden och djuret i samma box, så en skala på boxen hade zoomat
+    /// landskapet med. Ankrad i nederkant så djuret växer upp från marken det står på.
+    /// 1 är oförändrat, vilket är vad varje anropare som inte animerar får.
+    var petScaleMultiplier: CGFloat = 1
 
     var body: some View {
         let effectiveScale = min(
@@ -47,6 +53,7 @@ struct PetVisual: View {
                             height: geo.size.height * effectiveScale
                         )
                         .padding(4)
+                        .scaleEffect(petScaleMultiplier, anchor: .bottom)
                 } else {
                     Text("🐾")
                         .font(.system(size: 80))

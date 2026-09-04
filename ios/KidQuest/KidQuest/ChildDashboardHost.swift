@@ -123,6 +123,8 @@ struct ChildDashboardHost: View {
             pet: snapshot.pet,
             petLoadFailed: snapshot.petLoadFailed,
             level: max(1, min(5, snapshot.xp?.currentLevel ?? 1)),
+            xpInLevel: snapshot.xp?.xpInCurrentLevel ?? 0,
+            xpForNext: snapshot.xp?.xpForNextLevel ?? 0,
             foodCount: snapshot.foodCount,
             balance: snapshot.balance?.balance,
             tasks: snapshot.todaysChores,
@@ -421,7 +423,7 @@ extension ChildDashboardHost {
     private static func fixtureXp() -> XpProgressResponseDTO? {
         decode(XpProgressResponseDTO.self, """
         {"id":"x1","memberId":"child-1","year":2026,"month":8,"currentXp":52,
-         "currentLevel":3,"totalTasksCompleted":41,"xpForNextLevel":70,
+         "currentLevel":3,"totalTasksCompleted":41,"xpForNextLevel":18,
          "xpInCurrentLevel":17}
         """)
     }

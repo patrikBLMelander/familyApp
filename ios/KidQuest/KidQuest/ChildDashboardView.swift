@@ -29,6 +29,8 @@ struct ChildDashboardView: View {
     var preloaded: ChildDashboardRepository.Summary?
     var preloadedHistory: [PetHistoryResponseDTO] = []
     var preloadedViewingPast: PetHistoryResponseDTO?
+    /// Bara harnesket sätter den; se ChildDayLayout.harnessAutoFeed.
+    var harnessAutoFeed: Bool = false
 
     private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
 
@@ -81,6 +83,8 @@ struct ChildDashboardView: View {
             childName: childName,
             pet: s.pet,
             level: max(1, min(5, s.xp?.currentLevel ?? 1)),
+            xpInLevel: s.xp?.xpInCurrentLevel ?? 0,
+            xpForNext: s.xp?.xpForNextLevel ?? 0,
             foodCount: s.collectedFood?.totalCount ?? 0,
             balance: s.wallet?.balance,
             tasks: s.todaysTasks,
@@ -92,6 +96,7 @@ struct ChildDashboardView: View {
             onOpenWallet: onOpenWallet,
             onSelectEgg: { showSelectEgg = true },
             onAddChore: { showAddChore = true },
+            harnessAutoFeed: harnessAutoFeed,
             banner: { EmptyView() },
             footer: { signOutRow }
         )
@@ -200,22 +205,30 @@ extension ChildDashboardView {
     /// @param allDone renderar läget efter sista bocken, som är det enda sättet att se
     ///   att bandet växer -- simulatorn tar inte emot tryck.
     /// @param past visar ett tidigare djur i stället, alltså samlingens läsläge.
-    static func fixture(allDone: Bool = false, past: Bool = false) -> ChildDashboardView {
+    /// @param nearLevelUp tre XP från tröskeln med fem mat i räknaren, och matningen
+    ///   startar av sig själv -- det enda sättet att se nivåhöjningen i en simulator som
+    ///   inte tar emot tryck.
+    static func fixture(
+        allDone: Bool = false,
+        past: Bool = false,
+        nearLevelUp: Bool = false
+    ) -> ChildDashboardView {
         let history = ChildFixtures.history
         return ChildDashboardView(
             childId: "child-1",
             childName: "Signe",
             preloaded: ChildDashboardRepository.Summary(
                 pet: ChildFixtures.pet,
-                xp: ChildFixtures.xp,
+                xp: nearLevelUp ? ChildFixtures.xpNearLevelUp : ChildFixtures.xp,
                 wallet: WalletBalanceResponseDTO(id: "w1", memberId: "child-1", balance: 85),
                 collectedFood: CollectedFoodResponseDTO(
-                    foodItems: [], totalCount: allDone ? 5 : 2
+                    foodItems: [], totalCount: (allDone || nearLevelUp) ? 5 : 2
                 ),
                 todaysTasks: ChildFixtures.tasks(allDone: allDone)
             ),
             preloadedHistory: history,
-            preloadedViewingPast: past ? history.first : nil
+            preloadedViewingPast: past ? history.first : nil,
+            harnessAutoFeed: nearLevelUp
         )
     }
 }
@@ -228,14 +241,28 @@ enum ChildFixtures {
     static let pet = PetResponseDTO(
         id: "p1", memberId: "child-1", year: 2026, month: 9,
         selectedEggType: "yellow_egg", petType: "bird", name: "Kvitter",
-        growthStage: 4, hatchedAt: nil,
+        // Stadiet är nivån (calculateGrowthStage mappar 1:1), så en fixtur med
+        // stadie 4 och nivå 3 beskriver ett tillstånd som inte kan uppstå.
+        growthStage: 3, hatchedAt: nil,
         createdAt: "2026-09-01T08:00:00Z", updatedAt: "2026-09-01T08:00:00Z"
     )
 
     static let xp = XpProgressResponseDTO(
         id: "x1", memberId: "child-1", year: 2026, month: 9,
         currentXp: 42, currentLevel: 3, totalTasksCompleted: 28,
-        xpForNextLevel: 70, xpInCurrentLevel: 7
+        // xpForNextLevel är hur många XP som FATTAS, inte tröskeln -- servern
+        // returnerar tröskel minus currentXp. Fixturen hade 70, alltså tröskeln, vilket
+        // gav mätaren spannet 77 i stället för 35. Felet syntes inte förrän något
+        // faktiskt läste fältet.
+        xpForNextLevel: 28, xpInCurrentLevel: 7
+    )
+
+    /// Tre XP från tröskeln mellan nivå 3 och 4. Trösklarna är {0, 10, 35, 70, 125}, så
+    /// 67 ligger tre steg under 70 och spannet är 35.
+    static let xpNearLevelUp = XpProgressResponseDTO(
+        id: "x1", memberId: "child-1", year: 2026, month: 9,
+        currentXp: 67, currentLevel: 3, totalTasksCompleted: 41,
+        xpForNextLevel: 3, xpInCurrentLevel: 32
     )
 
     static let history = [
