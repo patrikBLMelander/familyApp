@@ -49,6 +49,7 @@ struct ChildDashboardHost: View {
     @State private var notice: String?
     @State private var isFeeding = false
     @State private var showSelectEgg = false
+    @State private var hasAutoOpenedEgg = false
     @State private var showSwitchChild = false
     @State private var siblings: [ChildRef] = []
     /// Barnets tidigare djur, och vilket som visas. Samma samling barnet ser.
@@ -296,11 +297,25 @@ struct ChildDashboardHost: View {
             guard target == activeChild.id else { return }
             snapshot = fresh
             isLoading = false
+            autoOpenEggIfNeeded(hasPet: fresh.pet != nil, failed: fresh.petLoadFailed)
         } catch {
             guard target == activeChild.id else { return }
             errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda barnvyn.")
             isLoading = false
         }
+    }
+
+
+    /// Öppnar äggväljaren en gång när det saknas djur.
+    ///
+    /// Android har gjort det hela tiden och iOS inte alls, vilket är varför ett barn utan
+    /// djur kunde bli stående här. En gång per session med flit: dialogen ska hjälpa, inte
+    /// hålla någon fast. Att stänga den är inte längre en återvändsgränd -- remsan under
+    /// bandet leder tillbaka.
+    private func autoOpenEggIfNeeded(hasPet: Bool, failed: Bool) {
+        guard !hasAutoOpenedEgg, !hasPet, !failed else { return }
+        hasAutoOpenedEgg = true
+        showSelectEgg = true
     }
 
     private func loadSiblings() async {

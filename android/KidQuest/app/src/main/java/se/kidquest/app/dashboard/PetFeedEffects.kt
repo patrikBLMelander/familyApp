@@ -7,6 +7,14 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -429,23 +438,50 @@ class FeedAnimation {
         repeat(amount) { i ->
             launch {
                 delay(i * BERRY_STAGGER_MS)
-                val berry = FlyingBerry(nextId++, emoji)
-                berries = berries + berry
-                onBerryLifted()
-
-                delay(BERRY_FLIGHT_MS.toLong())
-                berries = berries.filterNot { it.id == berry.id }
-                onBerryLanded()
-                chew()
-
-                if (i == crossingBerry) {
-                    delay(LEVEL_UP_DELAY_MS)
-                    onLevelUp()
-                    celebrate()
-                }
+                one(
+                    emoji = emoji,
+                    crosses = i == crossingBerry,
+                    onLifted = onBerryLifted,
+                    onLanded = onBerryLanded,
+                    onLevelUp = onLevelUp,
+                )
             }
         }
     }
+
+    /**
+     * Ett enda stycke mat, hela vägen.
+     *
+     * Både "Mata alla" och ett tryck på en enskild bricka går genom den här, så de två
+     * kan inte se olika ut. Flera samtidiga anrop är meningen och inte ett problem: ett
+     * barn som trycker fyra gånger snabbt ska se fyra frön i luften, inte vänta ut det
+     * första.
+     */
+    suspend fun one(
+        emoji: String,
+        crosses: Boolean,
+        onLifted: () -> Unit,
+        onLanded: () -> Unit,
+        onLevelUp: () -> Unit,
+    ) {
+        val berry = FlyingBerry(nextId++, emoji)
+        berries = berries + berry
+        onLifted()
+
+        delay(BERRY_FLIGHT_MS.toLong())
+        berries = berries.filterNot { it.id == berry.id }
+        onLanded()
+        chew()
+
+        if (crosses) {
+            delay(LEVEL_UP_DELAY_MS)
+            onLevelUp()
+            celebrate()
+        }
+    }
+
+    /** Hur många stycken mat som är i luften just nu. */
+    val inFlight: Int get() = berries.size
 
     /** Den lilla studsen när ett bär landar. Hoptryckt och tillbaka. */
     private suspend fun chew() {
@@ -475,5 +511,199 @@ class FeedAnimation {
         berries = emptyList()
         levelUp = 0f
         petPulse = 1f
+    }
+}
+
+/**
+ * Matremsan: maten som saker, mellan djuret och uppgifterna.
+ *
+ * Låg först som en stor knapp under listan. Ett barn med tio sysslor såg då aldrig
+ * djuret och knappen i samma skärmbild -- bandet är 258dp och varje rad omkring 46, så
+ * knappen hamnade runt 800dp ner på en skärm med drygt 850 användbara. Det gjorde hela
+ * den synliga matningen meningslös för just de barnen: de tryckte och såg ingenting,
+ * vilket är precis klagomålet arbetet skulle lösa.
+ *
+ * Remsan gör också maten till stycken i stället för en siffra. Ett tryck på en bricka
+ * ger ett, [onFeedAll] ger allt. Vilket barnen väljer är i sig svaret på frågan om maten
+ * ska ges styckvis -- de svarar med tummen i stället för i en enkät.
+ */
+@Composable
+fun FoodStrip(
+    foodCount: Int,
+    emoji: String,
+    petName: String,
+    enabled: Boolean,
+    season: SeasonPalette,
+    onFeedOne: () -> Unit,
+    onFeedAll: () -> Unit,
+    onTilesPositioned: (Offset) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(season.surface)
+            .border(1.dp, season.cardEdge, RoundedCornerShape(16.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 48.dp)
+                .onGloballyPositioned { c ->
+                    val p = c.positionInRoot()
+                    onTilesPositioned(
+                        Offset(p.x + c.size.width / 2f, p.y + c.size.height / 2f)
+                    )
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (foodCount == 0) {
+                Text(
+                    text = "Tomt — bocka av en syssla",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = season.inkFaint,
+                )
+            } else {
+                // Taket är fem. Knappen tar sin bredd först, och sex brickor a 38dp
+                // plus mellanrum får inte plats bredvid den på en 360dp-skärm -- de
+                // radbryter, och en remsa som blir två rader är inte längre en remsa.
+                val visible = minOf(foodCount, FOOD_TILE_CAP)
+                repeat(visible) { i ->
+                    val isOverflow = i == FOOD_TILE_CAP - 1 && foodCount > FOOD_TILE_CAP
+                    FoodTile(
+                        label = if (isOverflow) "+${foodCount - (FOOD_TILE_CAP - 1)}" else emoji,
+                        isCount = isOverflow,
+                        enabled = enabled,
+                        season = season,
+                        onClick = onFeedOne,
+                    )
+                }
+            }
+        }
+
+        // Knappen finns bara när det finns något att ge. Tom remsa sa förut både
+        // "Tomt -- bocka av en syssla" och "Mata Kvitter" i grått, alltså två
+        // meddelanden om samma sak där det ena såg ut som ett erbjudande. Raden håller
+        // sin höjd ändå tack vare heightIn ovan, så remsan hoppar inte.
+        if (foodCount > 0) {
+            Button(
+                onClick = onFeedAll,
+                enabled = enabled,
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = season.accent,
+                    contentColor = season.onAccent,
+                    disabledContainerColor = season.outlineBg,
+                    disabledContentColor = season.inkFaint,
+                ),
+            ) {
+                Text(
+                    text = if (foodCount > 1) "Mata alla" else "Mata $petName",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+}
+
+/** Hur många brickor som ryms bredvid knappen innan de radbryter. */
+private const val FOOD_TILE_CAP = 5
+
+/**
+ * En bricka mat.
+ *
+ * Ytan är 48dp medan brickan syns vara 38. Riktlinjen för en träffyta är 48, och den
+ * gäller mer här än på de flesta ställen: den som trycker är sex år, och trycker hen fel
+ * finns ingen ångerknapp -- maten är borta.
+ */
+@Composable
+private fun FoodTile(
+    label: String,
+    isCount: Boolean,
+    enabled: Boolean,
+    season: SeasonPalette,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(if (enabled) season.tipBg else season.outlineBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                fontSize = if (isCount) 13.sp else 19.sp,
+                fontWeight = if (isCount) FontWeight.Bold else FontWeight.Normal,
+                color = if (isCount) season.tipStrong else Color.Unspecified,
+            )
+        }
+    }
+}
+
+/**
+ * Vägen till äggvalet, på matremsans plats när det inte finns något djur att mata.
+ *
+ * "Välj ägg"-knappen bodde bara i uppgiftskortets tomma läge, alltså bakom villkoret att
+ * barnet saknar sysslor. Ett barn som läggs till får fem standardsysslor på köpet, så
+ * listan är aldrig tom och knappen syntes aldrig. På Android räddades det av att
+ * dialogen öppnades av sig själv en gång -- men stängde man den fanns ingen väg tillbaka
+ * förrän appen startades om, och på iOS fanns ingen väg alls.
+ *
+ * Här ligger den i stället där djurets sak hör hemma, synlig hela tiden.
+ */
+@Composable
+fun ChooseEggStrip(
+    season: SeasonPalette,
+    onSelectEgg: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(season.surface)
+            .border(1.dp, season.cardEdge, RoundedCornerShape(16.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = "Inget djur än",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = season.inkSoft,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).wrapContentHeight(),
+        )
+        Button(
+            onClick = onSelectEgg,
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = season.accent,
+                contentColor = season.onAccent,
+            ),
+        ) {
+            Text(
+                text = "Välj ägg",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }

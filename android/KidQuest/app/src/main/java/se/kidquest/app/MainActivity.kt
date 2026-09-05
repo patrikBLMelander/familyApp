@@ -135,7 +135,7 @@ class MainActivity : ComponentActivity() {
                 // fotograferas -- annars är "den är också uppdaterad" ett antagande.
                 // Den ligger nära tröskeln så att höjningen går att se i den vägen med.
                 //   --es kq_screen child | child-done | child-past | child-levelup
-                //                 | child-asparent
+                //                 | child-asparent | child-nopet
                 if (forcedScreen?.startsWith("child-") == true || forcedScreen == "child") {
                     val asParent = forcedScreen == "child-asparent"
                     ChildDashboardScreen(
@@ -151,6 +151,7 @@ class MainActivity : ComponentActivity() {
                             allDone = forcedScreen == "child-done",
                             viewingPast = forcedScreen == "child-past",
                             nearLevelUp = forcedScreen == "child-levelup" || asParent,
+                            noPet = forcedScreen == "child-nopet",
                         ),
                     )
                     return@KidQuestTheme

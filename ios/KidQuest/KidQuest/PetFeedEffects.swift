@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// Scenens koordinatrymd: bandet OCH remsan. Maten flyger mellan dem, så den behöver
+/// en gemensam rymd att räkna i.
+let kqScenSpace = "kq.scen"
+
 /// Det synliga svaret på matningen: mätaren, maten som flyger och nivåhöjningen.
 ///
 /// Barnen som testade sa tre saker -- att man inte ser att man matar, att man inte ser
@@ -331,6 +335,10 @@ final class FeedAnimation {
 
     private var nextId = 0
     private(set) var running = false
+    /// Hur många stycken mat som är i luften just nu. Behövs för att veta när
+    /// överskuggningarna får släppas, och för att räkna ut vilket stycke som korsar
+    /// tröskeln när flera är i luften samtidigt.
+    private(set) var inFlight = 0
 
     /// - Parameters:
     ///   - crossingBerry: index på det bär som tar barnet över tröskeln, eller nil om
@@ -357,44 +365,100 @@ final class FeedAnimation {
             for i in 0..<amount {
                 group.addTask { @MainActor in
                     try? await Task.sleep(for: .seconds(Double(i) * Self.berryStagger))
-
-                    let berry = FlyingBerry(
-                        id: self.nextId,
+                    await self.one(
                         emoji: emoji,
-                        drift: Double.random(in: -17...17),
-                        spin: Double.random(in: 220...420)
+                        crosses: i == crossingBerry,
+                        span: span,
+                        startLevel: startLevel,
+                        startStage: startStage
                     )
-                    self.nextId += 1
-                    self.berries.append(berry)
-                    self.food = max(0, (self.food ?? amount) - 1)
-
-                    try? await Task.sleep(for: .seconds(Self.berryFlight))
-                    self.berries.removeAll { $0.id == berry.id }
-
-                    // Ett bär i taget, så fyra bär blir fyra saker som händer i stället
-                    // för en siffra som byter värde. Mätaren stannar på fullt: att räkna
-                    // förbi spannet hade visat "37 / 37" i stället för "35 / 35".
-                    if span > 0 {
-                        self.xpInLevel = min(span, (self.xpInLevel ?? startXpInLevel) + 1)
-                    }
-                    self.chew()
-
-                    if i == crossingBerry {
-                        try? await Task.sleep(for: .seconds(0.24))
-                        // Namnraden visar nivån, och utan det här sa den "NIVÅ 3" i
-                        // 2,4 sekunder medan fanfaren sa "Nivå 4!".
-                        self.level = min(5, startLevel + 1)
-                        self.stage = min(5, startStage + 1)
-                        self.celebrating = true
-                        self.grow()
-                        try? await Task.sleep(for: .seconds(Self.levelUpLength))
-                        self.celebrating = false
-                    }
                 }
             }
         }
 
-        reset()
+        running = false
+        if inFlight == 0 && !celebrating { reset() }
+    }
+
+    /// Ett tryck på en bricka: ett stycke mat, utan att blockera på det som redan flyger.
+    ///
+    /// Ett barn som trycker fyra gånger snabbt ska se fyra frön i luften, inte vänta ut
+    /// det första. Överskuggningarna sätts från hostens värden första gången och ägs
+    /// sedan här tills allt landat.
+    @MainActor
+    func tapOne(
+        emoji: String,
+        span: Int,
+        hostFood: Int,
+        hostXpInLevel: Int,
+        hostLevel: Int,
+        hostStage: Int
+    ) async {
+        guard !celebrating, (food ?? hostFood) > 0 else { return }
+        if food == nil {
+            food = hostFood
+            xpInLevel = hostXpInLevel
+            level = hostLevel
+            stage = hostStage
+        }
+        // xpInLevel räknar bara det som LANDAT, så maten i luften måste dras av för att
+        // veta om just det här stycket är det som korsar tröskeln. Utan avdraget skulle
+        // fyra snabba tryck strax under gränsen fira fyra gånger.
+        let crosses = span > 0 && ((xpInLevel ?? hostXpInLevel) + inFlight + 1) >= span
+        await one(
+            emoji: emoji,
+            crosses: crosses,
+            span: span,
+            startLevel: level ?? hostLevel,
+            startStage: stage ?? hostStage
+        )
+        if inFlight == 0 && !celebrating && !running { reset() }
+    }
+
+    /// Ett enda stycke mat, hela vägen. Både "Mata alla" och ett tryck går genom den
+    /// här, så de två kan inte se olika ut.
+    @MainActor
+    private func one(
+        emoji: String,
+        crosses: Bool,
+        span: Int,
+        startLevel: Int,
+        startStage: Int
+    ) async {
+        inFlight += 1
+        let berry = FlyingBerry(
+            id: nextId,
+            emoji: emoji,
+            drift: Double.random(in: -17...17),
+            spin: Double.random(in: 220...420)
+        )
+        nextId += 1
+        berries.append(berry)
+        food = max(0, (food ?? 0) - 1)
+
+        try? await Task.sleep(for: .seconds(Self.berryFlight))
+        berries.removeAll { $0.id == berry.id }
+
+        // Ett stycke i taget, så fyra blir fyra saker som händer i stället för en siffra
+        // som byter värde. Mätaren stannar på fullt: att räkna förbi spannet hade visat
+        // "37 / 37" i stället för "35 / 35".
+        if span > 0 {
+            xpInLevel = min(span, (xpInLevel ?? 0) + 1)
+        }
+        chew()
+        inFlight -= 1
+
+        if crosses {
+            try? await Task.sleep(for: .seconds(0.24))
+            // Namnraden visar nivån, och utan det här sa den "NIVÅ 3" i 2,4 sekunder
+            // medan fanfaren sa "Nivå 4!".
+            level = min(5, startLevel + 1)
+            stage = min(5, startStage + 1)
+            celebrating = true
+            grow()
+            try? await Task.sleep(for: .seconds(Self.levelUpLength))
+            celebrating = false
+        }
     }
 
     /// Den lilla studsen när ett bär landar.
@@ -421,10 +485,182 @@ final class FeedAnimation {
         berries = []
         celebrating = false
         petPulse = 1
+        inFlight = 0
         food = nil
         xpInLevel = nil
         level = nil
         stage = nil
         running = false
+    }
+}
+
+// MARK: - Matremsan
+
+/// Hur många brickor som ryms bredvid knappen innan de radbryter.
+private let foodTileCap = 5
+
+/// Matremsan: maten som saker, mellan djuret och uppgifterna.
+///
+/// Låg först som en stor knapp under listan. Ett barn med tio sysslor såg då aldrig
+/// djuret och knappen i samma skärmbild -- bandet är 258 punkter och varje rad omkring
+/// 46, så knappen hamnade långt under vad skärmen rymmer. Det gjorde hela den synliga
+/// matningen meningslös för just de barnen: de tryckte och såg ingenting, vilket är
+/// precis klagomålet arbetet skulle lösa.
+///
+/// Remsan gör också maten till stycken i stället för en siffra. Ett tryck på en bricka
+/// ger ett, knappen ger allt. Vilket barnen väljer är i sig svaret på frågan om maten
+/// ska ges styckvis -- de svarar med tummen i stället för i en enkät.
+struct FoodStrip: View {
+    let foodCount: Int
+    let emoji: String
+    let petName: String
+    let enabled: Bool
+    let palette: SeasonPalette
+    let onFeedOne: () -> Void
+    let onFeedAll: () -> Void
+    /// Brickornas mitt i scenens koordinatrymd, så maten vet varifrån den lyfter.
+    let onTilesFrame: (CGPoint) -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            tiles
+            if foodCount > 0 {
+                // Knappen finns bara när det finns något att ge. En tom remsa med både
+                // "Tomt" och en grå knapp säger samma sak två gånger, och den ena ser ut
+                // som ett erbjudande.
+                Button(action: onFeedAll) {
+                    Text(foodCount > 1 ? "Mata alla" : "Mata \(petName)")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(enabled ? palette.onAccent : palette.inkFaint)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(enabled ? palette.accent : palette.outlineBg)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(!enabled)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(palette.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(palette.cardEdge, lineWidth: 1)
+        )
+    }
+
+    private var tiles: some View {
+        HStack(spacing: 2) {
+            if foodCount == 0 {
+                Text("Tomt — bocka av en syssla")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.inkFaint)
+                Spacer(minLength: 0)
+            } else {
+                ForEach(0..<min(foodCount, foodTileCap), id: \.self) { i in
+                    let overflow = (i == foodTileCap - 1) && foodCount > foodTileCap
+                    FoodTile(
+                        label: overflow ? "+\(foodCount - (foodTileCap - 1))" : emoji,
+                        isCount: overflow,
+                        enabled: enabled,
+                        palette: palette,
+                        action: onFeedOne
+                    )
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(minHeight: 48)
+        .background(
+            GeometryReader { g in
+                Color.clear
+                    .onAppear { report(g) }
+                    .onChange(of: g.frame(in: .named(kqScenSpace))) { _, _ in report(g) }
+            }
+        )
+    }
+
+    private func report(_ g: GeometryProxy) {
+        let f = g.frame(in: .named(kqScenSpace))
+        // Vänsterkanten och inte mitten: brickorna ligger till vänster och Spacer fyller
+        // resten, så radens mitt hade legat ute i tomma luften bredvid dem.
+        onTilesFrame(CGPoint(x: f.minX + 34, y: f.midY))
+    }
+}
+
+/// En bricka mat.
+///
+/// Ytan är 48 punkter medan brickan syns vara 38. Riktlinjen för en träffyta är 44 till
+/// 48, och den gäller mer här än på de flesta ställen: den som trycker är sex år, och
+/// trycker hen fel finns ingen ångerknapp -- maten är borta.
+private struct FoodTile: View {
+    let label: String
+    let isCount: Bool
+    let enabled: Bool
+    let palette: SeasonPalette
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: isCount ? 13 : 19, weight: isCount ? .bold : .regular))
+                .foregroundStyle(isCount ? palette.tipStrong : palette.ink)
+                .frame(width: 38, height: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(enabled ? palette.tipBg : palette.outlineBg)
+                )
+                .frame(width: 48, height: 48)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+}
+
+/// Vägen till äggvalet, på matremsans plats när det inte finns något djur att mata.
+///
+/// "Välj ägg" bodde bara i uppgiftskortets tomma läge, alltså bakom villkoret att barnet
+/// saknar sysslor. Ett barn som läggs till får fem standardsysslor på köpet, så listan är
+/// aldrig tom och knappen syntes aldrig. Android räddades av att dialogen öppnades av sig
+/// själv en gång; iOS hade ingen sådan, och därför ingen väg alls.
+struct ChooseEggStrip: View {
+    let palette: SeasonPalette
+    let onSelectEgg: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("Inget djur än")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(palette.inkSoft)
+            Spacer(minLength: 0)
+            Button(action: onSelectEgg) {
+                Text("Välj ägg")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(palette.onAccent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(palette.accent)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(minHeight: 48)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(palette.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(palette.cardEdge, lineWidth: 1)
+        )
     }
 }

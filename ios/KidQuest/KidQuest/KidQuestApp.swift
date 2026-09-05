@@ -143,12 +143,13 @@ enum ScreenHarness {
         // the state a parent opens it to fix, and already fed.
         // Barnets egen skärm. Tre lägen, för bandet växer när dagen är klar och
         // samlingens läsläge nås bara genom att trycka -- vilket simulatorn inte kan.
-        case "child", "child-done", "child-past", "child-levelup":
+        case "child", "child-done", "child-past", "child-levelup", "child-nopet":
             return Entry(view: AnyView(
                 ChildDashboardView.fixture(
                     allDone: name == "child-done",
                     past: name == "child-past",
-                    nearLevelUp: name == "child-levelup"
+                    nearLevelUp: name == "child-levelup",
+                    noPet: name == "child-nopet"
                 )
                 .preferredColorScheme(.light)
                 .defaultScrollAnchor(anchor, for: .initialOffset)

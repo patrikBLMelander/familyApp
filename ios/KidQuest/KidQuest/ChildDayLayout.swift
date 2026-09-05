@@ -18,10 +18,6 @@ import SwiftUI
 ///
 /// Mörkt läge används inte. Det är föräldrarnas inställning, för det är de som sitter i
 /// appen på kvällen; barnets skärm ska vara ljus och ha en årstid i den.
-/// Namnet på bandets koordinatrymd. Matlungans läge mäts i den, och bären flyger
-/// därifrån till djuret. På filnivå eftersom ChildDayLayout är generisk, och generiska
-/// typer inte får ha statiska lagrade egenskaper.
-private let kqBandSpace = "kq.band"
 
 struct ChildDayLayout<Banner: View, Footer: View>: View {
 
@@ -63,9 +59,8 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
     /// går: hosten nollställer matsiffran optimistiskt på en gång, och utan en
     /// överskuggning här hade det slagit ut nedräkningen bär för bär, som är poängen.
     @State private var anim = FeedAnimation()
-    /// Matlungans läge i bandets koordinater. Mäts medan lungan syns -- den försvinner
-    /// när maten tar slut, och ett borttaget element har ingen position att flyga från.
-    @State private var foodChipCenter: CGPoint?
+    /// Brickornas läge i scenens koordinater, alltså varifrån maten lyfter.
+    @State private var tilesCenter: CGPoint?
     @State private var harnessFired = false
 
     private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
@@ -114,14 +109,13 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
             palette.pageBg.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 0) {
-                    band
+                    scen
                     VStack(spacing: 14) {
                         banner()
                         if isPast {
                             backToNowCard
                         } else {
                             tasksCard
-                            feedButton
                         }
                         footer()
                     }
@@ -133,6 +127,70 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
             .ignoresSafeArea(edges: .top)
         }
         .environment(\.seasonPalette, palette)
+    }
+
+    // MARK: - Scenen
+
+    /// Bandet och matremsan i en gemensam behållare.
+    ///
+    /// De två ligger tillsammans för att maten flyger MELLAN dem -- från en bricka i
+    /// remsan upp till djuret i bandet. Bandet klipper sitt eget innehåll, så ett frö som
+    /// bara låg i bandet hade kapats vid underkanten. Flyglagret ligger därför här, medan
+    /// konfettin blir kvar inne i bandet där den ska klippas.
+    private var scen: some View {
+        VStack(spacing: 10) {
+            band
+            // Utan djur finns ingen mat att ge, men det ska finnas en väg till ägget --
+            // och den låg förut bara bakom en tom uppgiftslista.
+            if !isPast, pet == nil, !petLoadFailed {
+                ChooseEggStrip(palette: palette, onSelectEgg: onSelectEgg)
+                    .padding(.horizontal, 13)
+            }
+            // Ett tidigare djur går inte att mata, och en misslyckad hämtning får inte
+            // visa en tom remsa som om barnet vore utan mat.
+            if !isPast, let pet, !petLoadFailed {
+                FoodStrip(
+                    foodCount: shownFood,
+                    emoji: PetFoodUtilsIOS.emoji(for: shownPet?.type),
+                    petName: petDisplayName(pet),
+                    // Under firandet ligger allt stilla: att mata in i en pågående
+                    // nivåhöjning gör två saker samtidigt av det som ska vara ett
+                    // ögonblick.
+                    enabled: !anim.celebrating,
+                    palette: palette,
+                    onFeedOne: { feedOne() },
+                    onFeedAll: { startFeed(shownFood) },
+                    onTilesFrame: { tilesCenter = $0 }
+                )
+                .padding(.horizontal, 13)
+            }
+        }
+        .overlay { berryLayer }
+        .coordinateSpace(.named(kqScenSpace))
+    }
+
+    /// Maten i luften, ovanpå både bandet och remsan.
+    private var berryLayer: some View {
+        GeometryReader { geo in
+            let bigPet = allDone && !isPast
+            let petScale: CGFloat = bigPet ? 0.82 : 0.52
+            let boxW = geo.size.width * petScale
+            // Höjden räknas mot BANDET och inte mot scenen: djuret bor i bandet, och
+            // scenen är högre eftersom remsan ligger under.
+            let boxH = bandHeight * petScale
+            let petCenter = CGPoint(
+                x: bigPet ? geo.size.width / 2 : geo.size.width - boxW / 2,
+                y: bandHeight - boxH / 2
+            )
+            ZStack {
+                if let from = tilesCenter {
+                    ForEach(anim.berries) { berry in
+                        BerryInFlight(berry: berry, from: from, to: petCenter)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     // MARK: - Bandet
@@ -176,8 +234,7 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
         // Effekterna ovanpå allt i bandet, och klippta till det: konfettin faller nedåt
         // och hade annars ritats ner över uppgiftskortet, vilket läser som en bugg och
         // inte som ett firande.
-        .overlay { feedEffects }
-        .coordinateSpace(.named(kqBandSpace))
+        .overlay { celebrationLayer }
         .clipped()
         .animation(.easeInOut(duration: 0.45), value: allDone)
     }
@@ -189,7 +246,11 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
     /// punkter. Målet kan alltså inte hårdkodas. scaledToFit centrerar konsten i sin box,
     /// så boxens mitt är konstens mitt -- det är dit maten ska.
     @ViewBuilder
-    private var feedEffects: some View {
+    /// Blänket, fanfaren och konfettin -- klippt till bandet.
+    ///
+    /// Konfettin faller och ska sluta vid bandets kant; maten flyger uppåt och ska inte.
+    /// Därför ligger de i olika lager.
+    private var celebrationLayer: some View {
         GeometryReader { geo in
             let bigPet = allDone && !isPast
             let petScale: CGFloat = bigPet ? 0.82 : 0.52
@@ -201,13 +262,6 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
             )
 
             ZStack {
-                if let from = foodChipCenter {
-                    ForEach(anim.berries) { berry in
-                        BerryInFlight(berry: berry, from: from, to: petCenter)
-                    }
-                }
-
-                let _ = print("KQFeed celebrating=\(anim.celebrating) berries=\(anim.berries.count) petCenter=\(petCenter) chip=\(String(describing: foodChipCenter)) size=\(geo.size)")
                 if anim.celebrating, let pet {
                     LevelUpOverlay(
                         level: shownLevel,
@@ -271,9 +325,9 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
                         .font(.title2.weight(.bold))
                         .foregroundStyle(.white)
                 }
-                if shownFood > 0 {
-                    foodChip
-                }
+                // Matlungan låg här förut och sa "5 mat att ge". Remsan under bandet
+                // visar samma sak och går dessutom att trycka på, så två platser hade
+                // sagt samma sak och bara den ena gjort något.
             }
         }
         .shadow(color: .black.opacity(0.45), radius: 5, y: 1)
@@ -282,34 +336,7 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var foodChip: some View {
-        HStack(spacing: 5) {
-            Text(PetFoodUtilsIOS.emoji(for: shownPet?.type))
-                .font(.system(size: 13))
-            Text("\(shownFood) mat att ge")
-                .font(.caption.weight(.bold))
-        }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(.white.opacity(0.94)))
-        .foregroundStyle(palette.tipStrong)
-        // Läget mäts medan lungan syns och sparas kvar när den försvinner, så det sista
-        // bäret inte startar i skärmens hörn.
-        .background(
-            GeometryReader { g in
-                Color.clear
-                    .onAppear { foodChipCenter = center(of: g) }
-                    .onChange(of: g.frame(in: .named(kqBandSpace))) { _, _ in
-                        foodChipCenter = center(of: g)
-                    }
-            }
-        )
-    }
 
-    private func center(of g: GeometryProxy) -> CGPoint {
-        let f = g.frame(in: .named(kqBandSpace))
-        return CGPoint(x: f.midX, y: f.midY)
-    }
 
     /// Saldot, och vägen till plånboken. Ett tryck och inte ett kort: bandet ska inte
     /// konkurrera med listan om uppmärksamheten.
@@ -473,15 +500,12 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
                 Text("Välj ett ägg först")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(palette.ink)
-                Text("Då får du ett djur att ta hand om.")
+                // Knappen låg här förut och var enda vägen in -- alltså osynlig för
+                // varje barn som hade sysslor. Den bor i remsan ovanför nu, och två
+                // knappar för samma sak på en tom skärm läser som en dubblett.
+                Text("Knappen ligger i remsan ovanför.")
                     .font(.subheadline)
                     .foregroundStyle(palette.inkSoft)
-                Button("Välj ägg", action: onSelectEgg)
-                    .font(.body.weight(.bold))
-                    .foregroundStyle(palette.onAccent)
-                    .padding(.horizontal, 22).padding(.vertical, 12)
-                    .background(Capsule().fill(palette.accent))
-                    .padding(.top, 4)
             } else {
                 Text("Inga uppgifter idag")
                     .font(.body.weight(.semibold))
@@ -500,50 +524,29 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
 
     // MARK: - Matningen
 
-    /// Ligger i flödet under listan och inte fastlåst längst ner. Samma beslut som i
-    /// föräldravyn, av samma skäl: en knapp som alltid ligger över innehållet gör
-    /// skärmen trängre än den behöver vara.
-    @ViewBuilder
-    private var feedButton: some View {
-        if let pet {
-            VStack(spacing: 8) {
-                Button {
-                    startFeed(shownFood)
-                } label: {
-                    Text(shownFood > 0
-                         ? "Mata \(petDisplayName(pet)) med \(shownFood) mat"
-                         : "Ingen mat att ge än")
-                        .font(.system(size: 17, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .foregroundStyle(shownFood > 0 ? palette.onAccent : palette.inkFaint)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(shownFood > 0 ? palette.accent : palette.outlineBg)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(shownFood > 0 ? .clear : palette.outlineEdge, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(shownFood == 0 || anim.running)
-
-                if shownFood > 1 {
-                    Button("Mata bara 1") { startFeed(1) }
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(palette.inkSoft)
-                        .disabled(anim.running)
-                }
-            }
-        }
-    }
 
     /// Startar nätanropet och animationen samtidigt.
     ///
     /// Hosten äger anropet och sin egen optimistiska nollställning; den här vyn äger vad
     /// som står på skärmen under sekvensen. Höjningen spelas bara härifrån och aldrig ur
     /// inläst tillstånd -- annars hade den firat vid varje omladdning.
+    /// Ett tryck på en bricka i remsan: ett stycke mat.
+    private func feedOne() {
+        guard shownFood > 0, !anim.celebrating, let pet else { return }
+        let emoji = PetFoodUtilsIOS.emoji(for: shownPet?.type)
+        onFeed(1)
+        Task { @MainActor in
+            await anim.tapOne(
+                emoji: emoji,
+                span: xpSpan,
+                hostFood: shownFood,
+                hostXpInLevel: xpInLevel,
+                hostLevel: level,
+                hostStage: pet.growthStage
+            )
+        }
+    }
+
     private func startFeed(_ amount: Int) {
         guard amount > 0, !anim.running, let pet else { return }
         let emoji = PetFoodUtilsIOS.emoji(for: shownPet?.type)

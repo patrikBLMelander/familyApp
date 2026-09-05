@@ -180,11 +180,11 @@ fun ChildDashboardScreen(
     // så den kan inte hårdkodas.
     // Båda sparas i rotens pixlar och dras ifrån varandra först vid renderingen.
     // onGloballyPositioned garanterar ingen ordning mellan förälder och barn, så om
-    // lungan mättes först vore bandOrigin noll och lungans läge räknat mot roten i
-    // stället för mot bandet. Att spara råa lägen och räkna differensen där den
-    // används gör ordningen betydelselös.
-    var bandOrigin by remember { mutableStateOf(Offset.Zero) }
-    var foodPillRoot by remember { mutableStateOf<Offset?>(null) }
+    // brickorna mättes först vore scenOrigin noll och deras läge räknat mot roten i
+    // stället för mot scenen. Att spara råa lägen och räkna differensen där den används
+    // gör ordningen betydelselös.
+    var scenOrigin by remember { mutableStateOf(Offset.Zero) }
+    var foodTilesRoot by remember { mutableStateOf<Offset?>(null) }
     // positionInRoot() ger pixlar medan bandets maxWidth ger dp, och bären placeras med
     // Modifier.offset i dp. Omräkningen sker vid renderingen, på ett ställe.
     val density = LocalDensity.current
@@ -396,6 +396,70 @@ fun ChildDashboardScreen(
         }
     }
 
+    /**
+     * Ett enda stycke mat, från ett tryck på en bricka i remsan.
+     *
+     * Blockerar med flit inte på isFeeding. Ett barn som trycker fyra gånger snabbt ska
+     * se fyra frön i luften, inte vänta ut det första -- flera samtidigt är hela poängen
+     * med att maten ligger som stycken.
+     */
+    val feedOne: () -> Unit = {
+        val xp0 = xp
+        val petNow = pet
+        if (collectedFoodCount > 0 && xp0 != null && feedAnim.levelUp <= 0f) {
+            // xpForNextLevel räknar bara det som redan LANDAT. Maten som är i luften har
+            // inte räknats än, så den måste dras av för att veta om just det här stycket
+            // är det som korsar tröskeln. Utan avdraget skulle fyra snabba tryck strax
+            // under gränsen fira fyra gånger.
+            val crosses = (xp0.xpForNextLevel - feedAnim.inFlight) == 1
+            val emoji = PetFoodUtils.getPetFoodEmoji(petNow?.petType)
+            val levelAtTap = xp0.currentLevel
+
+            coroutineScope.launch {
+                val call = if (fixture != null) null else async(Dispatchers.IO) {
+                    kotlin.runCatching {
+                        if (actingAsParent) {
+                            ApiClient.petsApi.feedMemberPet(childId, FeedPetRequest(xpAmount = 1))
+                        } else {
+                            ApiClient.petsApi.feedPet(FeedPetRequest(xpAmount = 1))
+                        }
+                    }
+                }
+
+                feedAnim.one(
+                    emoji = emoji,
+                    crosses = crosses,
+                    onLifted = {
+                        collectedFoodCount = (collectedFoodCount - 1).coerceAtLeast(0)
+                    },
+                    onLanded = { xp = xp?.plusOneXp() },
+                    onLevelUp = {
+                        celebrateLevel = (levelAtTap + 1).coerceAtMost(5)
+                        xp = xp?.let { it.copy(currentLevel = celebrateLevel) }
+                        pet = pet?.let { it.copy(growthStage = (it.growthStage + 1).coerceAtMost(5)) }
+                    },
+                )
+
+                val result = call?.await() ?: return@launch
+                if (result.isSuccess) {
+                    lastFedDate = todayString
+                    // Bara när ingenting är kvar i luften. Fem snabba tryck skulle
+                    // annars ladda om fem gånger och slå sönder sin egen animation.
+                    if (feedAnim.inFlight == 0) refreshKey++
+                } else {
+                    // Ingen aritmetisk återställning här. Med flera stycken i luften
+                    // samtidigt går det inte att veta vad som ska läggas tillbaka --
+                    // servern är sanningen, så vi hämtar den.
+                    error = ApiErrors.message(
+                        result.exceptionOrNull() ?: Exception("okänt fel"),
+                        "Kunde inte ge maten",
+                    )
+                    refreshKey++
+                }
+            }
+        }
+    }
+
     val toggleTask: (DailyChoreWithCompletionResponse) -> Unit = { task ->
         taskToggleScope.launch {
             taskToggleMutex.withLock {
@@ -467,32 +531,39 @@ fun ChildDashboardScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState()),
             ) {
-                // ---- Bandet ----
-                // BoxWithConstraints och inte Box: maten ska flyga till djuret, och
-                // djuret flyttar sig. Det står i BottomEnd på 0,52 normalt och i
-                // BottomCenter på 0,82 när dagen är klar, i ett band som är 400dp eller
-                // 258dp. Målet måste alltså räknas ur bandets faktiska mått.
+                // ---- Scenen: bandet och matremsan ----
+                // De två ligger i en gemensam behållare för att maten flyger MELLAN dem
+                // -- från en bricka i remsan upp till djuret i bandet. Bandet klipper
+                // sitt eget innehåll, så ett frö som bara låg i bandet hade kapats vid
+                // underkanten. Flyglagret ligger därför i scenen, medan konfettin blir
+                // kvar inne i bandet där den ska klippas.
                 BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(bandHeight)
-                        // Konfettin faller nedåt och ritades utanför bandet, ner över
-                        // uppgiftskortet -- det läste som en bugg och inte som ett
-                        // firande. Bandet klipper sitt eget innehåll nu.
-                        .clipToBounds()
-                        .onGloballyPositioned { bandOrigin = it.positionInRoot() },
+                        .onGloballyPositioned { scenOrigin = it.positionInRoot() },
                 ) {
                     val bigPet = allDone && viewingPast == null
                     val petScale = if (bigPet) 0.82f else 0.52f
                     // ContentScale.Fit centrerar konsten i sin box, så boxens mitt är
-                    // konstens mitt -- det är dit bären ska.
+                    // konstens mitt -- det är dit maten ska. Bandet ligger överst i
+                    // scenen, så y räknas från scenens topp utan förskjutning.
                     val petBoxW = maxWidth.value * petScale
-                    val petBoxH = maxHeight.value * petScale
+                    val petBoxH = bandHeight.value * petScale
                     val petCenter = Offset(
                         x = if (bigPet) maxWidth.value / 2f else maxWidth.value - petBoxW / 2f,
-                        y = maxHeight.value - petBoxH / 2f,
+                        y = bandHeight.value - petBoxH / 2f,
                     )
 
+                    Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(bandHeight)
+                            // Konfettin faller nedåt och ritades utanför bandet, ner
+                            // över uppgiftskortet -- det läste som en bugg och inte som
+                            // ett firande.
+                            .clipToBounds(),
+                    ) {
                     if (shownPet != null) {
                         PetVisual(
                             petType = shownPet.first,
@@ -638,62 +709,16 @@ fun ChildDashboardScreen(
                                     color = Color.White,
                                 )
                             }
-                            if (collectedFoodCount > 0) {
-                                Surface(
-                                    shape = RoundedCornerShape(50),
-                                    color = Color.White.copy(alpha = 0.94f),
-                                    modifier = Modifier.onGloballyPositioned { c ->
-                                        // Läget sparas medan lungan syns. Den försvinner
-                                        // när maten tar slut, och ett borttaget element
-                                        // har ingen position att flyga från -- det sista
-                                        // bäret hade startat i skärmens hörn.
-                                        val p = c.positionInRoot()
-                                        foodPillRoot = Offset(
-                                            x = p.x + c.size.width / 2f,
-                                            y = p.y + c.size.height / 2f,
-                                        )
-                                    },
-                                ) {
-                                    Text(
-                                        text = "${PetFoodUtils.getPetFoodEmoji(pet!!.petType)} " +
-                                            "$collectedFoodCount mat att ge",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = season.tipStrong,
-                                        modifier = Modifier
-                                            .padding(horizontal = 11.dp, vertical = 6.dp),
-                                    )
-                                }
-                            }
+                            // Matlungan låg här förut och sa "5 mat att ge". Remsan
+                            // under bandet visar samma sak och går dessutom att trycka
+                            // på, så två platser hade sagt samma sak och bara den ena
+                            // gjort något.
                         }
                     }
 
-                    // ---- Matningens effekter ----
-                    // Sist bland bandets barn, alltså ovanpå djuret och texterna.
-                    val pillRoot = foodPillRoot
-                    val flyFrom = pillRoot?.let {
-                        with(density) {
-                            Offset(
-                                x = (it.x - bandOrigin.x).toDp().value,
-                                y = (it.y - bandOrigin.y).toDp().value,
-                            )
-                        }
-                    }
-                    if (flyFrom != null) {
-                        feedAnim.berries.forEach { berry ->
-                            // key på id:t: utan den återanvänder Compose samma
-                            // BerryInFlight för nästa bär, och animationen börjar
-                            // aldrig om från noll.
-                            key(berry.id) {
-                                BerryInFlight(
-                                    emoji = berry.emoji,
-                                    from = flyFrom,
-                                    to = petCenter,
-                                )
-                            }
-                        }
-                    }
-
+                    // ---- Firandet, klippt till bandet ----
+                    // Konfettin faller och ska sluta vid bandets kant. Maten flyger
+                    // uppåt och ska inte -- därför ligger de i olika lager.
                     if (feedAnim.levelUp > 0f) {
                         LevelUpFlash(feedAnim.levelUp)
                         ConfettiBurst(
@@ -714,6 +739,66 @@ fun ChildDashboardScreen(
                                 progress = feedAnim.levelUp,
                                 season = season,
                             )
+                        }
+                    }
+                    } // bandet
+
+                    // ---- Matremsan ----
+                    // Ett tidigare djur går inte att mata, och en misslyckad hämtning
+                    // får inte visa en tom remsa som om barnet vore utan mat.
+                    val shownPetForFood = pet
+                    if (viewingPast == null && shownPetForFood == null && !petLoadFailed && !loading) {
+                        // Utan djur finns ingen mat att ge, men det ska finnas en väg
+                        // till ägget -- och den låg förut bara bakom en tom uppgiftslista.
+                        ChooseEggStrip(
+                            season = season,
+                            onSelectEgg = { showSelectEggDialog = true },
+                            modifier = Modifier.padding(start = 13.dp, end = 13.dp, top = 10.dp),
+                        )
+                    }
+                    if (viewingPast == null && shownPetForFood != null && !petLoadFailed) {
+                        FoodStrip(
+                            foodCount = collectedFoodCount,
+                            emoji = PetFoodUtils.getPetFoodEmoji(shownPetForFood.petType),
+                            petName = shownPetForFood.name?.takeIf { it.isNotBlank() }
+                                ?: PetNameUtils.getPetNameSwedish(shownPetForFood.petType),
+                            // Under firandet ligger allt stilla: att mata in i en
+                            // pågående nivåhöjning gör två saker samtidigt av det som
+                            // ska vara ett ögonblick.
+                            enabled = feedAnim.levelUp <= 0f,
+                            season = season,
+                            onFeedOne = { feedOne() },
+                            onFeedAll = { feed(collectedFoodCount) },
+                            onTilesPositioned = { foodTilesRoot = it },
+                            modifier = Modifier.padding(start = 13.dp, end = 13.dp, top = 10.dp),
+                        )
+                    }
+                    } // scenens kolumn
+
+                    // ---- Maten i luften ----
+                    // Ligger i scenen och inte i bandet: den startar i remsan och landar
+                    // i djuret, alltså över gränsen mellan de två ytorna.
+                    val tiles = foodTilesRoot
+                    val flyFrom = tiles?.let {
+                        with(density) {
+                            Offset(
+                                x = (it.x - scenOrigin.x).toDp().value,
+                                y = (it.y - scenOrigin.y).toDp().value,
+                            )
+                        }
+                    }
+                    if (flyFrom != null) {
+                        feedAnim.berries.forEach { berry ->
+                            // key på id:t: utan den återanvänder Compose samma
+                            // BerryInFlight för nästa bär, och animationen börjar
+                            // aldrig om från noll.
+                            key(berry.id) {
+                                BerryInFlight(
+                                    emoji = berry.emoji,
+                                    from = flyFrom,
+                                    to = petCenter,
+                                )
+                            }
                         }
                     }
                 }
@@ -744,20 +829,7 @@ fun ChildDashboardScreen(
                             petLoadFailed = petLoadFailed,
                             season = season,
                             onToggle = { toggleTask(it) },
-                            onSelectEgg = { showSelectEggDialog = true },
                         )
-
-                        if (pet != null) {
-                            val displayName = pet!!.name?.takeIf { it.isNotBlank() }
-                                ?: PetNameUtils.getPetNameSwedish(pet!!.petType)
-                            FeedButtons(
-                                foodCount = collectedFoodCount,
-                                petName = displayName,
-                                isFeeding = isFeeding,
-                                season = season,
-                                onFeed = { amount -> feed(amount) },
-                            )
-                        }
                     }
 
                     if (!actingAsParent) {
@@ -1183,7 +1255,6 @@ private fun TasksSection(
     petLoadFailed: Boolean,
     season: SeasonPalette,
     onToggle: (DailyChoreWithCompletionResponse) -> Unit,
-    onSelectEgg: () -> Unit,
 ) {
     Column {
         Row(
@@ -1238,19 +1309,10 @@ private fun TasksSection(
                                 color = season.ink,
                             )
                             Text(
-                                "Då får du ett djur att ta hand om.",
+                                "Knappen ligger i remsan ovanför.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = season.inkSoft,
                             )
-                            Button(
-                                onClick = onSelectEgg,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = season.accent,
-                                    contentColor = season.onAccent,
-                                ),
-                            ) {
-                                Text("Välj ägg", fontWeight = FontWeight.Bold)
-                            }
                         }
                         else -> {
                             Text(
@@ -1331,54 +1393,6 @@ private fun TasksSection(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Matningen. Ligger i flödet under listan och inte fastlåst längst ner -- samma beslut
- * som i föräldravyn, av samma skäl: en knapp som alltid ligger över innehållet gör
- * skärmen trängre än den behöver vara.
- */
-@Composable
-private fun FeedButtons(
-    foodCount: Int,
-    petName: String,
-    isFeeding: Boolean,
-    season: SeasonPalette,
-    onFeed: (Int) -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Button(
-            onClick = { onFeed(foodCount) },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            enabled = foodCount > 0 && !isFeeding,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = season.accent,
-                contentColor = season.onAccent,
-                disabledContainerColor = season.outlineBg,
-                disabledContentColor = season.inkFaint,
-            ),
-        ) {
-            Text(
-                text = when {
-                    isFeeding -> "Ger mat…"
-                    foodCount > 0 -> "Mata $petName med $foodCount mat"
-                    else -> "Ingen mat att ge än"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-        if (foodCount > 1) {
-            TextButton(onClick = { onFeed(1) }, enabled = !isFeeding) {
-                Text("Mata bara 1", color = season.inkSoft, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -1522,10 +1536,16 @@ data class ChildDashboardFixture(
          *   följd av en matning och aldrig ur inläst tillstånd, vilket är rätt men också
          *   betyder att den annars inte kan fotograferas.
          */
+        /**
+         * @param noPet barnet har sysslor men inget djur -- läget varje nytt barn börjar
+         *   i, eftersom fem standardsysslor skapas när barnet läggs till. Det var just
+         *   den kombinationen som gömde "Välj ägg", och den gick inte att titta på förut.
+         */
         fun signe(
             allDone: Boolean = false,
             viewingPast: Boolean = false,
             nearLevelUp: Boolean = false,
+            noPet: Boolean = false,
         ): ChildDashboardFixture {
             fun chore(id: String, title: String, food: Int, done: Boolean) =
                 DailyChoreWithCompletionResponse(
@@ -1542,7 +1562,7 @@ data class ChildDashboardFixture(
                 )
 
             return ChildDashboardFixture(
-                pet = PetResponse(
+                pet = if (noPet) null else PetResponse(
                     id = "p1", memberId = "child-1", year = 2026, month = 9,
                     selectedEggType = "yellow_egg", petType = "bird", name = "Kvitter",
                     // Stadiet är nivån (calculateGrowthStage mappar 1:1), så en

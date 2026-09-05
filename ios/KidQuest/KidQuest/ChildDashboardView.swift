@@ -18,6 +18,7 @@ struct ChildDashboardView: View {
     @State private var summary: ChildDashboardRepository.Summary?
     @State private var isFeeding: Bool = false
     @State private var showSelectEgg: Bool = false
+    @State private var hasAutoOpenedEgg: Bool = false
     @State private var hasFedToday: Bool = false
     @State private var showAddChore: Bool = false
     @State private var history: [PetHistoryResponseDTO] = []
@@ -165,6 +166,7 @@ struct ChildDashboardView: View {
             await MainActor.run {
                 summary = s
                 isLoading = false
+                autoOpenEggIfNeeded(hasPet: s.pet != nil, failed: false)
             }
         } catch {
             await MainActor.run {
@@ -172,6 +174,19 @@ struct ChildDashboardView: View {
                 isLoading = false
             }
         }
+    }
+
+
+    /// Öppnar äggväljaren en gång när det saknas djur.
+    ///
+    /// Android har gjort det hela tiden och iOS inte alls, vilket är varför ett barn utan
+    /// djur kunde bli stående här. En gång per session med flit: dialogen ska hjälpa, inte
+    /// hålla någon fast. Att stänga den är inte längre en återvändsgränd -- remsan under
+    /// bandet leder tillbaka.
+    private func autoOpenEggIfNeeded(hasPet: Bool, failed: Bool) {
+        guard !hasAutoOpenedEgg, !hasPet, !failed else { return }
+        hasAutoOpenedEgg = true
+        showSelectEgg = true
     }
 
     private func feed(amount: Int) async {
@@ -208,17 +223,21 @@ extension ChildDashboardView {
     /// @param nearLevelUp tre XP från tröskeln med fem mat i räknaren, och matningen
     ///   startar av sig själv -- det enda sättet att se nivåhöjningen i en simulator som
     ///   inte tar emot tryck.
+    /// @param noPet barnet har sysslor men inget djur -- läget varje nytt barn börjar
+    ///   i, eftersom fem standardsysslor skapas när barnet läggs till. Det var just den
+    ///   kombinationen som gömde "Välj ägg".
     static func fixture(
         allDone: Bool = false,
         past: Bool = false,
-        nearLevelUp: Bool = false
+        nearLevelUp: Bool = false,
+        noPet: Bool = false
     ) -> ChildDashboardView {
         let history = ChildFixtures.history
         return ChildDashboardView(
             childId: "child-1",
             childName: "Signe",
             preloaded: ChildDashboardRepository.Summary(
-                pet: ChildFixtures.pet,
+                pet: noPet ? nil : ChildFixtures.pet,
                 xp: nearLevelUp ? ChildFixtures.xpNearLevelUp : ChildFixtures.xp,
                 wallet: WalletBalanceResponseDTO(id: "w1", memberId: "child-1", balance: 85),
                 collectedFood: CollectedFoodResponseDTO(
