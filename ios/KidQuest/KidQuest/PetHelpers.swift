@@ -252,3 +252,57 @@ enum PetThemeIOS {
         )
     }
 }
+
+/// Vad äggen heter för ett barn, och vad de viskar innan de kläcks.
+///
+/// Bodde i SelectEggSheet och var privat där, vilket gjorde att ingenting kunde
+/// kontrollera att listan var komplett. Den var det inte: lejonet och hajen lades till på
+/// servern och namnen följde aldrig med, så äggväljaren visade "golden_egg" och
+/// "white_egg" med understreck rakt upp och ner. Här ligger de bredvid artnamnen, och
+/// EggNamesTests ser till att alla fjorton täcks.
+enum EggNames {
+
+    static func label(for eggType: String) -> String {
+        switch eggType.lowercased() {
+        case "blue_egg": return "Blått ägg"
+        case "green_egg": return "Grönt ägg"
+        case "red_egg": return "Rött ägg"
+        case "yellow_egg": return "Gult ägg"
+        case "purple_egg": return "Lila ägg"
+        case "orange_egg": return "Orange ägg"
+        case "brown_egg": return "Brunt ägg"
+        case "black_egg": return "Mörkt ägg"
+        case "gray_egg": return "Grått ägg"
+        case "teal_egg": return "Turkost ägg"
+        case "pink_egg": return "Rosa ägg"
+        case "cyan_egg": return "Blågrönt ägg"
+        case "golden_egg": return "Gyllene ägg"
+        case "white_egg": return "Vitt ägg"
+        // Aldrig eggType. Föll ett ägg igenom stod det "golden_egg" med understreck
+        // mitt i äggväljaren, vilket är precis vad som hände när lejonet och hajen
+        // lades till på servern och namnen inte följde med. En reserv som lyder är
+        // bättre än en som avslöjar en identifierare.
+        default: return "Ägg"
+        }
+    }
+
+    static func hint(for eggType: String) -> String {
+        switch eggType.lowercased() {
+        case "blue_egg": return "Jag älskar att flyga högt bland molnen."
+        case "green_egg": return "Jag spinner nöjt när jag får ligga i solen."
+        case "red_egg": return "Jag hämtar gärna bollen om du kastar den."
+        case "yellow_egg": return "Jag kvittrar gärna när dagen börjar."
+        case "purple_egg": return "Jag hoppar fram och gnager gärna på morötter."
+        case "orange_egg": return "Jag tar gärna en lång vintersömn med magen full."
+        case "brown_egg": return "Jag gillar att slingra mig på varma stenar."
+        case "black_egg": return "Jag tycker om att smyga runt i skuggan."
+        case "gray_egg": return "Jag rör mig långsamt men kramas gärna länge."
+        case "teal_egg": return "Jag trivs där det finns mycket vatten och mystik."
+        case "pink_egg": return "Jag gillar glitter, regnbågar och magi."
+        case "cyan_egg": return "Jag älskar att plaska runt med kompisar."
+        case "golden_egg": return "Jag ryter så att alla hör att jag vaknat."
+        case "white_egg": return "Jag simmar snabbast av alla där det är djupt."
+        default: return "Jag längtar efter att få träffa dig."
+        }
+    }
+}

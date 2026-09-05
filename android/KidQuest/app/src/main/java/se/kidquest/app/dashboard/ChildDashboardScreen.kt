@@ -1175,7 +1175,13 @@ private fun getEggLabel(eggType: String): String =
         "teal_egg" -> "Turkost ägg"
         "pink_egg" -> "Rosa ägg"
         "cyan_egg" -> "Blågrönt ägg"
-        else -> eggType
+        "golden_egg" -> "Gyllene ägg"
+        "white_egg" -> "Vitt ägg"
+        // Aldrig eggType. Föll ett ägg igenom stod det "golden_egg" med understreck
+        // mitt i äggväljaren, vilket är precis vad som hände när lejonet och hajen
+        // lades till på servern och namnen inte följde med. En reserv som lyder är
+        // bättre än en som avslöjar en identifierare.
+        else -> "Ägg"
     }
 
 private fun getEggHint(eggType: String): String =
@@ -1192,6 +1198,8 @@ private fun getEggHint(eggType: String): String =
         "teal_egg" -> "Jag trivs där det finns mycket vatten och mystik."
         "pink_egg" -> "Jag gillar glitter, regnbågar och magi."
         "cyan_egg" -> "Jag älskar att plaska runt med kompisar."
+        "golden_egg" -> "Jag ryter så att alla hör att jag vaknat."
+        "white_egg" -> "Jag simmar snabbast av alla där det är djupt."
         else -> "Jag längtar efter att få träffa dig."
     }
 

@@ -542,7 +542,12 @@ struct ChildWalletView: View {
         case "ALLOWANCE": return "Fickpengar"
         case "EXPENSE": return "Köp"
         case "SAVINGS_ALLOCATION": return "Sparmål"
-        default: return type
+        // TransactionType har fem värden, inte tre. De två sista syntes aldrig här, så
+        // MANUAL_ADJUSTMENT stod med versaler och understreck i barnets egen plånbok.
+        case "MANUAL_ADJUSTMENT": return "Justering"
+        case "DELETION": return "Borttagen"
+        // Aldrig råvärdet. En okänd typ ska se tråkig ut, inte teknisk.
+        default: return "Övrigt"
         }
     }
 

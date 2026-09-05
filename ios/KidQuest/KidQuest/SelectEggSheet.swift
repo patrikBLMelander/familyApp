@@ -72,7 +72,7 @@ struct SelectEggSheet: View {
                     TextField("Namn på djuret", text: $petName)
                         .textFieldStyle(.roundedBorder)
                     if showHint {
-                        Text(eggHint(for: selectedEgg))
+                        Text(EggNames.hint(for: selectedEgg))
                             .font(.footnote)
                             .foregroundColor(.secondary)
                             .padding(.top, 4)
@@ -84,7 +84,7 @@ struct SelectEggSheet: View {
 
     private func eggCard(eggType: String) -> some View {
         let isSelected = eggType == selectedEgg
-        let label = eggLabel(for: eggType)
+        let label = EggNames.label(for: eggType)
 
         return Button {
             if selectedEgg == eggType {
@@ -178,40 +178,6 @@ struct SelectEggSheet: View {
         }
     }
 
-    private func eggLabel(for eggType: String) -> String {
-        switch eggType.lowercased() {
-        case "blue_egg": return "Blått ägg"
-        case "green_egg": return "Grönt ägg"
-        case "red_egg": return "Rött ägg"
-        case "yellow_egg": return "Gult ägg"
-        case "purple_egg": return "Lila ägg"
-        case "orange_egg": return "Orange ägg"
-        case "brown_egg": return "Brunt ägg"
-        case "black_egg": return "Mörkt ägg"
-        case "gray_egg": return "Grått ägg"
-        case "teal_egg": return "Turkost ägg"
-        case "pink_egg": return "Rosa ägg"
-        case "cyan_egg": return "Blågrönt ägg"
-        default: return eggType
-        }
-    }
 
-    private func eggHint(for eggType: String) -> String {
-        switch eggType.lowercased() {
-        case "blue_egg": return "Jag älskar att flyga högt bland molnen."
-        case "green_egg": return "Jag spinner nöjt när jag får ligga i solen."
-        case "red_egg": return "Jag hämtar gärna bollen om du kastar den."
-        case "yellow_egg": return "Jag kvittrar gärna när dagen börjar."
-        case "purple_egg": return "Jag hoppar fram och gnager gärna på morötter."
-        case "orange_egg": return "Jag tar gärna en lång vintersömn med magen full."
-        case "brown_egg": return "Jag gillar att slingra mig på varma stenar."
-        case "black_egg": return "Jag tycker om att smyga runt i skuggan."
-        case "gray_egg": return "Jag rör mig långsamt men kramas gärna länge."
-        case "teal_egg": return "Jag trivs där det finns mycket vatten och mystik."
-        case "pink_egg": return "Jag gillar glitter, regnbågar och magi."
-        case "cyan_egg": return "Jag älskar att plaska runt med kompisar."
-        default: return "Jag längtar efter att få träffa dig."
-        }
-    }
 }
 

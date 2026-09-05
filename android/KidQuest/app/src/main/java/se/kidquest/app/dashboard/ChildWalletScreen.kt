@@ -565,7 +565,12 @@ private fun localizedType(type: String) = when (type) {
     "ALLOWANCE" -> "Fickpengar"
     "EXPENSE" -> "Köp"
     "SAVINGS_ALLOCATION" -> "Sparmål"
-    else -> type
+    // TransactionType har fem värden, inte tre. De två sista syntes aldrig här, så
+    // MANUAL_ADJUSTMENT stod med versaler och understreck i barnets egen plånbok.
+    "MANUAL_ADJUSTMENT" -> "Justering"
+    "DELETION" -> "Borttagen"
+    // Aldrig råvärdet. En okänd typ ska se tråkig ut, inte teknisk.
+    else -> "Övrigt"
 }
 
 private fun formatDate(iso: String): String = try {
