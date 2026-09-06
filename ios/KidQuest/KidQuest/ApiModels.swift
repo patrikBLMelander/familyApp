@@ -212,6 +212,22 @@ struct XpProgressResponseDTO: Decodable {
     let xpInCurrentLevel: Int
 }
 
+/// En avslutad månad. Skrivs av `XpService.monthlyReset` klockan noll den första,
+/// samtidigt som djuret flyttas till pet_history.
+///
+/// Endpointen har alltid funnits och ingen klient har anropat den. Avskedet behöver den:
+/// `totalTasksCompleted` är det som gör månaden till en prestation snarare än ett datum
+/// som passerade.
+struct XpHistoryResponseDTO: Decodable {
+    let id: String
+    let memberId: String
+    let year: Int
+    let month: Int
+    let finalXp: Int
+    let finalLevel: Int
+    let totalTasksCompleted: Int
+}
+
 struct WalletBalanceResponseDTO: Decodable {
     let id: String?
     let memberId: String

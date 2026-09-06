@@ -50,6 +50,10 @@ struct ChildDashboardHost: View {
     @State private var isFeeding = false
     @State private var showSelectEgg = false
     @State private var hasAutoOpenedEgg = false
+    @State private var farewell: MonthFarewellData?
+    @State private var farewellChecked = false
+    /// Förälderns vy: allt är member-scopat, inklusive XP-historiken.
+    private var farewellMemberScope: String? { activeChild.id }
     @State private var showSwitchChild = false
     @State private var siblings: [ChildRef] = []
     /// Barnets tidigare djur, och vilket som visas. Samma samling barnet ser.
@@ -100,10 +104,25 @@ struct ChildDashboardHost: View {
                 history = await MemberScopedRepository.fetchPetHistory(memberId: activeChild.id)
             }
         }
+        // Sist i ZStacken: senare syskon ritar överst, och avskedet ska ligga över
+        // hela barnvyn.
+        .overlay {
+            if let farewell {
+                MonthFarewell(data: farewell, palette: palette) {
+                    FarewellLog.markSeen(memberId: activeChild.id,
+                                         year: farewell.entry.year,
+                                         month: farewell.entry.month)
+                    self.farewell = nil
+                    showSelectEgg = true
+                }
+                .transition(.opacity)
+            }
+        }
         .sheet(isPresented: $showSelectEgg) {
             // The member id is what makes this the CHILD's egg and not the parent's.
             SelectEggSheet(
                 memberId: activeChild.id,
+                history: history,
                 onDismiss: { showSelectEgg = false },
                 onEggSelected: { pet in
                     snapshot?.pet = pet
@@ -297,7 +316,10 @@ struct ChildDashboardHost: View {
             guard target == activeChild.id else { return }
             snapshot = fresh
             isLoading = false
-            autoOpenEggIfNeeded(hasPet: fresh.pet != nil, failed: fresh.petLoadFailed)
+            Task {
+                await checkFarewell(hasPet: fresh.pet != nil, failed: fresh.petLoadFailed,
+                                    memberId: activeChild.id)
+            }
         } catch {
             guard target == activeChild.id else { return }
             errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda barnvyn.")
@@ -316,6 +338,32 @@ struct ChildDashboardHost: View {
         guard !hasAutoOpenedEgg, !hasPet, !failed else { return }
         hasAutoOpenedEgg = true
         showSelectEgg = true
+    }
+
+
+    /// Avgör om månadsavskedet ska spelas.
+    ///
+    /// Fyra villkor, och alla fyra behövs. Djuret måste vara borta -- det är vad
+    /// monthlyReset gör. Det måste finnas ett djur i historiken att ta avsked av; ett
+    /// barn som aldrig valde ägg förra månaden har inget, och att fira ingenting är värre
+    /// än att inte fira alls. Hämtningen måste ha lyckats, annars firar vi bort ett djur
+    /// som bara inte gick att läsa. Och månaden får inte redan vara avklarad.
+    @MainActor
+    private func checkFarewell(hasPet: Bool, failed: Bool, memberId: String) async {
+        guard !farewellChecked, !hasPet, !failed else { return }
+        guard let senaste = history.first else { return }
+        farewellChecked = true
+        guard !FarewellLog.hasSeen(memberId: memberId,
+                                   year: senaste.year, month: senaste.month) else { return }
+        let tasks = await ChildDashboardRepository.fetchTasksCompleted(
+            year: senaste.year, month: senaste.month,
+            memberId: farewellMemberScope
+        )
+        farewell = MonthFarewellData(
+            entry: senaste,
+            petName: PetNameUtilsIOS.getPetNameSwedish(senaste.petType),
+            tasks: tasks
+        )
     }
 
     private func loadSiblings() async {

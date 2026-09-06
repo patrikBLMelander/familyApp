@@ -306,3 +306,11 @@ enum EggNames {
         }
     }
 }
+
+/// Månadens namn, för raden under ett samlat djur i äggväljaren.
+func kqMonthName(_ month: Int) -> String {
+    let n = ["januari", "februari", "mars", "april", "maj", "juni",
+             "juli", "augusti", "september", "oktober", "november", "december"]
+    guard month >= 1, month <= 12 else { return "" }
+    return n[month - 1]
+}

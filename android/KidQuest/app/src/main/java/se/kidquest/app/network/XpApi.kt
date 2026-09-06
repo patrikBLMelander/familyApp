@@ -18,6 +18,24 @@ data class XpProgressResponse(
     val xpInCurrentLevel: Int,
 )
 
+/**
+ * En avslutad månad. Skrivs av XpService.monthlyReset klockan noll den första, samtidigt
+ * som djuret flyttas till pet_history.
+ *
+ * Endpointen har alltid funnits och ingen klient har anropat den. Avskedet behöver den:
+ * finalLevel är hur långt djuret kom, och totalTasksCompleted är det som gör månaden till
+ * en prestation snarare än ett datum som passerade.
+ */
+data class XpHistoryResponse(
+    val id: String,
+    val memberId: String,
+    val year: Int,
+    val month: Int,
+    val finalXp: Int,
+    val finalLevel: Int,
+    val totalTasksCompleted: Int,
+)
+
 data class AwardBonusXpRequest(
     val xpPoints: Int,
 )
@@ -29,6 +47,12 @@ interface XpApi {
 
     @GET("xp/members/{memberId}/current")
     suspend fun getMemberXpProgress(@Path("memberId") memberId: String): Response<XpProgressResponse>
+
+    @GET("xp/history")
+    suspend fun getXpHistory(): List<XpHistoryResponse>
+
+    @GET("xp/members/{memberId}/history")
+    suspend fun getMemberXpHistory(@Path("memberId") memberId: String): List<XpHistoryResponse>
 
     @POST("xp/members/{memberId}/bonus")
     suspend fun awardBonusXp(

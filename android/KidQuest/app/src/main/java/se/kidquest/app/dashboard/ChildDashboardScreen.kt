@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
@@ -83,6 +84,8 @@ import se.kidquest.app.network.SelectEggRequest
 import se.kidquest.app.network.WalletBalanceResponse
 import se.kidquest.app.network.XpProgressResponse
 import se.kidquest.app.pet.PetFoodUtils
+import se.kidquest.app.session.PrefsStore
+import se.kidquest.app.pet.EggNames
 import se.kidquest.app.pet.PetImages
 import se.kidquest.app.pet.PetNameUtils
 import se.kidquest.app.pet.PetTheme
@@ -170,6 +173,11 @@ fun ChildDashboardScreen(
     // Barnets tidigare djur, och vilket som visas. Nil betyder dagens.
     var petHistory by remember { mutableStateOf<List<PetHistoryResponse>>(emptyList()) }
     var viewingPast by remember { mutableStateOf<PetHistoryResponse?>(null) }
+    // Månadsavskedet. Icke-null medan det spelas, och det ligger över allt annat.
+    var farewell by remember { mutableStateOf<MonthFarewellData?>(null) }
+    // Sätts när avskedet har körts en gång i den här sessionen, så en omladdning mitt i
+    // inte startar om det.
+    var farewellChecked by remember { mutableStateOf(false) }
 
     // Matningens synliga del. Barnen som testade sa att man inte ser att man matar och
     // inte ser progressen -- bägge stämde: maten försvann ur en siffra och nivån var en
@@ -201,6 +209,17 @@ fun ChildDashboardScreen(
             collectedFoodCount = fixture.foodCount
             petHistory = fixture.history
             viewingPast = if (fixture.viewingPast) fixture.history.firstOrNull() else null
+            if (fixture.showFarewell && farewell == null && !farewellChecked) {
+                farewellChecked = true
+                fixture.history.firstOrNull()?.let { senaste ->
+                    farewell = MonthFarewellData(
+                        entry = senaste,
+                        petName = PetNameUtils.getPetNameSwedish(senaste.petType),
+                        level = senaste.finalGrowthStage,
+                        tasks = 47,
+                    )
+                }
+            }
             loading = false
             isInitialLoad = false
             return@LaunchedEffect
@@ -279,6 +298,7 @@ fun ChildDashboardScreen(
         }
     }
 
+
     LaunchedEffect(showConfetti) {
         if (showConfetti) {
             delay(2500)
@@ -294,6 +314,45 @@ fun ChildDashboardScreen(
                 else ApiClient.petsApi.getPetHistory()
             }.getOrDefault(emptyList())
         }.sortedWith(compareByDescending<PetHistoryResponse> { it.year }.thenByDescending { it.month })
+    }
+
+    /**
+     * Avgör om månadsavskedet ska spelas.
+     *
+     * Fyra villkor, och alla fyra behövs. Djuret måste vara borta -- det är vad
+     * monthlyReset gör. Det måste finnas ett djur i historiken att ta avsked av; ett barn
+     * som aldrig valde ägg förra månaden har inget, och att fira ingenting är värre än
+     * att inte fira alls. Hämtningen måste ha lyckats, annars firar vi bort ett djur som
+     * bara inte gick att läsa. Och månaden får inte redan vara avklarad.
+     *
+     * Flaggan är per barn OCH månad: en förälder i "visa som barn" ska se samma sekvens,
+     * och utan barnets id hade den ena telefonen firat om det den andra redan gjort.
+     */
+    LaunchedEffect(loading, pet, petLoadFailed, petHistory, error) {
+        if (fixture != null || farewellChecked) return@LaunchedEffect
+        if (loading || error != null || petLoadFailed || pet != null) return@LaunchedEffect
+        val senaste = petHistory.firstOrNull() ?: return@LaunchedEffect
+        if (PrefsStore.hasSeenFarewell(childId, senaste.year, senaste.month)) {
+            farewellChecked = true
+            return@LaunchedEffect
+        }
+        farewellChecked = true
+        // Antalet avbockade sysslor är det som gör månaden till en prestation. Går det
+        // inte att hämta utelämnas raden hellre än att visa en nolla.
+        val tasks = withContext(Dispatchers.IO) {
+            kotlin.runCatching {
+                val hist = if (actingAsParent) ApiClient.xpApi.getMemberXpHistory(childId)
+                else ApiClient.xpApi.getXpHistory()
+                hist.firstOrNull { it.year == senaste.year && it.month == senaste.month }
+                    ?.totalTasksCompleted ?: 0
+            }.getOrDefault(0)
+        }
+        farewell = MonthFarewellData(
+            entry = senaste,
+            petName = PetNameUtils.getPetNameSwedish(senaste.petType),
+            level = senaste.finalGrowthStage,
+            tasks = tasks,
+        )
     }
 
     // Matningen och bockningen låg förut inne i knapparnas onClick. De ligger här nu
@@ -491,7 +550,11 @@ fun ChildDashboardScreen(
     var hasAutoOpenedEggDialog by remember { mutableStateOf(false) }
     LaunchedEffect(loading, pet, error, petLoadFailed) {
         if (fixture != null) return@LaunchedEffect
-        if (!loading && error == null && !petLoadFailed && pet == null && !hasAutoOpenedEggDialog) {
+        // Inte medan avskedet spelas: det slutar med att väljaren öppnas ändå, och två
+        // dialoger ovanpå varandra är inte en sekvens.
+        if (!loading && error == null && !petLoadFailed && pet == null &&
+            !hasAutoOpenedEggDialog && farewell == null && farewellChecked
+        ) {
             hasAutoOpenedEggDialog = true
             showSelectEggDialog = true
         }
@@ -520,6 +583,8 @@ fun ChildDashboardScreen(
     )
 
     CompositionLocalProvider(LocalSeasonPalette provides season) {
+
+
         Box(modifier = Modifier.fillMaxSize().background(season.pageBg)) {
             if (loading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -850,12 +915,33 @@ fun ChildDashboardScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                 }
             }
+
+            // Sist inuti rot-Boxen: senare syskon ritar överst, och avskedet ska
+            // ligga över hela barnvyn. Som syskon TILL boxen hamnade det bredvid
+            // den i stället för ovanpå, och syntes därför aldrig.
+            val farewellNow = farewell
+            if (farewellNow != null) {
+                MonthFarewell(
+                    data = farewellNow,
+                    season = season,
+                    onSaved = {
+                        coroutineScope.launch {
+                            PrefsStore.markFarewellSeen(
+                                childId, farewellNow.entry.year, farewellNow.entry.month,
+                            )
+                            farewell = null
+                            showSelectEggDialog = true
+                        }
+                    },
+                )
+            }
         }
     }
 
 
     if (showSelectEggDialog) {
         SelectEggDialog(
+            history = petHistory,
             actingAsParent = actingAsParent,
             childId = childId,
             onDismiss = { showSelectEggDialog = false },
@@ -904,11 +990,14 @@ fun ChildDashboardScreen(
 private fun SelectEggDialog(
     onDismiss: () -> Unit,
     onEggSelected: (PetResponse) -> Unit,
+    /** Vad barnet redan samlat. Tavlan visar de platserna som djur, inte som ägg. */
+    history: List<PetHistoryResponse> = emptyList(),
     // Whose egg this is. Without it a parent choosing in the child view creates a pet
     // for themselves, because select-egg resolves the member from the device token.
     actingAsParent: Boolean = false,
     childId: String = "",
 ) {
+    val season = LocalSeasonPalette.current
     var eggTypes by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedEgg by remember { mutableStateOf<String?>(null) }
     var name by remember { mutableStateOf("") }
@@ -1004,69 +1093,25 @@ private fun SelectEggDialog(
                         )
                     }
                 } else if (!isNaming) {
-                    Text("Välj ett ägg för ditt nya djur.")
-                    Spacer(modifier = Modifier.height(12.dp))
-                    eggTypes.forEach { egg ->
-                        val isSelected = egg == selectedEgg
-                        val eggDrawable = PetImages.eggDrawable(LocalContext.current, egg)
-                        val label = getEggLabel(egg)
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                },
-                            ),
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp)
-                                    .clickable {
-                                        selectedEgg = egg
-                                        showHint = false
-                                    },
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                if (eggDrawable != null) {
-                                    Image(
-                                        painter = painterResource(id = eggDrawable),
-                                        contentDescription = label,
-                                        modifier = Modifier.size(80.dp),
-                                        contentScale = ContentScale.Fit,
-                                    )
-                                } else {
-                                    Text(
-                                        text = "🥚",
-                                        style = MaterialTheme.typography.headlineLarge,
-                                    )
-                                }
-                                if (isSelected) {
-                                    TextButton(onClick = { showHint = !showHint }) {
-                                        Text(if (showHint) "Göm hint" else "Visa hint")
-                                    }
-                                    if (showHint) {
-                                        val hint = getEggHint(egg)
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                        ) {
-                                            Text(
-                                                text = hint,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                modifier = Modifier.padding(8.dp),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
+                    EggCollectionBoard(
+                        eggTypes = eggTypes,
+                        history = history,
+                        selectedEgg = selectedEgg,
+                        season = season,
+                        onSelect = { selectedEgg = it },
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // Hinten i en fast rad i stället för bakom "Visa hint". Den knappen
+                    // fanns bara på det valda ägget och upptäcktes därför nästan aldrig,
+                    // vilket gjorde att hälften av väljarens innehåll aldrig lästes.
+                    Text(
+                        text = selectedEgg?.let { EggNames.hint(it) }
+                            ?: "Tryck på ett ägg för att höra vad som viskar därinne.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (selectedEgg != null) season.tipInk else season.inkFaint,
+                        fontStyle = if (selectedEgg != null) FontStyle.Italic else FontStyle.Normal,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                    )
                 } else {
                     val egg = selectedEgg
                     val namingEggDrawable = PetImages.eggDrawable(LocalContext.current, egg)
@@ -1161,47 +1206,7 @@ private fun SelectEggDialog(
     )
 }
 
-private fun getEggLabel(eggType: String): String =
-    when (eggType.lowercase()) {
-        "blue_egg" -> "Blått ägg"
-        "green_egg" -> "Grönt ägg"
-        "red_egg" -> "Rött ägg"
-        "yellow_egg" -> "Gult ägg"
-        "purple_egg" -> "Lila ägg"
-        "orange_egg" -> "Orange ägg"
-        "brown_egg" -> "Brunt ägg"
-        "black_egg" -> "Mörkt ägg"
-        "gray_egg" -> "Grått ägg"
-        "teal_egg" -> "Turkost ägg"
-        "pink_egg" -> "Rosa ägg"
-        "cyan_egg" -> "Blågrönt ägg"
-        "golden_egg" -> "Gyllene ägg"
-        "white_egg" -> "Vitt ägg"
-        // Aldrig eggType. Föll ett ägg igenom stod det "golden_egg" med understreck
-        // mitt i äggväljaren, vilket är precis vad som hände när lejonet och hajen
-        // lades till på servern och namnen inte följde med. En reserv som lyder är
-        // bättre än en som avslöjar en identifierare.
-        else -> "Ägg"
-    }
 
-private fun getEggHint(eggType: String): String =
-    when (eggType.lowercase()) {
-        "blue_egg" -> "Jag älskar att flyga högt bland molnen."
-        "green_egg" -> "Jag spinner nöjt när jag får ligga i solen."
-        "red_egg" -> "Jag hämtar gärna bollen om du kastar den."
-        "yellow_egg" -> "Jag kvittrar gärna när dagen börjar."
-        "purple_egg" -> "Jag hoppar fram och gnager gärna på morötter."
-        "orange_egg" -> "Jag tar gärna en lång vintersömn med magen full."
-        "brown_egg" -> "Jag gillar att slingra mig på varma stenar."
-        "black_egg" -> "Jag tycker om att smyga runt i skuggan."
-        "gray_egg" -> "Jag rör mig långsamt men kramas gärna länge."
-        "teal_egg" -> "Jag trivs där det finns mycket vatten och mystik."
-        "pink_egg" -> "Jag gillar glitter, regnbågar och magi."
-        "cyan_egg" -> "Jag älskar att plaska runt med kompisar."
-        "golden_egg" -> "Jag ryter så att alla hör att jag vaknat."
-        "white_egg" -> "Jag simmar snabbast av alla där det är djupt."
-        else -> "Jag längtar efter att få träffa dig."
-    }
 
 
 // MARK: - Byggstenar för barnets dag
@@ -1534,6 +1539,8 @@ data class ChildDashboardFixture(
     val balance: WalletBalanceResponse?,
     val tasks: List<DailyChoreWithCompletionResponse>,
     val foodCount: Int,
+    /** Spelar månadsavskedet direkt. Bara harnesket; se MonthFarewell. */
+    val showFarewell: Boolean = false,
     val history: List<PetHistoryResponse>,
     val viewingPast: Boolean = false,
 ) {
@@ -1554,6 +1561,7 @@ data class ChildDashboardFixture(
             viewingPast: Boolean = false,
             nearLevelUp: Boolean = false,
             noPet: Boolean = false,
+            showFarewell: Boolean = false,
         ): ChildDashboardFixture {
             fun chore(id: String, title: String, food: Int, done: Boolean) =
                 DailyChoreWithCompletionResponse(
@@ -1570,7 +1578,7 @@ data class ChildDashboardFixture(
                 )
 
             return ChildDashboardFixture(
-                pet = if (noPet) null else PetResponse(
+                pet = if (noPet || showFarewell) null else PetResponse(
                     id = "p1", memberId = "child-1", year = 2026, month = 9,
                     selectedEggType = "yellow_egg", petType = "bird", name = "Kvitter",
                     // Stadiet är nivån (calculateGrowthStage mappar 1:1), så en
@@ -1600,6 +1608,7 @@ data class ChildDashboardFixture(
                     chore("5", "Hjälpa till med disken", 1, allDone),
                 ),
                 foodCount = if (nearLevelUp) 5 else if (allDone) 5 else 2,
+                showFarewell = showFarewell,
                 history = listOf(
                     PetHistoryResponse(
                         id = "h1", memberId = "child-1", year = 2026, month = 8,

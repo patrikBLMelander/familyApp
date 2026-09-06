@@ -19,6 +19,10 @@ struct ChildDashboardView: View {
     @State private var isFeeding: Bool = false
     @State private var showSelectEgg: Bool = false
     @State private var hasAutoOpenedEgg: Bool = false
+    @State private var farewell: MonthFarewellData?
+    @State private var farewellChecked = false
+    /// Barnets egen vy: anropen är token-scopade, så ingen memberId behövs.
+    private var farewellMemberScope: String? { nil }
     @State private var hasFedToday: Bool = false
     @State private var showAddChore: Bool = false
     @State private var history: [PetHistoryResponseDTO] = []
@@ -32,6 +36,12 @@ struct ChildDashboardView: View {
     var preloadedViewingPast: PetHistoryResponseDTO?
     /// Bara harnesket sätter den; se ChildDayLayout.harnessAutoFeed.
     var harnessAutoFeed: Bool = false
+    /// Öppnar äggväljaren direkt. Bara harnesket: väljaren nås annars bara genom att
+    /// trycka, och simulatorn tar inte emot tryck.
+    var harnessOpenEggPicker: Bool = false
+    /// Spelar månadsavskedet direkt. Bara harnesket: sekvensen kan annars bara ses en
+    /// gång i månaden, och 1 oktober ligger efter lanseringen.
+    var harnessFarewell: Bool = false
 
     private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
 
@@ -58,8 +68,33 @@ struct ChildDashboardView: View {
             await load()
             history = await ChildDashboardRepository.fetchPetHistory()
         }
+        // Sist i ZStacken: senare syskon ritar överst, och avskedet ska ligga över
+        // hela barnvyn.
+        .overlay {
+            if let farewell {
+                MonthFarewell(data: farewell, palette: palette, onSaved: {
+                    FarewellLog.markSeen(memberId: childId,
+                                         year: farewell.entry.year,
+                                         month: farewell.entry.month)
+                    self.farewell = nil
+                    showSelectEgg = true
+                }, harnessAutoSave: harnessFarewell)
+                .transition(.opacity)
+            }
+        }
+        .onAppear {
+            if harnessOpenEggPicker { showSelectEgg = true }
+            if harnessFarewell, farewell == nil, let senaste = ChildFixtures.history.first {
+                farewell = MonthFarewellData(
+                    entry: senaste,
+                    petName: PetNameUtilsIOS.getPetNameSwedish(senaste.petType),
+                    tasks: 47
+                )
+            }
+        }
         .sheet(isPresented: $showSelectEgg) {
             SelectEggSheet(
+                history: history,
                 onDismiss: { showSelectEgg = false },
                 onEggSelected: { pet in
                     if let s = summary {
@@ -166,7 +201,7 @@ struct ChildDashboardView: View {
             await MainActor.run {
                 summary = s
                 isLoading = false
-                autoOpenEggIfNeeded(hasPet: s.pet != nil, failed: false)
+                Task { await checkFarewell(hasPet: s.pet != nil, failed: false, memberId: childId) }
             }
         } catch {
             await MainActor.run {
@@ -187,6 +222,32 @@ struct ChildDashboardView: View {
         guard !hasAutoOpenedEgg, !hasPet, !failed else { return }
         hasAutoOpenedEgg = true
         showSelectEgg = true
+    }
+
+
+    /// Avgör om månadsavskedet ska spelas.
+    ///
+    /// Fyra villkor, och alla fyra behövs. Djuret måste vara borta -- det är vad
+    /// monthlyReset gör. Det måste finnas ett djur i historiken att ta avsked av; ett
+    /// barn som aldrig valde ägg förra månaden har inget, och att fira ingenting är värre
+    /// än att inte fira alls. Hämtningen måste ha lyckats, annars firar vi bort ett djur
+    /// som bara inte gick att läsa. Och månaden får inte redan vara avklarad.
+    @MainActor
+    private func checkFarewell(hasPet: Bool, failed: Bool, memberId: String) async {
+        guard !farewellChecked, !hasPet, !failed else { return }
+        guard let senaste = history.first else { return }
+        farewellChecked = true
+        guard !FarewellLog.hasSeen(memberId: memberId,
+                                   year: senaste.year, month: senaste.month) else { return }
+        let tasks = await ChildDashboardRepository.fetchTasksCompleted(
+            year: senaste.year, month: senaste.month,
+            memberId: farewellMemberScope
+        )
+        farewell = MonthFarewellData(
+            entry: senaste,
+            petName: PetNameUtilsIOS.getPetNameSwedish(senaste.petType),
+            tasks: tasks
+        )
     }
 
     private func feed(amount: Int) async {
@@ -230,14 +291,15 @@ extension ChildDashboardView {
         allDone: Bool = false,
         past: Bool = false,
         nearLevelUp: Bool = false,
-        noPet: Bool = false
+        noPet: Bool = false,
+        farewell: Bool = false
     ) -> ChildDashboardView {
         let history = ChildFixtures.history
         return ChildDashboardView(
             childId: "child-1",
             childName: "Signe",
             preloaded: ChildDashboardRepository.Summary(
-                pet: noPet ? nil : ChildFixtures.pet,
+                pet: (noPet || farewell) ? nil : ChildFixtures.pet,
                 xp: nearLevelUp ? ChildFixtures.xpNearLevelUp : ChildFixtures.xp,
                 wallet: WalletBalanceResponseDTO(id: "w1", memberId: "child-1", balance: 85),
                 collectedFood: CollectedFoodResponseDTO(
@@ -247,7 +309,9 @@ extension ChildDashboardView {
             ),
             preloadedHistory: history,
             preloadedViewingPast: past ? history.first : nil,
-            harnessAutoFeed: nearLevelUp
+            harnessAutoFeed: nearLevelUp,
+            harnessOpenEggPicker: noPet,
+            harnessFarewell: farewell
         )
     }
 }

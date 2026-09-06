@@ -9,6 +9,8 @@ struct SelectEggSheet: View {
     /// the member-scoped route is used instead. Optional with a default so the child's
     /// own dashboard keeps calling this sheet exactly as before.
     var memberId: String?
+    /// Vad barnet redan samlat. Tavlan visar de platserna som djur, inte som ägg.
+    var history: [PetHistoryResponseDTO] = []
     var onDismiss: () -> Void = {}
     var onEggSelected: (PetResponseDTO) -> Void = { _ in }
 
@@ -55,80 +57,36 @@ struct SelectEggSheet: View {
         }
     }
 
+    private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
+
     private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Välj ett ägg för ditt nya djur.")
-                    .font(.body)
-
-                ForEach(eggTypes, id: \.self) { egg in
-                    eggCard(eggType: egg)
-                }
-
-                if let selectedEgg {
-                    Divider().padding(.vertical, 8)
-                    Text("Vad ska ditt djur heta? (valfritt)")
-                        .font(.subheadline)
-                    TextField("Namn på djuret", text: $petName)
-                        .textFieldStyle(.roundedBorder)
-                    if showHint {
-                        Text(EggNames.hint(for: selectedEgg))
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 4)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            ScrollView {
+                EggCollectionBoard(
+                    eggTypes: eggTypes,
+                    history: history,
+                    selectedEgg: selectedEgg,
+                    palette: palette,
+                    onSelect: { selectedEgg = $0 }
+                )
+                .padding(.bottom, 4)
             }
+
+            // Hinten i en fast rad i stället för bakom "tryck igen". Den knappen fanns
+            // bara på det valda ägget och upptäcktes därför nästan aldrig, vilket gjorde
+            // att hälften av väljarens innehåll aldrig lästes.
+            Text(selectedEgg.map { EggNames.hint(for: $0) }
+                 ?? "Tryck på ett ägg för att höra vad som viskar därinne.")
+                .font(.footnote)
+                .italic(selectedEgg != nil)
+                .foregroundStyle(selectedEgg != nil ? palette.tipInk : palette.inkFaint)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+
+            TextField("Ge det ett namn (valfritt)", text: $petName)
+                .textFieldStyle(.roundedBorder)
         }
     }
 
-    private func eggCard(eggType: String) -> some View {
-        let isSelected = eggType == selectedEgg
-        let label = EggNames.label(for: eggType)
-
-        return Button {
-            if selectedEgg == eggType {
-                showHint.toggle()
-            } else {
-                selectedEgg = eggType
-                showHint = false
-            }
-        } label: {
-            HStack(spacing: 12) {
-                if let name = PetImagesIOS.eggImageName(for: eggType),
-                   let uiImage = UIImage(named: name) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 56, height: 56)
-                } else {
-                    Text("🥚")
-                        .font(.largeTitle)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(label)
-                        .font(.headline)
-                    if isSelected && !showHint {
-                        Text("Tryck igen för att visa hint")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isSelected ? Color.blue.opacity(0.12) : Color.gray.opacity(0.08))
-            )
-        }
-        .buttonStyle(.plain)
-    }
 
     private func loadEggTypes() async {
         loading = true

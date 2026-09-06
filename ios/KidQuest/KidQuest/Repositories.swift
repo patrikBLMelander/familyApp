@@ -318,6 +318,20 @@ enum ChildDashboardRepository {
         return all.sorted { ($0.year, $0.month) > ($1.year, $1.month) }
     }
 
+    /// Hur många sysslor barnet bockade av under en avslutad månad.
+    ///
+    /// Nil när hämtningen misslyckas, och avskedet utelämnar då raden hellre än att visa
+    /// en nolla -- "0 sysslor avbockade" är en anklagelse, inte en sammanfattning.
+    static func fetchTasksCompleted(year: Int, month: Int, memberId: String?) async -> Int? {
+        let path = memberId.map { "xp/members/\($0)/history" } ?? "xp/history"
+        let all = try? await ApiClient.shared.send(
+            [XpHistoryResponseDTO].self,
+            path: path,
+            method: "GET"
+        )
+        return all?.first { $0.year == year && $0.month == month }?.totalTasksCompleted
+    }
+
     static func feedPet(xpAmount: Int) async throws {
         let body = FeedPetRequestDTO(xpAmount: xpAmount)
         try await ApiClient.shared.sendWithoutResponse(
