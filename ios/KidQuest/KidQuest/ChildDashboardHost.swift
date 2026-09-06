@@ -50,6 +50,9 @@ struct ChildDashboardHost: View {
     @State private var isFeeding = false
     @State private var showSelectEgg = false
     @State private var hasAutoOpenedEgg = false
+    /// Förälderns kod för att lämna barnläget. Nil betyder ingen spärr.
+    @State private var parentPin: String?
+    @State private var pinPurpose: PinPurpose?
     @State private var farewell: MonthFarewellData?
     @State private var farewellChecked = false
     /// Förälderns vy: allt är member-scopat, inklusive XP-historiken.
@@ -106,6 +109,32 @@ struct ChildDashboardHost: View {
         }
         // Sist i ZStacken: senare syskon ritar överst, och avskedet ska ligga över
         // hela barnvyn.
+        .task { parentPin = KeychainPinStore.read() }
+        .overlay {
+            if let purpose = pinPurpose {
+                ZStack {
+                    Color.black.opacity(0.55).ignoresSafeArea()
+                    ParentPinSheet(
+                        purpose: purpose,
+                        palette: palette,
+                        childName: activeChild.name,
+                        verify: { $0 == parentPin },
+                        onPinChosen: { ny in
+                            pinPurpose = nil
+                            parentPin = ny
+                            if let ny { KeychainPinStore.write(ny) } else { KeychainPinStore.delete() }
+                        },
+                        onUnlocked: { pinPurpose = nil; onExit() },
+                        onSignOut: {
+                            pinPurpose = nil
+                            TokenStoreIOS.shared.clearToken()
+                            onExit()
+                        },
+                        onDismiss: { pinPurpose = nil }
+                    )
+                }
+            }
+        }
         .overlay {
             if let farewell {
                 MonthFarewell(data: farewell, palette: palette) {
@@ -174,10 +203,14 @@ struct ChildDashboardHost: View {
     // MARK: - Chrome
 
     private var actingAsParentBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
         HStack(spacing: 8) {
             Image(systemName: "eye")
                 .font(.footnote.weight(.semibold))
 
+            if parentPin != nil {
+                Text("🔒").font(.subheadline)
+            }
             Text("Du ser \(possessive(activeChild.name)) vy")
                 .font(.subheadline.weight(.medium))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,8 +221,29 @@ struct ChildDashboardHost: View {
             }
             .font(.subheadline.weight(.semibold))
 
-            Button("Tillbaka", action: onExit)
-                .font(.subheadline.weight(.semibold))
+            Button("Tillbaka") {
+                // Utan kod är vägen ut öppen, som förut.
+                if parentPin == nil { onExit() } else { pinPurpose = .unlock }
+            }
+            .font(.subheadline.weight(.semibold))
+        }
+
+        // Erbjudandet, bara innan en kod finns. Det blockerar ingenting -- en förälder
+        // som bara vill titta kan ignorera det hur länge som helst -- och det är borta
+        // för alltid så fort koden är satt.
+        //
+        // Frågan gäller situationen och inte funktionen: den som lämnar över telefonen
+        // behöver inte veta vad en kod är till för här för att förstå.
+        if parentPin == nil {
+            HStack(spacing: 8) {
+                Text("Lämnar du telefonen till \(activeChild.name)? Lås vägen tillbaka.")
+                    .font(.caption)
+                    .opacity(0.85)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Lås") { pinPurpose = .set }
+                    .font(.caption.weight(.bold))
+            }
+        }
         }
         .foregroundStyle(Color(red: 0x78 / 255, green: 0x35 / 255, blue: 0x0F / 255))
         .padding(.horizontal, 12)

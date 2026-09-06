@@ -150,6 +150,11 @@ fun AdultDashboardScreen(
     var checklistExpanded by remember { mutableStateOf<Boolean?>(null) }
     var subscription by remember { mutableStateOf<SubscriptionStatusResponse?>(null) }
     var topMenuOpen by remember { mutableStateOf(false) }
+    // Barnlåsets kod. Sätts i barnvyns banderoll där behovet uppstår, ändras härifrån.
+    var parentPin by remember { mutableStateOf<String?>(null) }
+    var showPinDialog by remember { mutableStateOf(false) }
+    val pinScope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { parentPin = TokenStore.parentPin() }
     // The family already named itself at registration. Falling back to "Min familj"
     // rather than blank, because the header is drawn before this arrives.
     var familyName by remember { mutableStateOf<String?>(null) }
@@ -583,8 +588,23 @@ fun AdultDashboardScreen(
             showSubscription = BillingConfig.isConfigured,
             onOpenPaywall = onOpenPaywall,
             onLogout = onLogout,
+            hasParentPin = parentPin != null,
+            onChangePin = { showPinDialog = true },
             onDeleteFamily = { confirmingFamilyDeletion = true },
         )
+
+        if (showPinDialog) {
+            ParentPinDialog(
+                purpose = PinPurpose.CHANGE,
+                season = palette,
+                onDismiss = { showPinDialog = false },
+                onPinChosen = { nyKod ->
+                    showPinDialog = false
+                    parentPin = nyKod
+                    pinScope.launch { TokenStore.setParentPin(nyKod) }
+                },
+            )
+        }
       }
     }
 
@@ -742,6 +762,9 @@ private fun DashboardTopBar(
     onOpenPaywall: () -> Unit,
     onLogout: () -> Unit,
     onDeleteFamily: () -> Unit,
+    /** Menypunkten finns bara när en kod är satt; se kommentaren vid den. */
+    hasParentPin: Boolean,
+    onChangePin: () -> Unit,
 ) {
     // White on the photograph, the season's ink once the bar is solid.
     val titleColour = lerp(Color.White, palette.ink, collapsed)
@@ -800,6 +823,19 @@ private fun DashboardTopBar(
                         onClick = {
                             onMenuOpenChange(false)
                             onOpenPaywall()
+                        },
+                    )
+                }
+                // Bara när en kod finns. Att SÄTTA den hör hemma i barnvyns banderoll,
+                // där behovet uppstår -- ingen öppnar en meny för att leta efter ett lås
+                // de inte vet finns. Att ÄNDRA den hör hemma här: den som ändrar vet
+                // redan att koden existerar.
+                if (hasParentPin) {
+                    DropdownMenuItem(
+                        text = { Text("Barnlåsets kod") },
+                        onClick = {
+                            onMenuOpenChange(false)
+                            onChangePin()
                         },
                     )
                 }

@@ -66,3 +66,48 @@ enum KeychainSessionStore {
         SecItemDelete(baseQuery as CFDictionary)
     }
 }
+
+/// Förälderns kod för att lämna barnläget.
+///
+/// Egen post i samma nyckelring som sessionen, av samma skäl: fyra siffror som skyddar
+/// mot ett barn är ingen hemlighet i kryptografisk mening, men den ligger bredvid ett
+/// bärartoken och ska då inte vara det enda som står i klartext där.
+///
+/// Lokal med flit. På servern hade förälderns andra telefon ärvt ett lås ingen satt där,
+/// och vi hade fått ännu en hemlighet att förvalta för att skydda mot en sjuåring.
+enum KeychainPinStore {
+
+    private static let service = "se.kidquest.session"
+    private static let account = "parent_pin"
+
+    private static var baseQuery: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+    }
+
+    static func read() -> String? {
+        var query = baseQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func write(_ pin: String) {
+        guard let data = pin.data(using: .utf8) else { return }
+        SecItemDelete(baseQuery as CFDictionary)
+        var query = baseQuery
+        query[kSecValueData as String] = data
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    static func delete() {
+        SecItemDelete(baseQuery as CFDictionary)
+    }
+}

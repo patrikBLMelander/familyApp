@@ -18,6 +18,18 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 private val KEY_SEALED_SESSION = stringPreferencesKey("session_v1")
 
 /**
+ * Förälderns kod för att lämna barnläget, förseglad med samma nyckel som sessionen.
+ *
+ * Fyra siffror som skyddar mot ett barn är inte en hemlighet i kryptografisk mening, men
+ * den ligger i samma lagring som ett bärartoken och ska då inte vara det enda som står i
+ * klartext där. Förseglingen är dessutom gratis: SessionCrypto finns redan.
+ *
+ * Lokal med flit. På servern hade förälderns andra telefon ärvt ett lås ingen satt där,
+ * och vi hade fått ännu en hemlighet att förvalta för att skydda mot en sjuåring.
+ */
+private val KEY_SEALED_PIN = stringPreferencesKey("parent_pin_v1")
+
+/**
  * How the session was written before it was encrypted. Read once on start-up so an
  * already signed-in family is carried across the upgrade rather than thrown back to
  * the login screen, then deleted. Removing these is the point of the exercise: keeping
@@ -105,9 +117,32 @@ object TokenStore {
     /** Kept for the token-only call sites; drops any stale identity with it. */
     suspend fun setToken(token: String) = setSession(token, null, null, null, null)
 
+    /** Fyra siffror, eller null när ingen kod är satt på den här telefonen. */
+    suspend fun parentPin(): String? {
+        val ctx = appContext ?: return null
+        val sealed = ctx.dataStore.data.first()[KEY_SEALED_PIN] ?: return null
+        return SessionCrypto.decrypt(sealed)
+    }
+
+    suspend fun setParentPin(pin: String?) {
+        val ctx = appContext ?: return
+        ctx.dataStore.edit { prefs ->
+            if (pin == null) {
+                prefs.remove(KEY_SEALED_PIN)
+            } else {
+                val sealed = SessionCrypto.encrypt(pin)
+                if (sealed != null) prefs[KEY_SEALED_PIN] = sealed else prefs.remove(KEY_SEALED_PIN)
+            }
+        }
+    }
+
     suspend fun clearToken() {
         appContext?.dataStore?.edit { prefs ->
             prefs.remove(KEY_SEALED_SESSION)
+            // Koden följer sessionen ut. Den skyddar vägen från barnläget tillbaka till
+            // EN inloggad förälder; blir någon annan inloggad på telefonen har den
+            // ingenting att skydda, och en kvarglömd kod hade låst ut den nya.
+            prefs.remove(KEY_SEALED_PIN)
             prefs.removeLegacy()
         }
         current = null

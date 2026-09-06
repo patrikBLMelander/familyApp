@@ -84,12 +84,14 @@ import se.kidquest.app.network.SelectEggRequest
 import se.kidquest.app.network.WalletBalanceResponse
 import se.kidquest.app.network.XpProgressResponse
 import se.kidquest.app.pet.PetFoodUtils
+import se.kidquest.app.session.TokenStore
 import se.kidquest.app.session.PrefsStore
 import se.kidquest.app.pet.EggNames
 import se.kidquest.app.pet.PetImages
 import se.kidquest.app.pet.PetNameUtils
 import se.kidquest.app.pet.PetTheme
 import se.kidquest.app.pet.PetVisual
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -199,6 +201,24 @@ fun ChildDashboardScreen(
     // Nivån som firas, fångad när höjningen sker. Att läsa xp?.currentLevel + 1 medan
     // fanfaren står kvar hade visat fel siffra så fort omladdningen kommit in.
     var celebrateLevel by remember { mutableStateOf(0) }
+
+    // Förälderns kod för att lämna barnläget. Null tills den lästs, och null igen om
+    // ingen är satt -- båda betyder "ingen spärr", vilket är rätt: en telefon utan kod
+    // ska inte hindra någon medan lagringen läses.
+    var parentPin by remember { mutableStateOf<String?>(null) }
+    var pinPurpose by remember { mutableStateOf<PinPurpose?>(null) }
+
+    LaunchedEffect(actingAsParent) {
+        if (fixture != null || !actingAsParent) return@LaunchedEffect
+        parentPin = TokenStore.parentPin()
+    }
+
+    // Gesten måste spärras, inte bara knappen. En spärr man går runt med ett svep är
+    // ingen spärr. Den här BackHandlern registreras efter MainActivitys och vinner
+    // därför över den, men bara när en kod faktiskt finns.
+    BackHandler(enabled = actingAsParent && parentPin != null && pinPurpose == null) {
+        pinPurpose = PinPurpose.UNLOCK
+    }
 
     LaunchedEffect(childId, refreshKey) {
         if (fixture != null) {
@@ -875,8 +895,15 @@ fun ChildDashboardScreen(
                     if (actingAsParent) {
                         ActingAsParentBanner(
                             childName = childName,
+                            hasPin = parentPin != null,
                             onSwitchChild = onSwitchChild,
-                            onExit = onExitChildView,
+                            onExit = onExitChildView?.let { exit ->
+                                {
+                                    // Utan kod är vägen ut öppen, som förut.
+                                    if (parentPin == null) exit() else pinPurpose = PinPurpose.UNLOCK
+                                }
+                            },
+                            onSetPin = { pinPurpose = PinPurpose.SET },
                         )
                     }
 
@@ -919,6 +946,33 @@ fun ChildDashboardScreen(
             // Sist inuti rot-Boxen: senare syskon ritar överst, och avskedet ska
             // ligga över hela barnvyn. Som syskon TILL boxen hamnade det bredvid
             // den i stället för ovanpå, och syntes därför aldrig.
+                    val purpose = pinPurpose
+            if (purpose != null) {
+                ParentPinDialog(
+                    purpose = purpose,
+                    season = season,
+                    childName = childName,
+                    onDismiss = { pinPurpose = null },
+                    onPinChosen = { nyKod ->
+                        pinPurpose = null
+                        parentPin = nyKod
+                        coroutineScope.launch { TokenStore.setParentPin(nyKod) }
+                    },
+                    verify = { it == parentPin },
+                    onUnlocked = {
+                        pinPurpose = null
+                        onExitChildView?.invoke()
+                    },
+                    onSignOut = {
+                        pinPurpose = null
+                        coroutineScope.launch {
+                            TokenStore.clearToken()
+                            onBack()
+                        }
+                    },
+                )
+            }
+
             val farewellNow = farewell
             if (farewellNow != null) {
                 MonthFarewell(
@@ -1480,32 +1534,66 @@ private fun ErrorCard(message: String, season: SeasonPalette, onRetry: () -> Uni
 @Composable
 private fun ActingAsParentBanner(
     childName: String,
+    /** Visar hänglåset i stället för erbjudandet. */
+    hasPin: Boolean,
     onSwitchChild: (() -> Unit)?,
     onExit: (() -> Unit)?,
+    onSetPin: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Du ser ${possessiveSwedish(childName)} vy",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF78350F),
-                modifier = Modifier.weight(1f),
-            )
-            if (onSwitchChild != null) {
-                TextButton(onClick = onSwitchChild) {
-                    Text("Byt barn", color = Color(0xFF78350F), fontWeight = FontWeight.SemiBold)
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (hasPin) {
+                    Text(
+                        text = "🔒",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
+                }
+                Text(
+                    text = "Du ser ${possessiveSwedish(childName)} vy",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF78350F),
+                    modifier = Modifier.weight(1f),
+                )
+                if (onSwitchChild != null) {
+                    TextButton(onClick = onSwitchChild) {
+                        Text("Byt barn", color = Color(0xFF78350F), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                if (onExit != null) {
+                    TextButton(onClick = onExit) {
+                        Text("Tillbaka", color = Color(0xFF78350F), fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
-            if (onExit != null) {
-                TextButton(onClick = onExit) {
-                    Text("Tillbaka", color = Color(0xFF78350F), fontWeight = FontWeight.SemiBold)
+
+            // Erbjudandet, bara innan en kod finns. Det blockerar ingenting -- en
+            // förälder som bara vill titta kan ignorera det hur länge som helst -- och
+            // det är borta för alltid så fort koden är satt.
+            //
+            // Frågan gäller situationen och inte funktionen: den som lämnar över
+            // telefonen behöver inte veta vad en kod är till för här för att förstå.
+            if (!hasPin) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Lämnar du telefonen till $childName? Lås vägen tillbaka.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFF78350F).copy(alpha = 0.85f),
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onSetPin) {
+                        Text("Lås", color = Color(0xFF78350F), fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -1513,7 +1601,7 @@ private fun ActingAsParentBanner(
 }
 
 /** Svensk genitiv: "Signes vy", men "Lukas vy" -- namn på s, x eller z får inget extra s. */
-private fun possessiveSwedish(name: String): String {
+internal fun possessiveSwedish(name: String): String {
     val last = name.lowercase().lastOrNull() ?: return name
     return if (last in "sxz") name else name + "s"
 }

@@ -37,6 +37,9 @@ struct AdultDashboardView: View {
 
     @Environment(\.seasonPalette) private var palette
 
+    /// Barnlåsets kod. Sätts i barnvyns banderoll där behovet uppstår, ändras härifrån.
+    @State private var parentPin: String?
+    @State private var showPinSheet = false
     @State private var overview: AdultDashboardRepository.Overview?
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -67,6 +70,24 @@ struct AdultDashboardView: View {
             } else {
                 list
                 topBar
+            }
+        }
+        .task { parentPin = KeychainPinStore.read() }
+        .overlay {
+            if showPinSheet {
+                ZStack {
+                    Color.black.opacity(0.55).ignoresSafeArea()
+                    ParentPinSheet(
+                        purpose: .change,
+                        palette: palette,
+                        onPinChosen: { ny in
+                            showPinSheet = false
+                            parentPin = ny
+                            if let ny { KeychainPinStore.write(ny) } else { KeychainPinStore.delete() }
+                        },
+                        onDismiss: { showPinSheet = false }
+                    )
+                }
             }
         }
         .task {
@@ -213,7 +234,9 @@ struct AdultDashboardView: View {
             onOpenSubscription: onOpenSubscription,
             onLogout: onLogout,
             onDeleteFamily: onDeleteFamily,
-            onOpenDeleteFamily: { showDeleteFamily = true }
+            onOpenDeleteFamily: { showDeleteFamily = true },
+            hasParentPin: parentPin != nil,
+            onChangePin: { showPinSheet = true }
         )
     }
 
@@ -476,6 +499,9 @@ private struct DashboardTopBar: View {
     let onLogout: () -> Void
     let onDeleteFamily: (() -> Void)?
     let onOpenDeleteFamily: () -> Void
+    /// Menypunkten finns bara när en kod är satt; se kommentaren vid den.
+    var hasParentPin: Bool = false
+    var onChangePin: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 0) {
@@ -494,6 +520,13 @@ private struct DashboardTopBar: View {
                 // as a switch that forgets what it was told.
                 if let onOpenSubscription {
                     Button("Prenumeration", action: onOpenSubscription)
+                }
+                // Bara när en kod finns. Att SÄTTA den hör hemma i barnvyns banderoll,
+                // där behovet uppstår -- ingen öppnar en meny för att leta efter ett lås
+                // de inte vet finns. Att ÄNDRA den hör hemma här: den som ändrar vet
+                // redan att koden existerar.
+                if hasParentPin {
+                    Button("Barnlåsets kod", action: onChangePin)
                 }
                 Button("Logga ut", action: onLogout)
                 if onDeleteFamily != nil {
@@ -979,7 +1012,8 @@ private struct AdultRow: View {
 ///
 /// A name already ending in s, x or z takes no extra s, so a plain `"\(name)s"`
 /// produced "Nilss sysslor" for a perfectly ordinary Swedish name.
-private func possessiveSwedish(_ name: String) -> String {
+/// Delad med kodrutan, som säger vems vy man lämnar.
+func possessiveSwedish(_ name: String) -> String {
     let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
     guard let last = trimmed.lowercased().last else { return trimmed }
     return ["s", "x", "z"].contains(String(last)) ? trimmed : "\(trimmed)s"

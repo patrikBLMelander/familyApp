@@ -118,6 +118,10 @@ final class TokenStoreIOS {
 
     func clearToken() {
         KeychainSessionStore.delete()
+        // Koden följer sessionen ut. Den skyddar vägen från barnläget tillbaka till EN
+        // inloggad förälder; blir någon annan inloggad på telefonen har den ingenting
+        // att skydda, och en kvarglömd kod hade låst ut den nya.
+        KeychainPinStore.delete()
         clearLegacyKeys()
         current = nil
         // Annars ärver nästa inloggning på samma telefon den förra familjens köp.
@@ -169,6 +173,7 @@ final class TokenStoreIOS {
     /// själva -- de behöver en förälder med en QR-kod.
     func resetForTesting() {
         KeychainSessionStore.delete()
+        KeychainPinStore.delete()
         clearLegacyKeys()
         defaults.removeObject(forKey: installMarkerKey)
         current = nil
