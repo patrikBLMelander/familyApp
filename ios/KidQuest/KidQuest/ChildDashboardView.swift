@@ -84,6 +84,10 @@ struct ChildDashboardView: View {
         }
         .onAppear {
             if harnessOpenEggPicker { showSelectEgg = true }
+            // #if DEBUG för att ChildFixtures bara finns där. Utan den kompilerade
+            // Debug fint och arkiveringen föll -- vilket är exakt vad ett Release-bygge
+            // är till för att fånga.
+            #if DEBUG
             if harnessFarewell, farewell == nil, let senaste = ChildFixtures.history.first {
                 farewell = MonthFarewellData(
                     entry: senaste,
@@ -91,6 +95,7 @@ struct ChildDashboardView: View {
                     tasks: 47
                 )
             }
+            #endif
         }
         .sheet(isPresented: $showSelectEgg) {
             SelectEggSheet(
