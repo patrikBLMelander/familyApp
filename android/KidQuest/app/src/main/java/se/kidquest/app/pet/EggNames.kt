@@ -1,38 +1,18 @@
 package se.kidquest.app.pet
 
 /**
- * Vad äggen heter för ett barn, och vad de viskar innan de kläcks.
+ * Vad äggen viskar innan de kläcks.
  *
  * Låg fil-privat i ChildDashboardScreen, vilket gjorde att ingenting kunde kontrollera
  * att listan var komplett -- och den var det inte: lejonet och hajen lades till på
- * servern och namnen följde aldrig med, så väljaren visade "golden_egg" och "white_egg"
- * med understreck. Här ligger de bredvid artnamnen, och iOS har samma uppdelning i
- * PetHelpers.swift.
+ * servern och ledtrådarna följde aldrig med. Här ligger de bredvid artnamnen, och iOS
+ * har samma uppdelning i PetHelpers.swift.
+ *
+ * Här fanns också label(), ett namn per ägg. Namnen kom från serverns identifierare,
+ * som är färger, medan konsten ritas per art -- så "Rött ägg" var beige med ett blått
+ * tassavtryck. Rutorna visar nu bara ägget, och ledtråden är den enda texten kvar.
  */
 object EggNames {
-
-    fun label(eggType: String): String =
-        when (eggType.lowercase()) {
-            "blue_egg" -> "Blått ägg"
-            "green_egg" -> "Grönt ägg"
-            "red_egg" -> "Rött ägg"
-            "yellow_egg" -> "Gult ägg"
-            "purple_egg" -> "Lila ägg"
-            "orange_egg" -> "Orange ägg"
-            "brown_egg" -> "Brunt ägg"
-            "black_egg" -> "Mörkt ägg"
-            "gray_egg" -> "Grått ägg"
-            "teal_egg" -> "Turkost ägg"
-            "pink_egg" -> "Rosa ägg"
-            "cyan_egg" -> "Blågrönt ägg"
-            "golden_egg" -> "Gyllene ägg"
-            "white_egg" -> "Vitt ägg"
-            // Aldrig eggType. Föll ett ägg igenom stod det "golden_egg" med understreck
-            // mitt i äggväljaren, vilket är precis vad som hände när lejonet och hajen
-            // lades till på servern och namnen inte följde med. En reserv som lyder är
-            // bättre än en som avslöjar en identifierare.
-            else -> "Ägg"
-    }
 
     fun hint(eggType: String): String =
         when (eggType.lowercase()) {

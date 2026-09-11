@@ -47,10 +47,12 @@ struct EggCollectionBoard: View {
     var body: some View {
         VStack(spacing: 8) {
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(available, id: \.self) { egg in
+                ForEach(Array(available.enumerated()), id: \.element) { index, egg in
                     EggTile(
                         egg: egg,
                         selected: egg == selectedEgg,
+                        ordinal: index + 1,
+                        total: available.count,
                         palette: palette,
                         action: { onSelect(egg) }
                     )
@@ -120,33 +122,39 @@ private struct CollectedTile: View {
 }
 
 /// Ett ägg som går att välja.
+///
+/// Utan namn under. Äggkonsten ritas per art -- bilderna heter `<art>_egg_stage1` -- medan
+/// namnen kom från serverns identifierare, som är färger. De två gled isär när djuren
+/// byttes ut: "Rött ägg" var beige med ett blått tassavtryck, "Brunt ägg" hade mörkgröna
+/// fjäll, "Vitt ägg" var blått. Nio av fjorton sa emot sin egen bild.
+///
+/// `ordinal` finns bara för VoiceOver. Fjorton rutor som alla heter "Ägg" går inte att
+/// navigera mellan; "Ägg 3 av 12" gör det, utan att avslöja något ögat inte redan ser.
+/// Android har samma ruta i EggCollectionBoard.kt.
 private struct EggTile: View {
     let egg: String
     let selected: Bool
+    let ordinal: Int
+    let total: Int
     let palette: SeasonPalette
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 3) {
+            VStack(spacing: 0) {
+                // Ägget får de bildpunkter texten hade. Det är nu rutans enda innehåll.
                 if let name = PetImagesIOS.eggImageName(for: egg),
                    let img = UIImage(named: name) {
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 52, height: 52)
+                        .frame(width: 64, height: 64)
                 } else {
-                    Text("🥚").font(.title2).frame(width: 52, height: 52)
+                    Text("🥚").font(.title2).frame(width: 64, height: 64)
                 }
-                Text(EggNames.label(for: egg))
-                    .font(.system(size: 11, weight: .semibold))
-                    // Årstidens färg och inte systemets blå: resten av barnvyn är höst
-                    // eller vinter, och väljaren var det enda stället som var blå.
-                    .foregroundStyle(selected ? palette.accent : palette.inkSoft)
-                    .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, minHeight: 104)
-            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 92)
+            .padding(.vertical, 10)
             .padding(.horizontal, 4)
             .background(
                 RoundedRectangle(cornerRadius: 15, style: .continuous)
@@ -158,6 +166,8 @@ private struct EggTile: View {
                             lineWidth: selected ? 2.5 : 1.5)
             )
         }
+        .accessibilityLabel("Ägg \(ordinal) av \(total)")
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
         .buttonStyle(.plain)
     }
 }

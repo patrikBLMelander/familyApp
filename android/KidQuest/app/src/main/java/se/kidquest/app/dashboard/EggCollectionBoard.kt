@@ -29,7 +29,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
 import se.kidquest.app.network.PetHistoryResponse
-import se.kidquest.app.pet.EggNames
 import se.kidquest.app.pet.PetImages
 import se.kidquest.app.pet.PetNameUtils
 import se.kidquest.app.theme.SeasonPalette
@@ -79,12 +78,14 @@ fun EggCollectionBoard(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        available.chunked(3).forEach { row ->
+        available.chunked(3).forEachIndexed { rowIndex, row ->
             TileRow(row.size) { i ->
                 val egg = row[i]
                 EggTile(
                     egg = egg,
                     selected = egg == selectedEgg,
+                    ordinal = rowIndex * 3 + i + 1,
+                    total = available.size,
                     season = season,
                     onClick = { onSelect(egg) },
                 )
@@ -153,7 +154,7 @@ private fun CollectedTile(entry: PetHistoryResponse, season: SeasonPalette) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 104.dp)
+            .heightIn(min = 92.dp)
             .clip(RoundedCornerShape(15.dp))
             .background(season.goodBg)
             .border(1.5.dp, season.goodInk.copy(alpha = 0.35f), RoundedCornerShape(15.dp))
@@ -187,11 +188,27 @@ private fun CollectedTile(entry: PetHistoryResponse, season: SeasonPalette) {
     }
 }
 
-/** Ett ägg som går att välja. */
+/**
+ * Ett ägg som går att välja.
+ *
+ * Utan namn under. Äggkonsten ritas per art -- filerna heter `<art>_egg_stage1` -- medan
+ * namnen kom från serverns identifierare, som är färger. De två gled isär när djuren
+ * byttes ut: "Rött ägg" var beige med ett blått tassavtryck, "Brunt ägg" hade mörkgröna
+ * fjäll, "Vitt ägg" var blått. Nio av fjorton sa emot sin egen bild.
+ *
+ * Att i stället döpa om dem hade gjort namnen sanna men fortfarande överflödiga -- ett ägg
+ * som ser prickigt ut behöver inte texten "Prickigt ägg" under sig. Gåtan ligger i
+ * ledtråden nedanför väljaren, och den stämmer.
+ *
+ * `ordinal` finns bara för skärmläsare. Fjorton rutor som alla heter "Ägg" går inte att
+ * navigera mellan; "Ägg 3 av 12" gör det, utan att avslöja något ögat inte redan ser.
+ */
 @Composable
 private fun EggTile(
     egg: String,
     selected: Boolean,
+    ordinal: Int,
+    total: Int,
     season: SeasonPalette,
     onClick: () -> Unit,
 ) {
@@ -211,29 +228,24 @@ private fun EggTile(
                 shape = RoundedCornerShape(15.dp),
             )
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .padding(vertical = 10.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
+        // Ägget får de bildpunkter texten hade. Det är nu rutans enda innehåll, och
+        // skillnaden mellan äggen är det enda barnet har att välja på.
         if (drawable != null) {
             Image(
                 painter = painterResource(id = drawable),
-                contentDescription = EggNames.label(egg),
-                modifier = Modifier.size(52.dp),
+                contentDescription = "Ägg $ordinal av $total",
+                modifier = Modifier.size(64.dp),
                 contentScale = ContentScale.Fit,
             )
         } else {
-            Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.size(64.dp), contentAlignment = Alignment.Center) {
                 Text("🥚", style = MaterialTheme.typography.headlineSmall)
             }
         }
-        Text(
-            text = EggNames.label(egg),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = if (selected) season.accent else season.inkSoft,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 

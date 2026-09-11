@@ -253,38 +253,17 @@ enum PetThemeIOS {
     }
 }
 
-/// Vad äggen heter för ett barn, och vad de viskar innan de kläcks.
+/// Vad äggen viskar innan de kläcks.
 ///
 /// Bodde i SelectEggSheet och var privat där, vilket gjorde att ingenting kunde
 /// kontrollera att listan var komplett. Den var det inte: lejonet och hajen lades till på
-/// servern och namnen följde aldrig med, så äggväljaren visade "golden_egg" och
-/// "white_egg" med understreck rakt upp och ner. Här ligger de bredvid artnamnen, och
+/// servern och ledtrådarna följde aldrig med. Här ligger de bredvid artnamnen, och
 /// EggNamesTests ser till att alla fjorton täcks.
+///
+/// Här fanns också label(), ett namn per ägg. Namnen kom från serverns identifierare,
+/// som är färger, medan konsten ritas per art -- så "Rött ägg" var beige med ett blått
+/// tassavtryck. Rutorna visar nu bara ägget, och ledtråden är den enda texten kvar.
 enum EggNames {
-
-    static func label(for eggType: String) -> String {
-        switch eggType.lowercased() {
-        case "blue_egg": return "Blått ägg"
-        case "green_egg": return "Grönt ägg"
-        case "red_egg": return "Rött ägg"
-        case "yellow_egg": return "Gult ägg"
-        case "purple_egg": return "Lila ägg"
-        case "orange_egg": return "Orange ägg"
-        case "brown_egg": return "Brunt ägg"
-        case "black_egg": return "Mörkt ägg"
-        case "gray_egg": return "Grått ägg"
-        case "teal_egg": return "Turkost ägg"
-        case "pink_egg": return "Rosa ägg"
-        case "cyan_egg": return "Blågrönt ägg"
-        case "golden_egg": return "Gyllene ägg"
-        case "white_egg": return "Vitt ägg"
-        // Aldrig eggType. Föll ett ägg igenom stod det "golden_egg" med understreck
-        // mitt i äggväljaren, vilket är precis vad som hände när lejonet och hajen
-        // lades till på servern och namnen inte följde med. En reserv som lyder är
-        // bättre än en som avslöjar en identifierare.
-        default: return "Ägg"
-        }
-    }
 
     static func hint(for eggType: String) -> String {
         switch eggType.lowercased() {
