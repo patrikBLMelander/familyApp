@@ -12,7 +12,7 @@ package se.kidquest.app.billing
  */
 object LegalLinks {
 
-    private const val WEB_BASE = "https://familyapp-frontend-production.up.railway.app"
+    private const val WEB_BASE = "https://www.kidquest.se"
 
     const val PRIVACY = "$WEB_BASE/privacy"
     const val TERMS = "$WEB_BASE/villkor"

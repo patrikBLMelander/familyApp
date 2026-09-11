@@ -7,7 +7,7 @@ import Foundation
 /// release on two stores. Same two URLs as Android's `LegalLinks`, deliberately.
 enum LegalLinks {
 
-    private static let webBase = "https://familyapp-frontend-production.up.railway.app"
+    private static let webBase = "https://www.kidquest.se"
 
     /// Optional rather than force-unwrapped: a typo in the base string should make a
     /// link disappear, not crash the paywall a parent is standing on.
