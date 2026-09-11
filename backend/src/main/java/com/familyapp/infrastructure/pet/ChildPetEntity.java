@@ -52,6 +52,9 @@ public class ChildPetEntity {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
+    @Column(name = "equipped_frame", length = 50)
+    private String equippedFrame;
+
     public UUID getId() {
         return id;
     }
@@ -106,6 +109,14 @@ public class ChildPetEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getEquippedFrame() {
+        return equippedFrame;
+    }
+
+    public void setEquippedFrame(String equippedFrame) {
+        this.equippedFrame = equippedFrame;
     }
 
     public int getGrowthStage() {

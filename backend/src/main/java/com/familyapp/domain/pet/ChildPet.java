@@ -14,7 +14,8 @@ public record ChildPet(
         int growthStage, // 1-5 (calculated from XP/level)
         OffsetDateTime hatchedAt, // NULL until egg is hatched
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        String equippedFrame // loot_item id of the frame on this month's scene, or null
 ) {
     public static final int MIN_GROWTH_STAGE = 1;
     public static final int MAX_GROWTH_STAGE = 5;

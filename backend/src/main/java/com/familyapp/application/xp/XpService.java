@@ -270,6 +270,7 @@ public class XpService {
             petHistory.setSelectedEggType(pet.getSelectedEggType());
             petHistory.setPetType(pet.getPetType());
             petHistory.setFinalGrowthStage(pet.getGrowthStage());
+            petHistory.setFrame(pet.getEquippedFrame());
             petHistory.setCreatedAt(OffsetDateTime.now());
             petHistoryRepository.save(petHistory);
 

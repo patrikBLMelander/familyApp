@@ -111,6 +111,31 @@ public class PetController {
         return petService.getAvailableEggTypes();
     }
 
+    /** The three-zone picker's data: every egg with rarity, unlocked and collected flags. */
+    @GetMapping("/eggs")
+    public List<PetService.EggOption> getEggOptions(
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        return petService.getEggOptions(requireMember(deviceToken));
+    }
+
+    /** Put a frame on this month's scene, or clear it by sending a null frameId. */
+    @PostMapping("/current/frame")
+    public PetResponse equipFrame(
+            @RequestBody EquipFrameRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID memberId = requireMember(deviceToken);
+        return toResponse(petService.equipFrame(memberId, request.frameId()));
+    }
+
+    private UUID requireMember(String deviceToken) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        return memberService.getMemberByDeviceToken(deviceToken).id();
+    }
+
     /**
      * 404 when the member has no pet this month, matching /pets/current.
      *
@@ -338,6 +363,9 @@ public class PetController {
         );
     }
 
+    public record EquipFrameRequest(String frameId) {
+    }
+
     public record SelectEggRequest(String eggType, String name) {
     }
 
@@ -384,7 +412,8 @@ public class PetController {
                 pet.growthStage(),
                 pet.hatchedAt(),
                 pet.createdAt(),
-                pet.updatedAt()
+                pet.updatedAt(),
+                pet.equippedFrame()
         );
     }
 
@@ -397,7 +426,8 @@ public class PetController {
                 history.selectedEggType(),
                 history.petType(),
                 history.finalGrowthStage(),
-                history.createdAt()
+                history.createdAt(),
+                history.frame()
         );
     }
 
@@ -412,7 +442,8 @@ public class PetController {
             int growthStage,
             OffsetDateTime hatchedAt,
             OffsetDateTime createdAt,
-            OffsetDateTime updatedAt
+            OffsetDateTime updatedAt,
+            String equippedFrame
     ) {
     }
 
@@ -424,7 +455,8 @@ public class PetController {
             String selectedEggType,
             String petType,
             int finalGrowthStage,
-            OffsetDateTime createdAt
+            OffsetDateTime createdAt,
+            String frame
     ) {
     }
 }

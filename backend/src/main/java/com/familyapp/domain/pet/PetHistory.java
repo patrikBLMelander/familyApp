@@ -11,7 +11,8 @@ public record PetHistory(
         String selectedEggType, // The egg type that was selected
         String petType, // The pet type that hatched
         int finalGrowthStage, // Final growth stage reached (1-5)
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        String frame // loot_item id carried in from the pet's scene, or null
 ) {
 }
 
