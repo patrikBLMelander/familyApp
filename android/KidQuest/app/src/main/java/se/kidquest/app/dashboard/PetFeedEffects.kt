@@ -570,9 +570,11 @@ fun FoodStrip(
                     color = season.inkFaint,
                 )
             } else {
-                // Taket är fem. Knappen tar sin bredd först, och sex brickor a 38dp
-                // plus mellanrum får inte plats bredvid den på en 360dp-skärm -- de
-                // radbryter, och en remsa som blir två rader är inte längre en remsa.
+                // Taket är fyra. Knappen tar sin bredd först, och på en 360dp-skärm
+                // blir det omkring 241dp kvar till brickorna -- fyra a 48dp med
+                // mellanrum går på 198dp, fem kräver 248dp. Femman fick inte plats:
+                // uppmätt på skärmen slutade bricka fyra på 208dp i stället för 221
+                // och femman klipptes där knappen började.
                 val visible = minOf(foodCount, FOOD_TILE_CAP)
                 repeat(visible) { i ->
                     val isOverflow = i == FOOD_TILE_CAP - 1 && foodCount > FOOD_TILE_CAP
@@ -614,8 +616,8 @@ fun FoodStrip(
     }
 }
 
-/** Hur många brickor som ryms bredvid knappen innan de radbryter. */
-private const val FOOD_TILE_CAP = 5
+/** Hur många brickor som ryms bredvid knappen på den smalaste skärm vi stödjer. */
+private const val FOOD_TILE_CAP = 4
 
 /**
  * En bricka mat.
