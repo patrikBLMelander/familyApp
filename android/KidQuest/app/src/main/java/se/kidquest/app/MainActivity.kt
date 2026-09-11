@@ -138,8 +138,10 @@ class MainActivity : ComponentActivity() {
                 //                 | child-asparent | child-nopet | child-farewell
                 if (forcedScreen?.startsWith("child-") == true || forcedScreen == "child") {
                     val asParent = forcedScreen == "child-asparent"
+                    // Namnet går att byta för butiksbilder, som inte bör visa ett
+                    // riktigt barns namn:  --es kq_name Ella
                     ChildDashboardScreen(
-                        childName = "Signe",
+                        childName = intent?.getStringExtra("kq_name") ?: "Signe",
                         childId = "child-1",
                         onBack = {},
                         onOpenTasks = {},
