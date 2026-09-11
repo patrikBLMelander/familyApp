@@ -186,12 +186,15 @@ struct ChildDashboardHost: View {
             onSelectEgg: { showSelectEgg = true },
             // Nil: en förälder lägger till sysslor i sin egen vy, inte härifrån.
             onAddChore: nil,
+            hasTopBar: true,
+            topBar: { actingAsParentBar },
             banner: {
-                VStack(spacing: 10) {
-                    actingAsParentBanner
-                    if let notice {
-                        noticeBanner(notice)
-                    }
+                // Notisen ligger kvar mellan djuret och listan; barnläget-raden flyttade
+                // upp ovanför bandet.
+                if let notice {
+                    noticeBanner(notice)
+                } else {
+                    EmptyView()
                 }
             },
             footer: { EmptyView() }
@@ -202,57 +205,60 @@ struct ChildDashboardHost: View {
 
     // MARK: - Chrome
 
-    private var actingAsParentBanner: some View {
-        VStack(alignment: .leading, spacing: 6) {
-        HStack(spacing: 8) {
-            Image(systemName: "eye")
-                .font(.footnote.weight(.semibold))
-
-            if parentPin != nil {
-                Text("🔒").font(.subheadline)
-            }
+    /// Barnläget-raden är bärande, inte dekoration: en förälder som lägger ifrån sig
+    /// telefonen mitt i och tar upp den igen har inget annat sätt att se vems skärm det är.
+    ///
+    /// Den ligger som en låg, dämpad rad ovanför bandet -- inte ett kort mellan djuret och
+    /// listan. Barnet ser den när telefonen lämnas över, så den bantades till en enda rad
+    /// och en enda etikett, "Barnlås". Låset är valfritt: utan kod är hänglåset öppet och
+    /// går att trycka på, struntar föräldern i det tar raden knappt någon plats. Den gamla
+    /// naggande "Lås vägen tillbaka"-raden är borta.
+    private var actingAsParentBar: some View {
+        let palette = SeasonTheme.current(dark: false)
+        return HStack(spacing: 4) {
             Text("Du ser \(possessive(activeChild.name)) vy")
-                .font(.subheadline.weight(.medium))
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(palette.inkFaint)
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button("Byt barn") {
                 showSwitchChild = true
                 Task { await loadSiblings() }
             }
-            .font(.subheadline.weight(.semibold))
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(palette.accent)
+            .padding(.horizontal, 4)
 
-            Button("Tillbaka") {
+            if parentPin != nil {
+                // Stängt lås: bara en markör att barnlåset är på. Att ändra eller ta bort
+                // koden görs från förälderns egen meny, inte härifrån.
+                Text("🔒 Barnlås")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(palette.inkFaint)
+                    .padding(.horizontal, 4)
+            } else {
+                Button("🔓 Barnlås") { pinPurpose = .set }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(palette.accent)
+                    .padding(.horizontal, 4)
+            }
+
+            Button {
                 // Utan kod är vägen ut öppen, som förut.
                 if parentPin == nil { onExit() } else { pinPurpose = .unlock }
+            } label: {
+                Text("✕")
+                    .font(.headline)
+                    .foregroundStyle(palette.inkFaint)
             }
-            .font(.subheadline.weight(.semibold))
+            .padding(.leading, 2)
         }
-
-        // Erbjudandet, bara innan en kod finns. Det blockerar ingenting -- en förälder
-        // som bara vill titta kan ignorera det hur länge som helst -- och det är borta
-        // för alltid så fort koden är satt.
-        //
-        // Frågan gäller situationen och inte funktionen: den som lämnar över telefonen
-        // behöver inte veta vad en kod är till för här för att förstå.
-        if parentPin == nil {
-            HStack(spacing: 8) {
-                Text("Lämnar du telefonen till \(activeChild.name)? Lås vägen tillbaka.")
-                    .font(.caption)
-                    .opacity(0.85)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button("Lås") { pinPurpose = .set }
-                    .font(.caption.weight(.bold))
-            }
-        }
-        }
-        .foregroundStyle(Color(red: 0x78 / 255, green: 0x35 / 255, blue: 0x0F / 255))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
         .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(red: 0xFE / 255, green: 0xF3 / 255, blue: 0xC7 / 255))
-        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Du tittar på \(activeChild.name)s vy som förälder")
     }

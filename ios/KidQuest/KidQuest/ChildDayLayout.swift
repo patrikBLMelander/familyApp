@@ -19,7 +19,7 @@ import SwiftUI
 /// Mörkt läge används inte. Det är föräldrarnas inställning, för det är de som sitter i
 /// appen på kvällen; barnets skärm ska vara ljus och ha en årstid i den.
 
-struct ChildDayLayout<Banner: View, Footer: View>: View {
+struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
 
     let childName: String
     let pet: PetResponseDTO?
@@ -52,6 +52,11 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
      /// inte emot tryck, så det finns annars inget sätt att se sekvensen alls.
     var harnessAutoFeed: Bool = false
 
+    /// När sant ligger `topBar` som en rad ovanför bandet -- föräldern i barnvyn -- och
+    /// bandet slutar klara notchen själv, eftersom raden gör det i stället. Barnets egen
+    /// vy lämnar den falsk: då är topBar tom och bandet ligger kant i kant som förut.
+    var hasTopBar: Bool = false
+    @ViewBuilder var topBar: () -> TopBar
     @ViewBuilder var banner: () -> Banner
     @ViewBuilder var footer: () -> Footer
 
@@ -78,6 +83,10 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
     /// Måtten är valda så att listan alltid börjar ovanför skärmens mitt i det korta
     /// läget, och så att djuret får plats att stå fram i det stora.
     private var bandHeight: CGFloat { allDone && !isPast ? 400 : 258 }
+
+    /// Bandet klarar notchen själv när det ligger överst. Ligger barnläget-raden ovanför
+    /// har den redan gjort det, och då räcker ett litet avstånd ner till bandets topprad.
+    private var bandTopInset: CGFloat { hasTopBar ? 14 : 52 }
 
     var body: some View {
         harnessBody
@@ -107,26 +116,42 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
     private var content: some View {
         ZStack {
             palette.pageBg.ignoresSafeArea()
-            ScrollView {
+            if hasTopBar {
+                // Föräldern i barnvyn: barnläget-raden ligger ovanför bandet och
+                // respekterar säkerhetszonen, så den hamnar under notchen. Bandet under
+                // slutar därför klara notchen själv (bandTopInset krymper). Scrollvyn
+                // respekterar zonen -- den ska inte dra sig upp bakom raden.
                 VStack(spacing: 0) {
-                    scen
-                    VStack(spacing: 14) {
-                        banner()
-                        if isPast {
-                            backToNowCard
-                        } else {
-                            tasksCard
-                        }
-                        footer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 14)
-                    .padding(.bottom, 28)
+                    topBar()
+                    scrollBody
                 }
+            } else {
+                // Barnets egen vy: oförändrad. Bandet når ända upp under notchen.
+                scrollBody
+                    .ignoresSafeArea(edges: .top)
             }
-            .ignoresSafeArea(edges: .top)
         }
         .environment(\.seasonPalette, palette)
+    }
+
+    private var scrollBody: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                scen
+                VStack(spacing: 14) {
+                    banner()
+                    if isPast {
+                        backToNowCard
+                    } else {
+                        tasksCard
+                    }
+                    footer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 28)
+            }
+        }
     }
 
     // MARK: - Scenen
@@ -298,7 +323,7 @@ struct ChildDayLayout<Banner: View, Footer: View>: View {
             walletChip
         }
         .padding(.horizontal, 14)
-        .padding(.top, 52)
+        .padding(.top, bandTopInset)
     }
 
     private var bandLabels: some View {

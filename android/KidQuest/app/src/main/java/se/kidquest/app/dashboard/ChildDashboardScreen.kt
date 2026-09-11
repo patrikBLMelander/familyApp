@@ -97,6 +97,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -108,6 +109,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
@@ -616,6 +618,27 @@ fun ChildDashboardScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState()),
             ) {
+                // Barnläget-raden ligger ovanför bandet, inte mellan djuret och listan:
+                // den ska tala om vems vy det är utan att skjuta in sig mellan barnets
+                // två saker. Den bär sin egen status bar-padding eftersom den nu är det
+                // översta innehållet; scenen nedanför konsumerar samma inset så bandet
+                // inte får dubbelt avstånd till klockan.
+                if (actingAsParent) {
+                    ActingAsParentBanner(
+                        childName = childName,
+                        hasPin = parentPin != null,
+                        onSwitchChild = onSwitchChild,
+                        onExit = onExitChildView?.let { exit ->
+                            {
+                                // Utan kod är vägen ut öppen, som förut.
+                                if (parentPin == null) exit() else pinPurpose = PinPurpose.UNLOCK
+                            }
+                        },
+                        onSetPin = { pinPurpose = PinPurpose.SET },
+                        modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
+                    )
+                }
+
                 // ---- Scenen: bandet och matremsan ----
                 // De två ligger i en gemensam behållare för att maten flyger MELLAN dem
                 // -- från en bricka i remsan upp till djuret i bandet. Bandet klipper
@@ -625,6 +648,16 @@ fun ChildDashboardScreen(
                 BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
+                        // Barnläget-raden ovanför har redan lagt status bar-inseten som
+                        // padding; utan det här skulle bandets egen windowInsetsPadding
+                        // lägga den en gång till och lämna en glugg överst i målningen.
+                        .then(
+                            if (actingAsParent) {
+                                Modifier.consumeWindowInsets(WindowInsets.statusBars)
+                            } else {
+                                Modifier
+                            },
+                        )
                         .onGloballyPositioned { scenOrigin = it.positionInRoot() },
                 ) {
                     val bigPet = allDone && viewingPast == null
@@ -892,21 +925,6 @@ fun ChildDashboardScreen(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    if (actingAsParent) {
-                        ActingAsParentBanner(
-                            childName = childName,
-                            hasPin = parentPin != null,
-                            onSwitchChild = onSwitchChild,
-                            onExit = onExitChildView?.let { exit ->
-                                {
-                                    // Utan kod är vägen ut öppen, som förut.
-                                    if (parentPin == null) exit() else pinPurpose = PinPurpose.UNLOCK
-                                }
-                            },
-                            onSetPin = { pinPurpose = PinPurpose.SET },
-                        )
-                    }
-
                     val error0 = error
                     if (error0 != null) {
                         ErrorCard(message = error0, season = season) { refreshKey++ }
@@ -1527,77 +1545,86 @@ private fun ErrorCard(message: String, season: SeasonPalette, onRetry: () -> Uni
 }
 
 /**
- * Den gula banderollen är bärande, inte dekoration: en förälder som lägger ifrån sig
- * telefonen mitt i och tar upp den igen har inget annat sätt att se vems skärm det är.
- * Den bär också vägen ut, sedan skärmen slutade ha en egen rubrikrad.
+ * Barnläget-raden är bärande, inte dekoration: en förälder som lägger ifrån sig telefonen
+ * mitt i och tar upp den igen har inget annat sätt att se vems skärm det är. Den bär också
+ * vägen ut, sedan skärmen slutade ha en egen rubrikrad.
+ *
+ * Den ligger som en låg, dämpad rad ovanför bandet -- inte ett kort mellan djuret och
+ * listan. Barnet ser den när telefonen lämnas över, så den bantades till en enda rad och
+ * en enda etikett, "Barnlås". Låset är valfritt: utan kod är hänglåset öppet och går att
+ * trycka på, och struntar föräldern i det tar raden knappt någon plats. Den gamla
+ * naggande "Lås vägen tillbaka"-raden är borta.
  */
 @Composable
 private fun ActingAsParentBanner(
     childName: String,
-    /** Visar hänglåset i stället för erbjudandet. */
+    /** Visar det stängda hänglåset i stället för det öppna, tryckbara. */
     hasPin: Boolean,
     onSwitchChild: (() -> Unit)?,
     onExit: (() -> Unit)?,
     onSetPin: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+    val palette = LocalSeasonPalette.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp)
+            .padding(top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (hasPin) {
-                    Text(
-                        text = "🔒",
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(end = 6.dp),
-                    )
-                }
-                Text(
-                    text = "Du ser ${possessiveSwedish(childName)} vy",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF78350F),
-                    modifier = Modifier.weight(1f),
-                )
-                if (onSwitchChild != null) {
-                    TextButton(onClick = onSwitchChild) {
-                        Text("Byt barn", color = Color(0xFF78350F), fontWeight = FontWeight.SemiBold)
-                    }
-                }
-                if (onExit != null) {
-                    TextButton(onClick = onExit) {
-                        Text("Tillbaka", color = Color(0xFF78350F), fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-
-            // Erbjudandet, bara innan en kod finns. Det blockerar ingenting -- en
-            // förälder som bara vill titta kan ignorera det hur länge som helst -- och
-            // det är borta för alltid så fort koden är satt.
-            //
-            // Frågan gäller situationen och inte funktionen: den som lämnar över
-            // telefonen behöver inte veta vad en kod är till för här för att förstå.
-            if (!hasPin) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Lämnar du telefonen till $childName? Lås vägen tillbaka.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFF78350F).copy(alpha = 0.85f),
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = onSetPin) {
-                        Text("Lås", color = Color(0xFF78350F), fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
+        Text(
+            text = "Du ser ${possessiveSwedish(childName)} vy",
+            style = MaterialTheme.typography.labelMedium,
+            color = palette.inkFaint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (onSwitchChild != null) {
+            BarAction(text = "Byt barn", tint = palette.accent, onClick = onSwitchChild)
+        }
+        if (hasPin) {
+            // Stängt lås: bara en markör att barnlåset är på. Att ändra eller ta bort
+            // koden görs från förälderns egen meny, inte härifrån.
+            Text(
+                text = "🔒 Barnlås",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = palette.inkFaint,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        } else {
+            BarAction(text = "🔓 Barnlås", tint = palette.accent, onClick = onSetPin)
+        }
+        if (onExit != null) {
+            Text(
+                text = "✕",
+                style = MaterialTheme.typography.titleMedium,
+                color = palette.inkFaint,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .clickable(onClick = onExit)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
         }
     }
+}
+
+/** En trycksam etikett i barnläget-raden, utan knapputseende -- raden ska hållas låg. */
+@Composable
+private fun BarAction(text: String, tint: Color, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = tint,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
 }
 
 /** Svensk genitiv: "Signes vy", men "Lukas vy" -- namn på s, x eller z får inget extra s. */

@@ -138,6 +138,9 @@ struct ChildDashboardView: View {
             onSelectEgg: { showSelectEgg = true },
             onAddChore: { showAddChore = true },
             harnessAutoFeed: harnessAutoFeed,
+            // Barnets egen vy har ingen banner ovanför bandet -- bandet ligger kant i kant
+            // som förut, och vägen ut är utloggningsraden längst ner.
+            topBar: { EmptyView() },
             banner: { EmptyView() },
             footer: { signOutRow }
         )
