@@ -145,6 +145,7 @@ fun ChildDashboardScreen(
     actingAsParent: Boolean = false,
     onExitChildView: (() -> Unit)? = null,
     onSwitchChild: (() -> Unit)? = null,
+    onOpenAdventures: (() -> Unit)? = null,
     /**
      * Icke-null renderar de här värdena i stället för att anropa nätet.
      *
@@ -756,6 +757,24 @@ fun ChildDashboardScreen(
                             }
                         }
                         Spacer(modifier = Modifier.weight(1f))
+                        // Vägen till äventyr, bredvid plånboken. Bara i nuläget, inte när
+                        // ett tidigare djur bläddras fram.
+                        if (onOpenAdventures != null && viewingPast == null) {
+                            Surface(
+                                onClick = onOpenAdventures,
+                                shape = RoundedCornerShape(50),
+                                color = Color.White.copy(alpha = 0.92f),
+                                modifier = Modifier.padding(end = 8.dp),
+                            ) {
+                                Text(
+                                    text = "🗺️ Äventyr",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = season.accent,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                )
+                            }
+                        }
                         // Saldot, och vägen till plånboken. Ett tryck och inte ett kort:
                         // bandet ska inte konkurrera med listan om uppmärksamheten.
                         Surface(

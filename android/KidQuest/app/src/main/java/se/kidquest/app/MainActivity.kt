@@ -53,6 +53,7 @@ import kotlinx.coroutines.withContext
 import se.kidquest.app.billing.Billing
 import se.kidquest.app.dashboard.AddFamilyMemberDialog
 import se.kidquest.app.dashboard.AdultDashboardScreen
+import se.kidquest.app.dashboard.AdventuresScreen
 import se.kidquest.app.dashboard.ChildDashboardFixture
 import se.kidquest.app.dashboard.ChildDashboardScreen
 import se.kidquest.app.dashboard.ChildPetScreen
@@ -90,6 +91,12 @@ private sealed class AppScreen {
      */
     data class ChildViewAsParent(val childId: String, val childName: String) : AppScreen()
     data class ChildPet(val childId: String, val childName: String) : AppScreen()
+
+    data class ChildAdventures(
+        val childId: String,
+        val childName: String,
+        val actingAsParent: Boolean,
+    ) : AppScreen()
     data class ChildWallet(
         val childId: String,
         val childName: String,
@@ -249,6 +256,14 @@ class MainActivity : ComponentActivity() {
                             currentScreen = AppScreen.Home
                         })
 
+                        is AppScreen.ChildAdventures -> ({
+                            currentScreen = if (s.actingAsParent) {
+                                AppScreen.ChildViewAsParent(s.childId, s.childName)
+                            } else {
+                                AppScreen.ChildDashboard(s.childId, s.childName)
+                            }
+                        })
+
                         is AppScreen.RecurringAllowance -> ({
                             currentScreen = AppScreen.ChildWallet(
                                 s.childId,
@@ -398,6 +413,11 @@ class MainActivity : ComponentActivity() {
                                 returnToChildDashboard = screen.childId to screen.childName
                                 currentScreen = AppScreen.ChildWallet(screen.childId, screen.childName, isOwnWallet = true)
                             },
+                            onOpenAdventures = {
+                                currentScreen = AppScreen.ChildAdventures(
+                                    screen.childId, screen.childName, actingAsParent = false,
+                                )
+                            },
                         )
                         is AppScreen.ChildViewAsParent -> ChildDashboardScreen(
                             childName = screen.childName,
@@ -421,10 +441,21 @@ class MainActivity : ComponentActivity() {
                                     fromChildView = true,
                                 )
                             },
+                            onOpenAdventures = {
+                                currentScreen = AppScreen.ChildAdventures(
+                                    screen.childId, screen.childName, actingAsParent = true,
+                                )
+                            },
                         )
                         is AppScreen.ChildPet -> ChildPetScreen(
                             childName = screen.childName,
                             childId = screen.childId,
+                            onBack = { backAction?.invoke() },
+                        )
+                        is AppScreen.ChildAdventures -> AdventuresScreen(
+                            childName = screen.childName,
+                            childId = screen.childId,
+                            actingAsParent = screen.actingAsParent,
                             onBack = { backAction?.invoke() },
                         )
                         is AppScreen.ChildWallet -> ChildWalletScreen(

@@ -110,5 +110,9 @@ object ApiClient {
     val recurringAllowanceApi: RecurringAllowanceApi by lazy {
         retrofit.create(RecurringAllowanceApi::class.java)
     }
+
+    val adventuresApi: AdventuresApi by lazy {
+        retrofit.create(AdventuresApi::class.java)
+    }
 }
 

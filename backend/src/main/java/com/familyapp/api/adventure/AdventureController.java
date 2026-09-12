@@ -85,11 +85,81 @@ public class AdventureController {
                 .toList();
     }
 
+    // --- Member-scoped, for a parent acting in a child's view (parity with the picker). ---
+
+    @GetMapping("/members/{memberId}")
+    public AdventureStateResponse getStateForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        var adventures = adventureRepository.findByMemberIdOrderByStartedAtDesc(memberId).stream()
+                .map(AdventureController::toResponse)
+                .toList();
+        return new AdventureStateResponse(adventureService.ticketBalance(memberId), adventures);
+    }
+
+    @PostMapping("/members/{memberId}")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AdventureResponse startForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody StartAdventureRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        if (request.scene() == null || request.scene().isEmpty()) {
+            throw new IllegalArgumentException("Scene is required");
+        }
+        return toResponse(adventureService.start(memberId, request.scene()));
+    }
+
+    @PostMapping("/members/{memberId}/{id}/claim")
+    public LootResponse claimForMember(
+            @PathVariable("memberId") UUID memberId,
+            @PathVariable("id") UUID id,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        var adventure = adventureRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Adventure not found: " + id));
+        if (!adventure.getMember().getId().equals(memberId)) {
+            throw new IllegalArgumentException("Access denied");
+        }
+        LootResult loot = adventureService.claim(id);
+        return new LootResponse(loot.type().name(), loot.ref(), loot.quantity());
+    }
+
+    @GetMapping("/members/{memberId}/inventory")
+    public List<InventoryItemResponse> getInventoryForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        return inventoryRepository.findByMemberId(memberId).stream()
+                .map(AdventureController::toInventoryResponse)
+                .toList();
+    }
+
     private UUID requireMember(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
             throw new IllegalArgumentException("Device token is required");
         }
         return memberService.getMemberByDeviceToken(deviceToken).id();
+    }
+
+    /** Authorises a parent acting for a child in the same family (mirrors PetController). */
+    private void requireParentOf(String deviceToken, UUID memberId) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        var requester = memberService.getMemberByDeviceToken(deviceToken);
+        var member = memberService.getMemberById(memberId);
+        if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
+            throw new IllegalArgumentException("Access denied");
+        }
+        if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
+            throw new IllegalArgumentException("Only a parent can act for another member");
+        }
     }
 
     private static AdventureResponse toResponse(AdventureEntity a) {
