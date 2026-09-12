@@ -55,6 +55,9 @@ public class ChildPetEntity {
     @Column(name = "equipped_frame", length = 50)
     private String equippedFrame;
 
+    @Column(name = "equipped_scene_item", length = 50)
+    private String equippedSceneItem;
+
     public UUID getId() {
         return id;
     }
@@ -117,6 +120,14 @@ public class ChildPetEntity {
 
     public void setEquippedFrame(String equippedFrame) {
         this.equippedFrame = equippedFrame;
+    }
+
+    public String getEquippedSceneItem() {
+        return equippedSceneItem;
+    }
+
+    public void setEquippedSceneItem(String equippedSceneItem) {
+        this.equippedSceneItem = equippedSceneItem;
     }
 
     public int getGrowthStage() {

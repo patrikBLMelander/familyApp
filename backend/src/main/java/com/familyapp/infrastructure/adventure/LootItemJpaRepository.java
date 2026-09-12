@@ -9,4 +9,6 @@ import java.util.List;
 public interface LootItemJpaRepository extends JpaRepository<LootItemEntity, String> {
 
     List<LootItemEntity> findByTypeAndActiveTrue(String type);
+
+    List<LootItemEntity> findByActiveTrue();
 }

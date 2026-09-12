@@ -11,7 +11,9 @@ struct AdventuresView: View {
 
     @State private var state: AdventureStateDTO?
     @State private var inventory: [InventoryItemDTO] = []
+    @State private var catalog: [String: LootCatalogItemDTO] = [:]
     @State private var equippedFrame: String?
+    @State private var equippedSceneItem: String?
     @State private var loading = true
     @State private var busy = false
     @State private var error: String?
@@ -86,6 +88,7 @@ struct AdventuresView: View {
                 }
 
                 framesSection
+                decorationsSection
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -172,7 +175,9 @@ struct AdventuresView: View {
 
     @ViewBuilder
     private var framesSection: some View {
-        let frames = inventory.map { $0.itemId }
+        // Split owned cosmetics by catalog type; items missing from the catalog fall back
+        // to frames, matching the pre-scene-item behaviour.
+        let frames = inventory.map { $0.itemId }.filter { catalog[$0]?.type != "SCENE_ITEM" }
         if !frames.isEmpty {
             sectionTitle("Dina ramar").padding(.top, 4)
             let options: [String?] = [nil] + frames
@@ -182,6 +187,57 @@ struct AdventuresView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var decorationsSection: some View {
+        let items = inventory.map { $0.itemId }.filter { catalog[$0]?.type == "SCENE_ITEM" }
+        if !items.isEmpty {
+            sectionTitle("Dina dekorationer").padding(.top, 4)
+            let options: [String?] = [nil] + items
+            LazyVGrid(columns: cols, spacing: 8) {
+                ForEach(Array(options.enumerated()), id: \.offset) { _, itemId in
+                    decorationTile(itemId)
+                }
+            }
+        }
+    }
+
+    private func decorationTile(_ itemId: String?) -> some View {
+        let selected = itemId == equippedSceneItem
+        let label = itemId.flatMap { catalog[$0]?.name }
+        return Button {
+            Task { await equipSceneItem(itemId) }
+        } label: {
+            VStack(spacing: 4) {
+                if itemId == nil {
+                    Text("Ingen")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(palette.inkFaint)
+                        .frame(height: 52)
+                } else if let name = PetImagesIOS.sceneItemImageName(itemId), let img = UIImage(named: name) {
+                    Image(uiImage: img).resizable().scaledToFit().frame(height: 52)
+                    Text(label ?? "Dekoration")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(palette.ink)
+                        .lineLimit(1)
+                } else {
+                    Text("✨").font(.title2).frame(height: 52)
+                    Text(label ?? "Dekoration")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(palette.ink)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 84)
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .fill(selected ? palette.tipBg : palette.surface))
+            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .stroke(selected ? palette.accent : palette.cardEdge, lineWidth: selected ? 2.5 : 1.5))
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
     }
 
     private func frameTile(_ frameId: String?) -> some View {
@@ -225,11 +281,14 @@ struct AdventuresView: View {
         do {
             let s = try await AdventureRepository.state(memberId: memberId)
             let inv = try await AdventureRepository.inventory(memberId: memberId)
-            let frame = await AdventureRepository.currentEquippedFrame(memberId: memberId)
+            let cat = await AdventureRepository.lootCatalog()
+            let pet = await AdventureRepository.currentPet(memberId: memberId)
             await MainActor.run {
                 state = s
                 inventory = inv
-                equippedFrame = frame
+                catalog = Dictionary(uniqueKeysWithValues: cat.map { ($0.id, $0) })
+                equippedFrame = pet?.equippedFrame
+                equippedSceneItem = pet?.equippedSceneItem
                 loadedAt = Date()
                 loading = false
             }
@@ -281,6 +340,19 @@ struct AdventuresView: View {
         await MainActor.run { busy = false }
     }
 
+    private func equipSceneItem(_ itemId: String?) async {
+        if busy { return }
+        busy = true
+        error = nil
+        do {
+            let pet = try await AdventureRepository.setSceneItem(memberId: memberId, itemId: itemId)
+            await MainActor.run { equippedSceneItem = pet.equippedSceneItem }
+        } catch {
+            await MainActor.run { self.error = "Kunde inte byta dekoration." }
+        }
+        await MainActor.run { busy = false }
+    }
+
     private func formatRemaining(_ secs: Int) -> String {
         let m = secs / 60
         let s = secs % 60
@@ -302,6 +374,7 @@ private struct LootReveal: View {
         switch loot.type {
         case "EGG": return ("🥚", "Du hittade ett nytt ägg! Det väntar i äggväljaren.")
         case "FRAME": return ("🖼️", "En ny ram till din scen!")
+        case "SCENE_ITEM": return ("✨", "En ny dekoration till din scen!")
         default:
             return ("🍎", loot.quantity == 1 ? "Du hittade 1 mat till ditt djur!"
                 : "Du hittade \(loot.quantity) mat till ditt djur!")

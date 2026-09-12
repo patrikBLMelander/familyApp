@@ -19,6 +19,7 @@ data class PetResponse(
     val createdAt: String,
     val updatedAt: String,
     val equippedFrame: String? = null, // loot_item-id på ramen på månadens scen, om någon
+    val equippedSceneItem: String? = null, // loot_item-id på scendekorationen, om någon
 )
 
 data class SelectEggRequest(
@@ -80,6 +81,10 @@ data class FrameRequest(
     val frameId: String?, // null rensar ramen
 )
 
+data class SceneItemRequest(
+    val itemId: String?, // null rensar dekorationen
+)
+
 interface PetsApi {
     @GET("pets/current")
     suspend fun getCurrentPet(): Response<PetResponse>
@@ -103,6 +108,16 @@ interface PetsApi {
     suspend fun setFrameForMember(
         @Path("memberId") memberId: String,
         @Body body: FrameRequest,
+    ): PetResponse
+
+    /** Sätt en scendekoration på månadens scen, eller rensa med null. */
+    @POST("pets/current/scene-item")
+    suspend fun setSceneItem(@Body body: SceneItemRequest): PetResponse
+
+    @POST("pets/members/{memberId}/scene-item")
+    suspend fun setSceneItemForMember(
+        @Path("memberId") memberId: String,
+        @Body body: SceneItemRequest,
     ): PetResponse
 
     @POST("pets/select-egg")

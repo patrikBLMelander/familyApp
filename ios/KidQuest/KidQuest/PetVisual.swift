@@ -25,6 +25,11 @@ struct PetVisual: View {
     /// landskapet med. Ankrad i nederkant så djuret växer upp från marken det står på.
     /// 1 är oförändrat, vilket är vad varje anropare som inte animerar får.
     var petScaleMultiplier: CGFloat = 1
+    /// Ramen som omger hela scenen (loot_item-id = bildnamn), eller nil.
+    var frameName: String? = nil
+    /// Scendekorationen (loot_item-id = bildnamn), eller nil, och om den sitter i himlen.
+    var sceneItemName: String? = nil
+    var sceneItemAtTop: Bool = true
 
     var body: some View {
         let effectiveScale = min(
@@ -43,6 +48,19 @@ struct PetVisual: View {
                         .clipped()
                 }
 
+                // Scendekorationen ligger mellan bakgrunden och djuret, ankrad mot himlen
+                // eller marken. Ritad på egen genomskinlig canvas, så scaledToFit bevarar
+                // proportionerna.
+                if let sceneItemName, let deco = UIImage(named: sceneItemName) {
+                    Image(uiImage: deco)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .padding(6)
+                        .frame(width: geo.size.width, height: geo.size.height,
+                               alignment: sceneItemAtTop ? .top : .bottom)
+                }
+
                 if let petName = PetImagesIOS.petImageName(for: petType, growthStage: growthStage),
                    let pet = UIImage(named: petName) {
                     Image(uiImage: pet)
@@ -57,6 +75,13 @@ struct PetVisual: View {
                 } else {
                     Text("🐾")
                         .font(.system(size: 80))
+                }
+
+                // Ramen omger hela scenen, så den ritas sist, över allt, kant till kant.
+                if let frameName, let frame = UIImage(named: frameName) {
+                    Image(uiImage: frame)
+                        .resizable()
+                        .frame(width: geo.size.width, height: geo.size.height)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: alignment)

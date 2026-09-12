@@ -158,6 +158,9 @@ fun ChildDashboardScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var pet by remember { mutableStateOf<PetResponse?>(null) }
+    // Scene-item id -> anchor ("top"/"bottom"), so the equipped decoration renders on the
+    // right side of the band. Loaded once; the catalog is small and rarely changes.
+    var sceneItemAnchors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var xp by remember { mutableStateOf<XpProgressResponse?>(null) }
     var balance by remember { mutableStateOf<WalletBalanceResponse?>(null) }
     var todaysTasks by remember { mutableStateOf<List<DailyChoreWithCompletionResponse>>(emptyList()) }
@@ -280,6 +283,9 @@ fun ChildDashboardScreen(
                     }.getOrNull()
                 }
                 val tasksDeferred = async { DailyChoreRepository.fetchChoresForToday(childId) }
+                val catalogDeferred = async {
+                    kotlin.runCatching { ApiClient.adventuresApi.getLootCatalog() }.getOrNull()
+                }
 
                 val petResult = petDeferred.await()
                 val petResp = petResult.getOrNull()
@@ -289,6 +295,10 @@ fun ChildDashboardScreen(
                 todaysTasks = tasksDeferred.await()
 
                 pet = if (petResp?.isSuccessful == true) petResp.body() else null
+
+                catalogDeferred.await()
+                    ?.filter { it.type == "SCENE_ITEM" && it.anchor != null }
+                    ?.let { items -> sceneItemAnchors = items.associate { it.id to it.anchor!! } }
 
                 // A 404 genuinely means "this child has no pet this month", which is what
                 // opens the egg picker. Anything else - a 500, a timeout, a dropped
@@ -685,6 +695,11 @@ fun ChildDashboardScreen(
                             .clipToBounds(),
                     ) {
                     if (shownPet != null) {
+                        // Cosmetics show only on the current pet's scene, not when looking
+                        // back at a past month. A past month keeps the frame it retired with.
+                        val past = viewingPast
+                        val currentFrame = if (past == null) pet?.equippedFrame else past.frame
+                        val currentSceneItem = if (past == null) pet?.equippedSceneItem else null
                         PetVisual(
                             petType = shownPet.first,
                             growthStage = shownPet.second,
@@ -699,6 +714,9 @@ fun ChildDashboardScreen(
                             // Bara djuret pulsar. Skalar man hela PetVisual zoomar
                             // landskapet med.
                             petScaleMultiplier = feedAnim.petPulse,
+                            frameDrawableName = currentFrame,
+                            sceneItemDrawableName = currentSceneItem,
+                            sceneItemAtTop = currentSceneItem?.let { sceneItemAnchors[it] != "bottom" } ?: true,
                         )
                     } else {
                         PetImages.seasonalBackgroundDrawable(context)?.let { bg ->

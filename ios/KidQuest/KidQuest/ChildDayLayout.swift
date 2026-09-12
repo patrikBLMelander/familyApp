@@ -36,6 +36,9 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     let balance: Int?
     let tasks: [DailyChoreWithCompletionResponseDTO]
     var history: [PetHistoryResponseDTO] = []
+    /// Scendekorations-id -> ankare ("top"/"bottom"), så den utrustade dekorationen ritas
+    /// på rätt sida av bandet. Tom när katalogen inte lästs in; då antas himlen.
+    var sceneItemAnchors: [String: String] = [:]
     @Binding var viewingPast: PetHistoryResponseDTO?
     var isFeeding: Bool = false
 
@@ -224,6 +227,10 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     private var band: some View {
         ZStack(alignment: .bottomLeading) {
             if let shown = shownPet {
+                // Kosmetiken visas bara på det nuvarande djurets scen. En förfluten månad
+                // behåller ramen den pensionerades med, men inga dekorationer.
+                let frameName = isPast ? viewingPast?.frame : pet?.equippedFrame
+                let sceneItemId = isPast ? nil : pet?.equippedSceneItem
                 PetVisual(
                     petType: shown.type,
                     growthStage: shown.stage,
@@ -233,7 +240,10 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                     scale: allDone && !isPast ? 0.82 : 0.52,
                     alignment: allDone && !isPast ? .bottom : .bottomTrailing,
                     // Bara djuret pulsar. Skalar man hela PetVisual zoomar landskapet.
-                    petScaleMultiplier: anim.petPulse
+                    petScaleMultiplier: anim.petPulse,
+                    frameName: PetImagesIOS.frameImageName(frameName),
+                    sceneItemName: PetImagesIOS.sceneItemImageName(sceneItemId),
+                    sceneItemAtTop: sceneItemId.map { sceneItemAnchors[$0] != "bottom" } ?? true
                 )
                 .frame(height: bandHeight)
                 .clipped()

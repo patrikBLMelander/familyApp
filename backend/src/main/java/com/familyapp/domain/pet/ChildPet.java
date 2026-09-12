@@ -15,7 +15,8 @@ public record ChildPet(
         OffsetDateTime hatchedAt, // NULL until egg is hatched
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
-        String equippedFrame // loot_item id of the frame on this month's scene, or null
+        String equippedFrame, // loot_item id of the frame on this month's scene, or null
+        String equippedSceneItem // loot_item id of the scene decoration, or null
 ) {
     public static final int MIN_GROWTH_STAGE = 1;
     public static final int MAX_GROWTH_STAGE = 5;

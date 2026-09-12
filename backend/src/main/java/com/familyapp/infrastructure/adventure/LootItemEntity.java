@@ -28,6 +28,10 @@ public class LootItemEntity {
     @Column(nullable = false)
     private boolean active;
 
+    /** Scene items only: 'top' (sky) or 'bottom' (ground). Null for frames. */
+    @Column(length = 16)
+    private String anchor;
+
     public String getId() {
         return id;
     }
@@ -74,5 +78,13 @@ public class LootItemEntity {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public String getAnchor() {
+        return anchor;
+    }
+
+    public void setAnchor(String anchor) {
+        this.anchor = anchor;
     }
 }

@@ -44,6 +44,20 @@ data class InventoryItemResponse(
     val acquiredAt: String,
 )
 
+/**
+ * En post i loot-katalogen (ramar och scendekorationer). Klienten slår upp en ägd
+ * inventarie-post här för att få dess typ, namn, sällsynthet, bild och `anchor`
+ * ("top"/"bottom", bara för scendekorationer; null för ramar).
+ */
+data class LootCatalogItemResponse(
+    val id: String,
+    val type: String,   // FRAME | SCENE_ITEM
+    val rarity: String,
+    val name: String,
+    val assetKey: String,
+    val anchor: String?, // "top" | "bottom" | null
+)
+
 interface AdventuresApi {
     @GET("adventures")
     suspend fun getState(): AdventureStateResponse
@@ -56,6 +70,9 @@ interface AdventuresApi {
 
     @GET("adventures/inventory")
     suspend fun getInventory(): List<InventoryItemResponse>
+
+    @GET("adventures/loot-catalog")
+    suspend fun getLootCatalog(): List<LootCatalogItemResponse>
 
     // --- Member-scoped: en förälder som agerar i barnets vy. ---
 

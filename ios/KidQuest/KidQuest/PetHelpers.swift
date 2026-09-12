@@ -146,6 +146,12 @@ enum PetImagesIOS {
         return UIImage(named: name) != nil ? name : nil
     }
 
+    /// A scene decoration's loot_item id is also its asset name (item_kite, …).
+    static func sceneItemImageName(_ itemId: String?) -> String? {
+        guard let itemId, UIImage(named: itemId) != nil else { return nil }
+        return itemId
+    }
+
     static func chestStageImageName(_ stage: Int) -> String? {
         let name = "chest_stage\(min(max(stage, minStage), maxStage))"
         return UIImage(named: name) != nil ? name : nil

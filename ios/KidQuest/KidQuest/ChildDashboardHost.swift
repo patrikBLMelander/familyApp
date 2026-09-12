@@ -63,6 +63,7 @@ struct ChildDashboardHost: View {
     /// Barnets tidigare djur, och vilket som visas. Samma samling barnet ser.
     @State private var history: [PetHistoryResponseDTO] = []
     @State private var viewingPast: PetHistoryResponseDTO?
+    @State private var sceneItemAnchors: [String: String] = [:]
 
     /// Icke-tom hoppar över nätanropet. Bara fixturen sätter den.
     var preloadedHistory: [PetHistoryResponseDTO] = []
@@ -107,6 +108,12 @@ struct ChildDashboardHost: View {
             } else {
                 history = await MemberScopedRepository.fetchPetHistory(memberId: activeChild.id)
             }
+            let catalog = await AdventureRepository.lootCatalog()
+            sceneItemAnchors = Dictionary(
+                uniqueKeysWithValues: catalog
+                    .filter { $0.type == "SCENE_ITEM" }
+                    .compactMap { item in item.anchor.map { (item.id, $0) } }
+            )
         }
         // Sist i ZStacken: senare syskon ritar överst, och avskedet ska ligga över
         // hela barnvyn.
@@ -179,6 +186,7 @@ struct ChildDashboardHost: View {
             balance: snapshot.balance?.balance,
             tasks: snapshot.todaysChores,
             history: history,
+            sceneItemAnchors: sceneItemAnchors,
             viewingPast: $viewingPast,
             isFeeding: isFeeding,
             onToggleTask: { item in Task { await toggle(item) } },

@@ -5,5 +5,6 @@ package com.familyapp.domain.adventure;
 public enum LootType {
     FOOD,
     FRAME,
-    EGG
+    EGG,
+    SCENE_ITEM
 }

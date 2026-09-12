@@ -28,6 +28,8 @@ struct ChildDashboardView: View {
     @State private var showAddChore: Bool = false
     @State private var history: [PetHistoryResponseDTO] = []
     @State private var viewingPast: PetHistoryResponseDTO?
+    /// Scendekorations-id -> ankare, för var den utrustade dekorationen ritas på bandet.
+    @State private var sceneItemAnchors: [String: String] = [:]
 
     /// Icke-nil renderar de här värdena i stället för att anropa nätet. Bara [fixture]
     /// sätter dem; de ligger utanför #if DEBUG så att typen har samma form i båda
@@ -68,6 +70,12 @@ struct ChildDashboardView: View {
             }
             await load()
             history = await ChildDashboardRepository.fetchPetHistory()
+            let catalog = await AdventureRepository.lootCatalog()
+            sceneItemAnchors = Dictionary(
+                uniqueKeysWithValues: catalog
+                    .filter { $0.type == "SCENE_ITEM" }
+                    .compactMap { item in item.anchor.map { (item.id, $0) } }
+            )
         }
         // Sist i ZStacken: senare syskon ritar överst, och avskedet ska ligga över
         // hela barnvyn.
@@ -131,6 +139,7 @@ struct ChildDashboardView: View {
             balance: s.wallet?.balance,
             tasks: s.todaysTasks,
             history: history,
+            sceneItemAnchors: sceneItemAnchors,
             viewingPast: $viewingPast,
             isFeeding: isFeeding,
             onToggleTask: { task in Task { await toggleTask(task) } },
@@ -338,7 +347,7 @@ enum ChildFixtures {
         // stadie 4 och nivå 3 beskriver ett tillstånd som inte kan uppstå.
         growthStage: 3, hatchedAt: nil,
         createdAt: "2026-09-01T08:00:00Z", updatedAt: "2026-09-01T08:00:00Z",
-        equippedFrame: nil
+        equippedFrame: nil, equippedSceneItem: nil
     )
 
     static let xp = XpProgressResponseDTO(

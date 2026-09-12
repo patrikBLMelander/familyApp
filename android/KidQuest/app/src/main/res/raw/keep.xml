@@ -5,4 +5,4 @@
   R8 / shrinkResources is enabled. Keep them explicitly.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/*_stage*,@drawable/season_*,@drawable/frame_*,@drawable/mystery_egg,@drawable/scene_*" />
+    tools:keep="@drawable/*_stage*,@drawable/season_*,@drawable/frame_*,@drawable/mystery_egg,@drawable/scene_*,@drawable/item_*" />

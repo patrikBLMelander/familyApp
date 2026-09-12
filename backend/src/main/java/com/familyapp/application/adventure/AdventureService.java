@@ -53,6 +53,7 @@ public class AdventureService {
     private static final String STATUS_ONGOING = "ONGOING";
     private static final String STATUS_CLAIMED = "CLAIMED";
     private static final String FRAME_TYPE = "FRAME";
+    private static final String SCENE_ITEM_TYPE = "SCENE_ITEM";
     private static final String FOOD_REF = "food";
 
     private final AdventureJpaRepository adventureRepository;
@@ -217,7 +218,7 @@ public class AdventureService {
             return eggLootOrFood(memberId);
         }
         if (roll < EGG_WEIGHT + FRAME_WEIGHT) {
-            return frameLootOrFood();
+            return cosmeticLootOrFood();
         }
         return new LootResult(LootType.FOOD, FOOD_REF, FLOOR_FOOD_QTY);
     }
@@ -238,15 +239,18 @@ public class AdventureService {
         return new LootResult(LootType.FOOD, FOOD_REF, FLOOR_FOOD_QTY);
     }
 
-    /** A random active frame from the catalog; food if none exist yet (before the art
-     *  ships, the catalog is empty and frames simply never drop). */
-    private LootResult frameLootOrFood() {
-        List<LootItemEntity> frames = lootItemRepository.findByTypeAndActiveTrue(FRAME_TYPE);
-        if (frames.isEmpty()) {
+    /** A random active cosmetic (frame or scene item) from the catalog; food if none exist
+     *  yet (before the art ships, the catalog is empty and cosmetics simply never drop). */
+    private LootResult cosmeticLootOrFood() {
+        var cosmetics = lootItemRepository.findByActiveTrue().stream()
+                .filter(item -> FRAME_TYPE.equals(item.getType()) || SCENE_ITEM_TYPE.equals(item.getType()))
+                .toList();
+        if (cosmetics.isEmpty()) {
             return new LootResult(LootType.FOOD, FOOD_REF, FLOOR_FOOD_QTY);
         }
-        var frame = frames.get(ThreadLocalRandom.current().nextInt(frames.size()));
-        return new LootResult(LootType.FRAME, frame.getId(), 1);
+        var item = cosmetics.get(ThreadLocalRandom.current().nextInt(cosmetics.size()));
+        var type = SCENE_ITEM_TYPE.equals(item.getType()) ? LootType.SCENE_ITEM : LootType.FRAME;
+        return new LootResult(type, item.getId(), 1);
     }
 
     /** Unlocked eggs minus already collected (history) minus the current month's pet. */
@@ -265,6 +269,7 @@ public class AdventureService {
             case EGG -> unlockEgg(memberId, loot.ref());
             case FOOD -> collectedFoodService.addBonusFood(memberId, loot.quantity());
             case FRAME -> grantInventoryItem(memberId, loot.ref());
+            case SCENE_ITEM -> grantInventoryItem(memberId, loot.ref());
         }
     }
 

@@ -95,10 +95,15 @@ fun PetVisual(
     alignment: Alignment = Alignment.Center,
     petPadding: Dp = 8.dp,
     petScaleMultiplier: Float = 1f,
+    frameDrawableName: String? = null,
+    sceneItemDrawableName: String? = null,
+    sceneItemAtTop: Boolean = true,
 ) {
     val context = LocalContext.current
     val petId = PetImages.petDrawable(context, petType, growthStage)
     val backgroundId = PetImages.seasonalBackgroundDrawable(context, season)
+    val sceneItemId = sceneItemDrawableName?.let { drawableId(context, it) }
+    val frameId = frameDrawableName?.let { drawableId(context, it) }
 
     Box(
         modifier = modifier.clip(RoundedCornerShape(cornerRadius.dp)),
@@ -110,6 +115,19 @@ fun PetVisual(
                 contentDescription = null,
                 modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
+            )
+        }
+        // Scene decoration sits between the background and the pet, anchored to the sky or
+        // the ground. Drawn on its own transparent canvas, so Fit keeps its proportions.
+        if (sceneItemId != null) {
+            Image(
+                painter = painterResource(id = sceneItemId),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(6.dp),
+                alignment = if (sceneItemAtTop) Alignment.TopCenter else Alignment.BottomCenter,
+                contentScale = ContentScale.Fit,
             )
         }
         if (petId != null) {
@@ -129,5 +147,18 @@ fun PetVisual(
         } else {
             Text(text = "🐾", style = MaterialTheme.typography.displayLarge)
         }
+        // The frame surrounds the whole scene, so it is drawn last, over everything, filling
+        // the box edge to edge.
+        if (frameId != null) {
+            Image(
+                painter = painterResource(id = frameId),
+                contentDescription = null,
+                modifier = Modifier.matchParentSize(),
+                contentScale = ContentScale.FillBounds,
+            )
+        }
     }
 }
+
+private fun drawableId(context: android.content.Context, name: String): Int? =
+    context.resources.getIdentifier(name, "drawable", context.packageName).takeIf { it != 0 }

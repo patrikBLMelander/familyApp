@@ -617,10 +617,30 @@ enum AdventureRepository {
             body: SetFrameRequestDTO(frameId: frameId))
     }
 
+    static func setSceneItem(memberId: String?, itemId: String?) async throws -> PetResponseDTO {
+        let path = memberId.map { "pets/members/\($0)/scene-item" } ?? "pets/current/scene-item"
+        return try await ApiClient.shared.send(
+            PetResponseDTO.self, path: path, method: "POST",
+            body: SetSceneItemRequestDTO(itemId: itemId))
+    }
+
+    /// The full cosmetic catalog (frames + scene items), for resolving an owned item's
+    /// type, name, rarity, asset, and anchor. The same for everyone, so memberId is not
+    /// needed. Empty on failure so the UI degrades to "no decorations" rather than an error.
+    static func lootCatalog() async -> [LootCatalogItemDTO] {
+        (try? await ApiClient.shared.send(
+            [LootCatalogItemDTO].self, path: "adventures/loot-catalog", method: "GET")) ?? []
+    }
+
+    /// This month's pet, or nil (also nil when there is no pet — 404). Callers read the
+    /// equipped frame and scene item off it.
+    static func currentPet(memberId: String?) async -> PetResponseDTO? {
+        let path = memberId.map { "pets/members/\($0)/current" } ?? "pets/current"
+        return try? await ApiClient.shared.send(PetResponseDTO.self, path: path, method: "GET")
+    }
+
     /// The frame on this month's scene, or nil (also nil when there is no pet — 404).
     static func currentEquippedFrame(memberId: String?) async -> String? {
-        let path = memberId.map { "pets/members/\($0)/current" } ?? "pets/current"
-        let pet = try? await ApiClient.shared.send(PetResponseDTO.self, path: path, method: "GET")
-        return pet?.equippedFrame
+        await currentPet(memberId: memberId)?.equippedFrame
     }
 }

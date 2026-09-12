@@ -7,6 +7,8 @@ import com.familyapp.infrastructure.adventure.AdventureEntity;
 import com.familyapp.infrastructure.adventure.AdventureJpaRepository;
 import com.familyapp.infrastructure.adventure.ChildInventoryEntity;
 import com.familyapp.infrastructure.adventure.ChildInventoryJpaRepository;
+import com.familyapp.infrastructure.adventure.LootItemEntity;
+import com.familyapp.infrastructure.adventure.LootItemJpaRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,17 +30,20 @@ public class AdventureController {
     private final FamilyMemberService memberService;
     private final AdventureJpaRepository adventureRepository;
     private final ChildInventoryJpaRepository inventoryRepository;
+    private final LootItemJpaRepository lootItemRepository;
 
     public AdventureController(
             AdventureService adventureService,
             FamilyMemberService memberService,
             AdventureJpaRepository adventureRepository,
-            ChildInventoryJpaRepository inventoryRepository
+            ChildInventoryJpaRepository inventoryRepository,
+            LootItemJpaRepository lootItemRepository
     ) {
         this.adventureService = adventureService;
         this.memberService = memberService;
         this.adventureRepository = adventureRepository;
         this.inventoryRepository = inventoryRepository;
+        this.lootItemRepository = lootItemRepository;
     }
 
     @GetMapping
@@ -82,6 +87,21 @@ public class AdventureController {
         UUID memberId = requireMember(deviceToken);
         return inventoryRepository.findByMemberId(memberId).stream()
                 .map(AdventureController::toInventoryResponse)
+                .toList();
+    }
+
+    /**
+     * The full catalog of cosmetic loot (frames and scene items), so the client can resolve
+     * an owned inventory item's type, name, rarity, asset, and anchor. Not member-scoped:
+     * the catalog is the same for everyone.
+     */
+    @GetMapping("/loot-catalog")
+    public List<LootCatalogItemResponse> getLootCatalog(
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireMember(deviceToken);
+        return lootItemRepository.findByActiveTrue().stream()
+                .map(AdventureController::toCatalogResponse)
                 .toList();
     }
 
@@ -184,6 +204,17 @@ public class AdventureController {
         return new InventoryItemResponse(i.getItemId(), i.getAcquiredAt());
     }
 
+    private static LootCatalogItemResponse toCatalogResponse(LootItemEntity item) {
+        return new LootCatalogItemResponse(
+                item.getId(),
+                item.getType(),
+                item.getRarity(),
+                item.getName(),
+                item.getAssetKey(),
+                item.getAnchor()
+        );
+    }
+
     // ---- DTOs ----
 
     public record StartAdventureRequest(String scene) {
@@ -210,5 +241,15 @@ public class AdventureController {
     }
 
     public record InventoryItemResponse(String itemId, OffsetDateTime acquiredAt) {
+    }
+
+    public record LootCatalogItemResponse(
+            String id,
+            String type,
+            String rarity,
+            String name,
+            String assetKey,
+            String anchor
+    ) {
     }
 }

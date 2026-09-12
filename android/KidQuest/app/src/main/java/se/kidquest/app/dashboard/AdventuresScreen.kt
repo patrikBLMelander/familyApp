@@ -48,7 +48,9 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.FrameRequest
 import se.kidquest.app.network.InventoryItemResponse
+import se.kidquest.app.network.LootCatalogItemResponse
 import se.kidquest.app.network.LootResponse
+import se.kidquest.app.network.SceneItemRequest
 import se.kidquest.app.network.StartAdventureRequest
 import se.kidquest.app.theme.LocalSeasonPalette
 import se.kidquest.app.theme.SeasonHeaderBar
@@ -85,7 +87,9 @@ fun AdventuresScreen(
     var refreshKey by remember { mutableStateOf(0) }
     var loot by remember { mutableStateOf<LootResponse?>(null) }
     var inventory by remember { mutableStateOf<List<InventoryItemResponse>>(emptyList()) }
+    var catalog by remember { mutableStateOf<Map<String, LootCatalogItemResponse>>(emptyMap()) }
     var equippedFrame by remember { mutableStateOf<String?>(null) }
+    var equippedSceneItem by remember { mutableStateOf<String?>(null) }
     // Increments each second so the countdowns recompose; the remaining time itself is
     // computed from the server's secondsRemaining minus wall-clock elapsed since load.
     var tick by remember { mutableStateOf(0L) }
@@ -104,11 +108,16 @@ fun AdventuresScreen(
                 if (actingAsParent) ApiClient.adventuresApi.getInventoryForMember(childId)
                 else ApiClient.adventuresApi.getInventory()
             }
-            equippedFrame = withContext(Dispatchers.IO) {
+            catalog = withContext(Dispatchers.IO) {
+                ApiClient.adventuresApi.getLootCatalog().associateBy { it.id }
+            }
+            val pet = withContext(Dispatchers.IO) {
                 val resp = if (actingAsParent) ApiClient.petsApi.getMemberPet(childId)
                 else ApiClient.petsApi.getCurrentPet()
-                if (resp.isSuccessful) resp.body()?.equippedFrame else null
+                if (resp.isSuccessful) resp.body() else null
             }
+            equippedFrame = pet?.equippedFrame
+            equippedSceneItem = pet?.equippedSceneItem
         } catch (e: Exception) {
             error = ApiErrors.message(e, "Kunde inte hämta äventyr")
         } finally {
@@ -189,6 +198,26 @@ fun AdventuresScreen(
         }
     }
 
+    fun equipSceneItem(itemId: String?) {
+        if (busy) return
+        scope.launch {
+            busy = true
+            error = null
+            try {
+                val updated = withContext(Dispatchers.IO) {
+                    val body = SceneItemRequest(itemId)
+                    if (actingAsParent) ApiClient.petsApi.setSceneItemForMember(childId, body)
+                    else ApiClient.petsApi.setSceneItem(body)
+                }
+                equippedSceneItem = updated.equippedSceneItem
+            } catch (e: Exception) {
+                error = ApiErrors.message(e, "Kunde inte byta dekoration")
+            } finally {
+                busy = false
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(season.pageBg)) {
         SeasonHeaderBar(title = "Äventyr", subtitle = childName, onBack = onBack)
 
@@ -253,12 +282,27 @@ fun AdventuresScreen(
                 }
             }
 
+            val ownedIds = inventory.map { it.itemId }
+            // Split owned cosmetics by catalog type. Items missing from the catalog (older art)
+            // fall back to frames, matching the pre-scene-item behaviour.
+            val frameIds = ownedIds.filter { catalog[it]?.type != "SCENE_ITEM" }
+            val sceneItemIds = ownedIds.filter { catalog[it]?.type == "SCENE_ITEM" }
+
             FramesSection(
-                inventory = inventory,
+                frameIds = frameIds,
                 equippedFrame = equippedFrame,
                 busy = busy,
                 season = season,
                 onEquip = { equipFrame(it) },
+            )
+
+            DecorationsSection(
+                sceneItemIds = sceneItemIds,
+                catalog = catalog,
+                equippedSceneItem = equippedSceneItem,
+                busy = busy,
+                season = season,
+                onEquip = { equipSceneItem(it) },
             )
         }
     }
@@ -427,6 +471,7 @@ private fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () 
     val (emoji, message) = when (loot.type) {
         "EGG" -> "🥚" to "Du hittade ett nytt ägg! Det väntar i äggväljaren."
         "FRAME" -> "🖼️" to "En ny ram till din scen!"
+        "SCENE_ITEM" -> "✨" to "En ny dekoration till din scen!"
         else -> "🍎" to (if (loot.quantity == 1) "Du hittade 1 mat till ditt djur!"
         else "Du hittade ${loot.quantity} mat till ditt djur!")
     }
@@ -472,14 +517,13 @@ private fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () 
  *  this month and follows the pet into the collection at month-end. */
 @Composable
 private fun FramesSection(
-    inventory: List<InventoryItemResponse>,
+    frameIds: List<String>,
     equippedFrame: String?,
     busy: Boolean,
     season: SeasonPalette,
     onEquip: (String?) -> Unit,
 ) {
-    val frames = inventory.map { it.itemId }
-    if (frames.isEmpty()) return
+    if (frameIds.isEmpty()) return
     Text(
         text = "Dina ramar",
         style = MaterialTheme.typography.titleSmall,
@@ -487,7 +531,7 @@ private fun FramesSection(
         color = season.ink,
         modifier = Modifier.padding(top = 4.dp),
     )
-    val options: List<String?> = listOf(null) + frames
+    val options: List<String?> = listOf(null) + frameIds
     options.chunked(3).forEach { row ->
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -505,6 +549,119 @@ private fun FramesSection(
                 }
             }
             repeat(3 - row.size) { Box(modifier = Modifier.weight(1f)) {} }
+        }
+    }
+}
+
+/** Owned scene decorations, with an "Ingen" option to clear. Like frames, an equipped
+ *  decoration shows on this month's scene. */
+@Composable
+private fun DecorationsSection(
+    sceneItemIds: List<String>,
+    catalog: Map<String, LootCatalogItemResponse>,
+    equippedSceneItem: String?,
+    busy: Boolean,
+    season: SeasonPalette,
+    onEquip: (String?) -> Unit,
+) {
+    if (sceneItemIds.isEmpty()) return
+    Text(
+        text = "Dina dekorationer",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = season.ink,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    val options: List<String?> = listOf(null) + sceneItemIds
+    options.chunked(3).forEach { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            row.forEach { itemId ->
+                Box(modifier = Modifier.weight(1f)) {
+                    DecorationTile(
+                        itemId = itemId,
+                        label = itemId?.let { catalog[it]?.name },
+                        selected = itemId == equippedSceneItem,
+                        enabled = !busy,
+                        season = season,
+                        onClick = { onEquip(itemId) },
+                    )
+                }
+            }
+            repeat(3 - row.size) { Box(modifier = Modifier.weight(1f)) {} }
+        }
+    }
+}
+
+@Composable
+private fun DecorationTile(
+    itemId: String?,
+    label: String?,
+    selected: Boolean,
+    enabled: Boolean,
+    season: SeasonPalette,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val drawable = itemId?.let {
+        val id = context.resources.getIdentifier(it, "drawable", context.packageName)
+        if (id != 0) id else null
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 84.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(if (selected) season.tipBg else season.surface)
+            .border(
+                width = if (selected) 2.5.dp else 1.5.dp,
+                color = if (selected) season.accent else season.cardEdge,
+                shape = RoundedCornerShape(15.dp),
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (itemId == null) {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Ingen",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = season.inkFaint,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else {
+            if (drawable != null) {
+                Image(
+                    painter = painterResource(id = drawable),
+                    contentDescription = label,
+                    modifier = Modifier.size(52.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("✨", style = MaterialTheme.typography.headlineSmall)
+                }
+            }
+            Text(
+                text = label ?: "Dekoration",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = season.ink,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
         }
     }
 }

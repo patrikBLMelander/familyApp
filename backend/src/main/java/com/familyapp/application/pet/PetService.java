@@ -267,6 +267,22 @@ public class PetService {
         return toDomain(petRepository.save(petEntity));
     }
 
+    /**
+     * Put a scene decoration on this month's scene, or clear it with null. The child must
+     * own the item (won on an adventure); an unowned item is rejected.
+     */
+    public ChildPet equipSceneItem(UUID memberId, String itemId) {
+        LocalDate now = LocalDate.now();
+        var petEntity = petRepository.findByMemberIdAndYearAndMonth(memberId, now.getYear(), now.getMonthValue())
+                .orElseThrow(() -> new IllegalArgumentException("No pet this month"));
+        if (itemId != null && !inventoryRepository.existsByMemberAndItem(memberId, itemId)) {
+            throw new IllegalArgumentException("Scene item not owned: " + itemId);
+        }
+        petEntity.setEquippedSceneItem(itemId);
+        petEntity.setUpdatedAt(OffsetDateTime.now());
+        return toDomain(petRepository.save(petEntity));
+    }
+
     /** One row of the egg picker: the egg, the animal it hatches, its rarity, and this
      *  child's relationship to it. */
     public record EggOption(String eggType, String petType, String rarity, boolean unlocked, boolean collected) {
@@ -312,7 +328,8 @@ public class PetService {
                 entity.getHatchedAt(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                entity.getEquippedFrame()
+                entity.getEquippedFrame(),
+                entity.getEquippedSceneItem()
         );
     }
 

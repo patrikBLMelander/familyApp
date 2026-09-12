@@ -165,6 +165,7 @@ struct PetResponseDTO: Decodable {
     let createdAt: String
     let updatedAt: String
     let equippedFrame: String?
+    let equippedSceneItem: String?
 }
 
 /// Ett djur barnet haft tidigare. Bär inte namnet -- historiken har det inte -- och
@@ -210,6 +211,22 @@ struct EggCollectionItemDTO: Decodable, Identifiable, Equatable {
 
 struct SetFrameRequestDTO: Encodable {
     let frameId: String? // null clears the frame
+}
+
+struct SetSceneItemRequestDTO: Encodable {
+    let itemId: String? // null clears the decoration
+}
+
+/// En post i loot-katalogen (ramar och scendekorationer). Klienten slår upp en ägd
+/// inventarie-post här för typ, namn, sällsynthet, bild och `anchor` ("top"/"bottom",
+/// bara för scendekorationer; null för ramar).
+struct LootCatalogItemDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let type: String // FRAME | SCENE_ITEM
+    let rarity: String
+    let name: String
+    let assetKey: String
+    let anchor: String? // "top" | "bottom" | null
 }
 
 struct AdventureResponseDTO: Decodable, Identifiable, Equatable {

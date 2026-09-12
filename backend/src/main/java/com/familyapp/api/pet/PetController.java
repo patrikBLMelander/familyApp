@@ -129,6 +129,16 @@ public class PetController {
         return toResponse(petService.equipFrame(memberId, request.frameId()));
     }
 
+    /** Put a scene decoration on this month's scene, or clear it by sending a null itemId. */
+    @PostMapping("/current/scene-item")
+    public PetResponse equipSceneItem(
+            @RequestBody EquipSceneItemRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID memberId = requireMember(deviceToken);
+        return toResponse(petService.equipSceneItem(memberId, request.itemId()));
+    }
+
     /** Member-scoped picker data, for a parent acting in a child's view. */
     @GetMapping("/members/{memberId}/eggs")
     public List<PetService.EggOption> getEggOptionsForMember(
@@ -147,6 +157,16 @@ public class PetController {
     ) {
         requireParentOf(deviceToken, memberId);
         return toResponse(petService.equipFrame(memberId, request.frameId()));
+    }
+
+    @PostMapping("/members/{memberId}/scene-item")
+    public PetResponse equipSceneItemForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody EquipSceneItemRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        return toResponse(petService.equipSceneItem(memberId, request.itemId()));
     }
 
     private UUID requireMember(String deviceToken) {
@@ -386,6 +406,9 @@ public class PetController {
     public record EquipFrameRequest(String frameId) {
     }
 
+    public record EquipSceneItemRequest(String itemId) {
+    }
+
     public record SelectEggRequest(String eggType, String name) {
     }
 
@@ -433,7 +456,8 @@ public class PetController {
                 pet.hatchedAt(),
                 pet.createdAt(),
                 pet.updatedAt(),
-                pet.equippedFrame()
+                pet.equippedFrame(),
+                pet.equippedSceneItem()
         );
     }
 
@@ -463,7 +487,8 @@ public class PetController {
             OffsetDateTime hatchedAt,
             OffsetDateTime createdAt,
             OffsetDateTime updatedAt,
-            String equippedFrame
+            String equippedFrame,
+            String equippedSceneItem
     ) {
     }
 
