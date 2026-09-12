@@ -78,6 +78,7 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.DailyChoreResponse
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
+import se.kidquest.app.network.EggOption
 import se.kidquest.app.network.FeedPetRequest
 import se.kidquest.app.network.PetResponse
 import se.kidquest.app.network.SelectEggRequest
@@ -1070,7 +1071,7 @@ private fun SelectEggDialog(
     childId: String = "",
 ) {
     val season = LocalSeasonPalette.current
-    var eggTypes by remember { mutableStateOf<List<String>>(emptyList()) }
+    var eggs by remember { mutableStateOf<List<EggOption>>(emptyList()) }
     var selectedEgg by remember { mutableStateOf<String?>(null) }
     var name by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -1090,12 +1091,14 @@ private fun SelectEggDialog(
         loading = true
         error = null
         try {
-            eggTypes = withContext(Dispatchers.IO) {
-                ApiClient.petsApi.getAvailableEggTypes()
+            eggs = withContext(Dispatchers.IO) {
+                if (actingAsParent) ApiClient.petsApi.getEggsForMember(childId)
+                else ApiClient.petsApi.getEggs()
             }
-            if (eggTypes.isNotEmpty()) {
-                selectedEgg = eggTypes.first()
-            }
+            // Förvalt: första valbara (upplåst och inte redan samlat). Är inget valbart
+            // -- barnet har samlat allt upplåst -- lämnas det tomt och tavlan visar bara
+            // mystery + samlade, med vägen vidare via äventyr.
+            selectedEgg = eggs.firstOrNull { it.unlocked && !it.collected }?.eggType
         } catch (e: Exception) {
             error = ApiErrors.message(e, "Kunde inte hämta äggtyper")
         } finally {
@@ -1166,7 +1169,7 @@ private fun SelectEggDialog(
                     }
                 } else if (!isNaming) {
                     EggCollectionBoard(
-                        eggTypes = eggTypes,
+                        eggs = eggs,
                         history = history,
                         selectedEgg = selectedEgg,
                         season = season,

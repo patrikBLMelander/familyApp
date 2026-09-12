@@ -129,6 +129,26 @@ public class PetController {
         return toResponse(petService.equipFrame(memberId, request.frameId()));
     }
 
+    /** Member-scoped picker data, for a parent acting in a child's view. */
+    @GetMapping("/members/{memberId}/eggs")
+    public List<PetService.EggOption> getEggOptionsForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        return petService.getEggOptions(memberId);
+    }
+
+    @PostMapping("/members/{memberId}/frame")
+    public PetResponse equipFrameForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody EquipFrameRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        return toResponse(petService.equipFrame(memberId, request.frameId()));
+    }
+
     private UUID requireMember(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
             throw new IllegalArgumentException("Device token is required");

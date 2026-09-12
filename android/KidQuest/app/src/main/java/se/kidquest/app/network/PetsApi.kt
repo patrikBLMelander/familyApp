@@ -61,12 +61,47 @@ data class PetHistoryResponse(
     val finalGrowthStage: Int,
 )
 
+/**
+ * En rad i äggväljaren: ägget, djuret det kläcker, dess sällsynthet, och barnets relation
+ * till det. Driver tre-zonstavlan (valbara / att upptäcka / samlade). rarity och petType
+ * kommer från servern -- ingen lokal kopia av EGG_TO_PET_MAP som kan glida isär.
+ */
+data class EggOption(
+    val eggType: String,
+    val petType: String,
+    val rarity: String, // COMMON | RARE | LEGENDARY | MYTHIC
+    val unlocked: Boolean,
+    val collected: Boolean,
+)
+
+data class FrameRequest(
+    val frameId: String?, // null rensar ramen
+)
+
 interface PetsApi {
     @GET("pets/current")
     suspend fun getCurrentPet(): Response<PetResponse>
 
     @GET("pets/available-eggs")
     suspend fun getAvailableEggTypes(): List<String>
+
+    /** Tre-zonstavlans data: alla ägg med tier, unlocked och collected. */
+    @GET("pets/eggs")
+    suspend fun getEggs(): List<EggOption>
+
+    /** Samma, när en förälder tittar i barnets vy. */
+    @GET("pets/members/{memberId}/eggs")
+    suspend fun getEggsForMember(@Path("memberId") memberId: String): List<EggOption>
+
+    /** Sätt en ram på månadens scen, eller rensa med null. */
+    @POST("pets/current/frame")
+    suspend fun setFrame(@Body body: FrameRequest): PetResponse
+
+    @POST("pets/members/{memberId}/frame")
+    suspend fun setFrameForMember(
+        @Path("memberId") memberId: String,
+        @Body body: FrameRequest,
+    ): PetResponse
 
     @POST("pets/select-egg")
     suspend fun selectEgg(@Body body: SelectEggRequest): PetResponse
