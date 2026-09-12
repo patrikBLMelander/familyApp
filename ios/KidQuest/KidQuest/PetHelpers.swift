@@ -133,6 +133,24 @@ enum PetImagesIOS {
         petImageName(for: petType(forEgg: eggType), growthStage: growthStage)
     }
 
+    // MARK: - Adventures + rarity art (nil when the asset is not in the catalog yet)
+
+    /// A frame's loot_item id is also its asset name (frame_forest, …).
+    static func frameImageName(_ frameId: String?) -> String? {
+        guard let frameId, UIImage(named: frameId) != nil else { return nil }
+        return frameId
+    }
+
+    static func sceneImageName(_ key: String) -> String? {
+        let name = "scene_\(key)"
+        return UIImage(named: name) != nil ? name : nil
+    }
+
+    static func chestStageImageName(_ stage: Int) -> String? {
+        let name = "chest_stage\(min(max(stage, minStage), maxStage))"
+        return UIImage(named: name) != nil ? name : nil
+    }
+
     /// Mar–May spring, Jun–Aug summer, Sep–Nov autumn, otherwise winter — as on web.
     static func currentSeason() -> String {
         switch Calendar.current.component(.month, from: Date()) {

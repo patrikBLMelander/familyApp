@@ -164,6 +164,7 @@ struct PetResponseDTO: Decodable {
     let hatchedAt: String?
     let createdAt: String
     let updatedAt: String
+    let equippedFrame: String?
 }
 
 /// Ett djur barnet haft tidigare. Bär inte namnet -- historiken har det inte -- och
@@ -177,6 +178,7 @@ struct PetHistoryResponseDTO: Decodable, Identifiable, Equatable {
     let selectedEggType: String
     let petType: String
     let finalGrowthStage: Int
+    let frame: String?
 }
 
 struct CollectedFoodResponseDTO: Decodable {
@@ -193,6 +195,55 @@ struct FoodItemResponseDTO: Decodable {
 
 struct FeedPetRequestDTO: Encodable {
     let xpAmount: Int
+}
+
+// MARK: - Adventures + rarity
+
+struct EggCollectionItemDTO: Decodable, Identifiable, Equatable {
+    let eggType: String
+    let petType: String
+    let rarity: String // COMMON | RARE | LEGENDARY | MYTHIC
+    let unlocked: Bool
+    let collected: Bool
+    var id: String { eggType }
+}
+
+struct SetFrameRequestDTO: Encodable {
+    let frameId: String? // null clears the frame
+}
+
+struct AdventureResponseDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let scene: String
+    let status: String // ONGOING | CLAIMED
+    let durationSecs: Int
+    let secondsRemaining: Int
+    let ready: Bool
+    let lootType: String?
+    let lootRef: String?
+    let lootQty: Int?
+    let startedAt: String
+}
+
+struct AdventureStateDTO: Decodable {
+    let ticketBalance: Int
+    let adventures: [AdventureResponseDTO]
+}
+
+struct StartAdventureRequestDTO: Encodable {
+    let scene: String
+}
+
+struct ClaimLootResponseDTO: Decodable {
+    let type: String // FOOD | FRAME | EGG
+    let ref: String
+    let quantity: Int
+}
+
+struct InventoryItemDTO: Decodable, Identifiable, Equatable {
+    let itemId: String
+    let acquiredAt: String
+    var id: String { itemId }
 }
 
 struct SelectEggRequestDTO: Encodable {

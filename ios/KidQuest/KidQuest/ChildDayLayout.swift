@@ -46,6 +46,7 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     /// Nil döljer knappen. Barnets egen vy erbjuder den; värden gör det inte, för en
     /// förälder lägger till sysslor i sin egen vy.
     var onAddChore: (() -> Void)?
+    var onOpenAdventures: (() -> Void)?
 
     /// Startar matningen av sig själv strax efter att vyn visats. Bara harnesket sätter
      /// den: höjningen spelas med flit aldrig ur inläst tillstånd, och simulatorn tar
@@ -320,6 +321,9 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
         HStack(alignment: .top, spacing: 8) {
             petSwitcher
             Spacer(minLength: 8)
+            if onOpenAdventures != nil, viewingPast == nil {
+                adventuresChip
+            }
             walletChip
         }
         .padding(.horizontal, 14)
@@ -375,6 +379,24 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
                     .opacity(0.6)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(.white.opacity(0.92)))
+            .foregroundStyle(palette.accent)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Vägen till äventyr, bredvid plånboken. Bara i nuläget, inte när ett tidigare djur
+    /// bläddras fram.
+    private var adventuresChip: some View {
+        Button(action: { onOpenAdventures?() }) {
+            HStack(spacing: 5) {
+                Image(systemName: "map.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Äventyr")
+                    .font(.caption.weight(.bold))
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 7)

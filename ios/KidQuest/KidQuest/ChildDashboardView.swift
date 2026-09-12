@@ -12,6 +12,7 @@ struct ChildDashboardView: View {
     var onBack: () -> Void = {}
     var onOpenTasks: () -> Void = {}
     var onOpenWallet: () -> Void = {}
+    var onOpenAdventures: () -> Void = {}
 
     @State private var isLoading: Bool = true
     @State private var error: String?
@@ -137,6 +138,7 @@ struct ChildDashboardView: View {
             onOpenWallet: onOpenWallet,
             onSelectEgg: { showSelectEgg = true },
             onAddChore: { showAddChore = true },
+            onOpenAdventures: onOpenAdventures,
             harnessAutoFeed: harnessAutoFeed,
             // Barnets egen vy har ingen banner ovanför bandet -- bandet ligger kant i kant
             // som förut, och vägen ut är utloggningsraden längst ner.
@@ -335,7 +337,8 @@ enum ChildFixtures {
         // Stadiet är nivån (calculateGrowthStage mappar 1:1), så en fixtur med
         // stadie 4 och nivå 3 beskriver ett tillstånd som inte kan uppstå.
         growthStage: 3, hatchedAt: nil,
-        createdAt: "2026-09-01T08:00:00Z", updatedAt: "2026-09-01T08:00:00Z"
+        createdAt: "2026-09-01T08:00:00Z", updatedAt: "2026-09-01T08:00:00Z",
+        equippedFrame: nil
     )
 
     static let xp = XpProgressResponseDTO(
@@ -359,11 +362,11 @@ enum ChildFixtures {
     static let history = [
         PetHistoryResponseDTO(
             id: "h1", memberId: "child-1", year: 2026, month: 8,
-            selectedEggType: "blue_egg", petType: "dragon", finalGrowthStage: 5
+            selectedEggType: "blue_egg", petType: "dragon", finalGrowthStage: 5, frame: nil
         ),
         PetHistoryResponseDTO(
             id: "h2", memberId: "child-1", year: 2026, month: 7,
-            selectedEggType: "pink_egg", petType: "unicorn", finalGrowthStage: 4
+            selectedEggType: "pink_egg", petType: "unicorn", finalGrowthStage: 4, frame: nil
         ),
     ]
 

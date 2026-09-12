@@ -14,7 +14,7 @@ struct SelectEggSheet: View {
     var onDismiss: () -> Void = {}
     var onEggSelected: (PetResponseDTO) -> Void = { _ in }
 
-    @State private var eggTypes: [String] = []
+    @State private var eggs: [EggCollectionItemDTO] = []
     @State private var selectedEgg: String?
     @State private var petName: String = ""
     @State private var loading: Bool = true
@@ -63,7 +63,7 @@ struct SelectEggSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView {
                 EggCollectionBoard(
-                    eggTypes: eggTypes,
+                    eggs: eggs,
                     history: history,
                     selectedEgg: selectedEgg,
                     palette: palette,
@@ -92,12 +92,12 @@ struct SelectEggSheet: View {
         loading = true
         errorMessage = nil
         do {
-            let eggs = try await ApiClient.shared.send([String].self,
-                                                       path: "pets/available-eggs",
-                                                       method: "GET")
+            let loaded = try await AdventureRepository.eggs(memberId: memberId)
             await MainActor.run {
-                self.eggTypes = eggs
-                self.selectedEgg = eggs.first
+                self.eggs = loaded
+                // Förvalt: första valbara (upplåst och inte redan samlat). Är inget
+                // valbart lämnas det tomt och tavlan visar mystery + samlade.
+                self.selectedEgg = loaded.first(where: { $0.unlocked && !$0.collected })?.eggType
                 self.loading = false
             }
         } catch {

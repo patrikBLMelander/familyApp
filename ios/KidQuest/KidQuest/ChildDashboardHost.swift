@@ -33,6 +33,7 @@ struct ChildDashboardHost: View {
     /// the child that is currently being viewed rather than the one we opened with.
     var onOpenTasks: (ChildRef) -> Void = { _ in }
     var onOpenWallet: (ChildRef) -> Void = { _ in }
+    var onOpenAdventures: (ChildRef) -> Void = { _ in }
 
     /// Non-nil renders these values instead of calling the network. Only `fixture()`
     /// sets them; they stay plain stored properties rather than living behind `#if
@@ -186,6 +187,7 @@ struct ChildDashboardHost: View {
             onSelectEgg: { showSelectEgg = true },
             // Nil: en förälder lägger till sysslor i sin egen vy, inte härifrån.
             onAddChore: nil,
+            onOpenAdventures: { onOpenAdventures(activeChild) },
             hasTopBar: true,
             topBar: { actingAsParentBar },
             banner: {

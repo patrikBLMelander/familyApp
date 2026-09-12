@@ -27,6 +27,8 @@ enum AppScreen: Equatable {
     /// "Visa som barn": barnets egen vy, sedd från en förälders telefon.
     case childView(childId: String, childName: String)
     case childTasks(childId: String, childName: String)
+    /// memberId nil = barnets egen token; satt = förälder som agerar i barnets vy.
+    case childAdventures(childId: String, childName: String, memberId: String?)
 }
 
 struct ContentView: View {
@@ -83,6 +85,9 @@ struct ContentView: View {
                                 isOwnWallet: viewerIsChild,
                                 fromChildView: true
                             )
+                        },
+                        onOpenAdventures: {
+                            currentScreen = .childAdventures(childId: childId, childName: childName, memberId: nil)
                         }
                     )
     }
@@ -137,6 +142,9 @@ struct ContentView: View {
                     isOwnWallet: false,
                     fromChildView: true
                 )
+            },
+            onOpenAdventures: { child in
+                currentScreen = .childAdventures(childId: child.id, childName: child.name, memberId: child.id)
             }
         )
     }
@@ -297,6 +305,17 @@ struct ContentView: View {
                             } else {
                                 currentScreen = .home
                             }
+                        }
+                    )
+
+                case let .childAdventures(childId, childName, memberId):
+                    AdventuresView(
+                        childName: childName,
+                        memberId: memberId,
+                        onBack: {
+                            currentScreen = memberId == nil
+                                ? .childDashboard(childId: childId, childName: childName)
+                                : .childView(childId: childId, childName: childName)
                         }
                     )
                 

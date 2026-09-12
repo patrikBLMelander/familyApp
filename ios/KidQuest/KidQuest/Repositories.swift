@@ -574,3 +574,53 @@ enum AdultDashboardRepository {
         }
     }
 }
+
+// MARK: - Adventures + rarity
+
+/// Adventures, the egg picker's rarity data, and frames. A nil `memberId` means the
+/// caller's own token; a set `memberId` uses the parent-acting-for-child endpoints, exactly
+/// like SelectEggSheet's selectEgg branch.
+enum AdventureRepository {
+
+    static func state(memberId: String?) async throws -> AdventureStateDTO {
+        let path = memberId.map { "adventures/members/\($0)" } ?? "adventures"
+        return try await ApiClient.shared.send(AdventureStateDTO.self, path: path, method: "GET")
+    }
+
+    static func start(memberId: String?, scene: String) async throws -> AdventureResponseDTO {
+        let path = memberId.map { "adventures/members/\($0)" } ?? "adventures"
+        return try await ApiClient.shared.send(
+            AdventureResponseDTO.self, path: path, method: "POST",
+            body: StartAdventureRequestDTO(scene: scene))
+    }
+
+    static func claim(memberId: String?, adventureId: String) async throws -> ClaimLootResponseDTO {
+        let path = memberId.map { "adventures/members/\($0)/\(adventureId)/claim" }
+            ?? "adventures/\(adventureId)/claim"
+        return try await ApiClient.shared.send(ClaimLootResponseDTO.self, path: path, method: "POST")
+    }
+
+    static func inventory(memberId: String?) async throws -> [InventoryItemDTO] {
+        let path = memberId.map { "adventures/members/\($0)/inventory" } ?? "adventures/inventory"
+        return try await ApiClient.shared.send([InventoryItemDTO].self, path: path, method: "GET")
+    }
+
+    static func eggs(memberId: String?) async throws -> [EggCollectionItemDTO] {
+        let path = memberId.map { "pets/members/\($0)/eggs" } ?? "pets/eggs"
+        return try await ApiClient.shared.send([EggCollectionItemDTO].self, path: path, method: "GET")
+    }
+
+    static func setFrame(memberId: String?, frameId: String?) async throws -> PetResponseDTO {
+        let path = memberId.map { "pets/members/\($0)/frame" } ?? "pets/current/frame"
+        return try await ApiClient.shared.send(
+            PetResponseDTO.self, path: path, method: "POST",
+            body: SetFrameRequestDTO(frameId: frameId))
+    }
+
+    /// The frame on this month's scene, or nil (also nil when there is no pet — 404).
+    static func currentEquippedFrame(memberId: String?) async -> String? {
+        let path = memberId.map { "pets/members/\($0)/current" } ?? "pets/current"
+        let pet = try? await ApiClient.shared.send(PetResponseDTO.self, path: path, method: "GET")
+        return pet?.equippedFrame
+    }
+}
