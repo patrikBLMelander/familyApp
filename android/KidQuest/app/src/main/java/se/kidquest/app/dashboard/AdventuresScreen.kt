@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,15 +54,17 @@ import se.kidquest.app.theme.LocalSeasonPalette
 import se.kidquest.app.theme.SeasonHeaderBar
 import se.kidquest.app.theme.SeasonPalette
 
-/** A place a pet can be sent. Placeholder scenes until scene art exists; the key is what
- *  the server stores and what a future `scene_<key>` backdrop will key off. */
-private data class AdventureScene(val key: String, val label: String, val emoji: String)
+/** A place a pet can be sent. `key` is stored server-side; `drawable` is the scene art in
+ *  res/drawable (scene_<key>). */
+private data class AdventureScene(val key: String, val label: String, val drawable: String)
 
 private val SCENES = listOf(
-    AdventureScene("forest", "Skogen", "🌲"),
-    AdventureScene("cave", "Grottan", "🪨"),
-    AdventureScene("beach", "Stranden", "🏖️"),
-    AdventureScene("mountain", "Berget", "⛰️"),
+    AdventureScene("glade", "Gläntan", "scene_glade"),
+    AdventureScene("forest", "Skogen", "scene_forest"),
+    AdventureScene("snow", "Snöstigen", "scene_snow"),
+    AdventureScene("mountain", "Berget", "scene_mountain"),
+    AdventureScene("cave", "Grottan", "scene_cave"),
+    AdventureScene("reef", "Korallrevet", "scene_reef"),
 )
 
 @Composable
@@ -222,7 +225,7 @@ fun AdventuresScreen(
                     fontWeight = FontWeight.Bold,
                     color = season.ink,
                 )
-                SceneRow(enabled = !busy, season = season, onPick = { startAdventure(it.key) })
+                SceneGrid(enabled = !busy, season = season, onPick = { startAdventure(it.key) })
             } else if (ongoing.isEmpty()) {
                 Text(
                     text = "Klara fler nivåer för att få en äventyrsbiljett.",
@@ -287,33 +290,57 @@ private fun TicketBadge(balance: Long, season: SeasonPalette) {
 }
 
 @Composable
-private fun SceneRow(
+private fun SceneGrid(
     enabled: Boolean,
     season: SeasonPalette,
     onPick: (AdventureScene) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SCENES.forEach { scene ->
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(15.dp))
-                    .background(season.surface)
-                    .border(1.5.dp, season.cardEdge, RoundedCornerShape(15.dp))
-                    .clickable(enabled = enabled) { onPick(scene) }
-                    .padding(vertical = 12.dp, horizontal = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(scene.emoji, style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    text = scene.label,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = season.ink,
-                    textAlign = TextAlign.Center,
-                )
+    val context = LocalContext.current
+    SCENES.chunked(3).forEach { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            row.forEach { scene ->
+                val drawable = remember(scene.drawable) {
+                    val id = context.resources.getIdentifier(scene.drawable, "drawable", context.packageName)
+                    if (id != 0) id else null
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(season.surface)
+                        .border(1.5.dp, season.cardEdge, RoundedCornerShape(12.dp))
+                        .clickable(enabled = enabled) { onPick(scene) }
+                        .padding(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (drawable != null) {
+                        Image(
+                            painter = painterResource(id = drawable),
+                            contentDescription = scene.label,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxWidth().height(52.dp))
+                    }
+                    Text(
+                        text = scene.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = season.ink,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                }
             }
+            repeat(3 - row.size) { Box(modifier = Modifier.weight(1f)) {} }
         }
     }
 }
@@ -328,6 +355,11 @@ private fun OngoingAdventureCard(
 ) {
     val ready = remainingSecs <= 0
     val scene = SCENES.firstOrNull { it.key == adventure.scene }
+    val context = LocalContext.current
+    val sceneDrawable = scene?.let {
+        val id = context.resources.getIdentifier(it.drawable, "drawable", context.packageName)
+        if (id != 0) id else null
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -342,7 +374,16 @@ private fun OngoingAdventureCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(scene?.emoji ?: "🗺️", style = MaterialTheme.typography.headlineSmall)
+        if (sceneDrawable != null) {
+            Image(
+                painter = painterResource(id = sceneDrawable),
+                contentDescription = null,
+                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Text("🗺️", style = MaterialTheme.typography.headlineSmall)
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = scene?.label ?: "Äventyr",
