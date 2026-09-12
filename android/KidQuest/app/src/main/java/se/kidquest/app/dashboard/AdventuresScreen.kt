@@ -407,6 +407,23 @@ private fun OngoingAdventureCard(
 
 @Composable
 private fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    // The chest opens through five stages, then the reward fades in -- the same beat as
+    // the egg hatching. Nothing is dismissible until it has opened.
+    var stage by remember { mutableStateOf(1) }
+    var revealed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        for (s in 1..5) {
+            stage = s
+            delay(320)
+        }
+        delay(200)
+        revealed = true
+    }
+    val chest = remember(stage) {
+        val id = context.resources.getIdentifier("chest_stage$stage", "drawable", context.packageName)
+        if (id != 0) id else null
+    }
     val (emoji, message) = when (loot.type) {
         "EGG" -> "🥚" to "Du hittade ett nytt ägg! Det väntar i äggväljaren."
         "FRAME" -> "🖼️" to "En ny ram till din scen!"
@@ -414,24 +431,38 @@ private fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () 
         else "Du hittade ${loot.quantity} mat till ditt djur!")
     }
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (revealed) onDismiss() },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Toppen!", fontWeight = FontWeight.Bold) }
+            if (revealed) {
+                TextButton(onClick = onDismiss) { Text("Toppen!", fontWeight = FontWeight.Bold) }
+            }
         },
-        title = { Text("Djuret är hemma!") },
+        title = { Text(if (revealed) "Titta vad du fick!" else "Öppnar kistan…") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(emoji, style = MaterialTheme.typography.displaySmall)
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    color = season.ink,
-                )
+                if (chest != null) {
+                    Image(
+                        painter = painterResource(id = chest),
+                        contentDescription = null,
+                        modifier = Modifier.size(150.dp),
+                        contentScale = ContentScale.Fit,
+                    )
+                } else {
+                    Text("🧰", style = MaterialTheme.typography.displaySmall)
+                }
+                if (revealed) {
+                    Text(emoji, style = MaterialTheme.typography.displaySmall)
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        color = season.ink,
+                    )
+                }
             }
         },
     )
