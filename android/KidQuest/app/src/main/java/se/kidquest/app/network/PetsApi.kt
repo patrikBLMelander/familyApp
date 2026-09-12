@@ -18,6 +18,7 @@ data class PetResponse(
     val hatchedAt: String?,
     val createdAt: String,
     val updatedAt: String,
+    val equippedFrame: String? = null, // loot_item-id på ramen på månadens scen, om någon
 )
 
 data class SelectEggRequest(
@@ -59,6 +60,7 @@ data class PetHistoryResponse(
     val selectedEggType: String,
     val petType: String,
     val finalGrowthStage: Int,
+    val frame: String? = null, // loot_item-id på ramen djuret bar, om någon
 )
 
 /**

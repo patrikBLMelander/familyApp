@@ -167,15 +167,34 @@ private fun CollectedTile(entry: PetHistoryResponse, season: SeasonPalette) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        if (drawable != null) {
-            Image(
-                painter = painterResource(id = drawable),
-                contentDescription = PetNameUtils.getPetNameSwedish(entry.petType),
-                modifier = Modifier.size(52.dp),
-                contentScale = ContentScale.Fit,
-            )
-        } else {
-            Text("🐾", style = MaterialTheme.typography.headlineSmall)
+        // Ramen djuret bar den månaden lägger sig runt porträttet -- en fyrkantig ram i
+        // en fyrkantig ruta. Saknas ram (eller dess bild) visas djuret som förut.
+        val frameDrawable = entry.frame?.let { name ->
+            val id = context.resources.getIdentifier(name, "drawable", context.packageName)
+            if (id != 0) id else null
+        }
+        Box(
+            modifier = Modifier.size(if (frameDrawable != null) 66.dp else 52.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (drawable != null) {
+                Image(
+                    painter = painterResource(id = drawable),
+                    contentDescription = PetNameUtils.getPetNameSwedish(entry.petType),
+                    modifier = Modifier.size(if (frameDrawable != null) 40.dp else 52.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Text("🐾", style = MaterialTheme.typography.headlineSmall)
+            }
+            if (frameDrawable != null) {
+                Image(
+                    painter = painterResource(id = frameDrawable),
+                    contentDescription = null,
+                    modifier = Modifier.size(66.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
         }
         Text(
             text = PetNameUtils.getPetNameSwedish(entry.petType),

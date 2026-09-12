@@ -1,5 +1,6 @@
 package se.kidquest.app.dashboard
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,6 +45,8 @@ import se.kidquest.app.network.AdventureResponse
 import se.kidquest.app.network.AdventureStateResponse
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.FrameRequest
+import se.kidquest.app.network.InventoryItemResponse
 import se.kidquest.app.network.LootResponse
 import se.kidquest.app.network.StartAdventureRequest
 import se.kidquest.app.theme.LocalSeasonPalette
@@ -74,6 +81,8 @@ fun AdventuresScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var refreshKey by remember { mutableStateOf(0) }
     var loot by remember { mutableStateOf<LootResponse?>(null) }
+    var inventory by remember { mutableStateOf<List<InventoryItemResponse>>(emptyList()) }
+    var equippedFrame by remember { mutableStateOf<String?>(null) }
     // Increments each second so the countdowns recompose; the remaining time itself is
     // computed from the server's secondsRemaining minus wall-clock elapsed since load.
     var tick by remember { mutableStateOf(0L) }
@@ -88,6 +97,15 @@ fun AdventuresScreen(
             }
             state = loaded
             loadedAtMillis = System.currentTimeMillis()
+            inventory = withContext(Dispatchers.IO) {
+                if (actingAsParent) ApiClient.adventuresApi.getInventoryForMember(childId)
+                else ApiClient.adventuresApi.getInventory()
+            }
+            equippedFrame = withContext(Dispatchers.IO) {
+                val resp = if (actingAsParent) ApiClient.petsApi.getMemberPet(childId)
+                else ApiClient.petsApi.getCurrentPet()
+                if (resp.isSuccessful) resp.body()?.equippedFrame else null
+            }
         } catch (e: Exception) {
             error = ApiErrors.message(e, "Kunde inte hämta äventyr")
         } finally {
@@ -142,6 +160,26 @@ fun AdventuresScreen(
                 refreshKey++
             } catch (e: Exception) {
                 error = ApiErrors.message(e, "Kunde inte hämta belöningen")
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    fun equipFrame(frameId: String?) {
+        if (busy) return
+        scope.launch {
+            busy = true
+            error = null
+            try {
+                val updated = withContext(Dispatchers.IO) {
+                    val body = FrameRequest(frameId)
+                    if (actingAsParent) ApiClient.petsApi.setFrameForMember(childId, body)
+                    else ApiClient.petsApi.setFrame(body)
+                }
+                equippedFrame = updated.equippedFrame
+            } catch (e: Exception) {
+                error = ApiErrors.message(e, "Kunde inte byta ram")
             } finally {
                 busy = false
             }
@@ -211,6 +249,14 @@ fun AdventuresScreen(
                     )
                 }
             }
+
+            FramesSection(
+                inventory = inventory,
+                equippedFrame = equippedFrame,
+                busy = busy,
+                season = season,
+                onEquip = { equipFrame(it) },
+            )
         }
     }
 
@@ -348,6 +394,96 @@ private fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () 
             }
         },
     )
+}
+
+/** Owned frames, with an "Ingen ram" option to clear. Equipping one shows on the scene
+ *  this month and follows the pet into the collection at month-end. */
+@Composable
+private fun FramesSection(
+    inventory: List<InventoryItemResponse>,
+    equippedFrame: String?,
+    busy: Boolean,
+    season: SeasonPalette,
+    onEquip: (String?) -> Unit,
+) {
+    val frames = inventory.map { it.itemId }
+    if (frames.isEmpty()) return
+    Text(
+        text = "Dina ramar",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = season.ink,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    val options: List<String?> = listOf(null) + frames
+    options.chunked(3).forEach { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            row.forEach { frameId ->
+                Box(modifier = Modifier.weight(1f)) {
+                    FrameTile(
+                        frameId = frameId,
+                        selected = frameId == equippedFrame,
+                        enabled = !busy,
+                        season = season,
+                        onClick = { onEquip(frameId) },
+                    )
+                }
+            }
+            repeat(3 - row.size) { Box(modifier = Modifier.weight(1f)) {} }
+        }
+    }
+}
+
+@Composable
+private fun FrameTile(
+    frameId: String?,
+    selected: Boolean,
+    enabled: Boolean,
+    season: SeasonPalette,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val drawable = frameId?.let {
+        val id = context.resources.getIdentifier(it, "drawable", context.packageName)
+        if (id != 0) id else null
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 84.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(if (selected) season.tipBg else season.surface)
+            .border(
+                width = if (selected) 2.5.dp else 1.5.dp,
+                color = if (selected) season.accent else season.cardEdge,
+                shape = RoundedCornerShape(15.dp),
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (frameId == null) {
+            Text(
+                text = "Ingen ram",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = season.inkFaint,
+                textAlign = TextAlign.Center,
+            )
+        } else if (drawable != null) {
+            Image(
+                painter = painterResource(id = drawable),
+                contentDescription = "Ram",
+                modifier = Modifier.size(64.dp),
+                contentScale = ContentScale.Fit,
+            )
+        } else {
+            Text("🖼️", style = MaterialTheme.typography.headlineSmall)
+        }
+    }
 }
 
 /** mm:ss for short waits, "X min" once it is more than a couple of minutes. */
