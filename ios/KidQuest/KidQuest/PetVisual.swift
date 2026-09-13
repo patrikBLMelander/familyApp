@@ -80,11 +80,15 @@ struct PetVisual: View {
                         .font(.system(size: 80))
                 }
 
-                // Ramen omger hela scenen, så den ritas sist, över allt, kant till kant.
+                // Ramen omger hela scenen, ritad sist. Den skalas något förbi kanten och
+                // klipps: den genererade ram-konsten bär ett mjukt glöd-moln utanför sin
+                // ram som annars disar bandets kanter och får ramen att se indragen ut.
+                // Överskalning trycker ut den solida ramen till kanten och klipper molnet.
                 if let frameName, let frame = UIImage(named: frameName) {
                     Image(uiImage: frame)
                         .resizable()
                         .frame(width: geo.size.width, height: geo.size.height)
+                        .scaleEffect(1.12)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: alignment)

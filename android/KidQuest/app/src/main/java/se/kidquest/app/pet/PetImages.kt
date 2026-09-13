@@ -36,6 +36,10 @@ object PetImages {
         "white_egg" to "shark",
         "golden_egg" to "lion",
         "silver_egg" to "koala",
+        "sand_egg" to "meerkat",
+        "ice_egg" to "penguin",
+        "amber_egg" to "spider",
+        "clay_egg" to "kangaroo",
     )
 
     /**
@@ -61,6 +65,10 @@ object PetImages {
         "shark" to "Haj",
         "lion" to "Lejon",
         "koala" to "Koala",
+        "meerkat" to "Surikat",
+        "penguin" to "Pingvin",
+        "spider" to "Spindel",
+        "kangaroo" to "Känguru",
     )
 
     /** Null for an unknown species, so the caller can decide what to say instead. */

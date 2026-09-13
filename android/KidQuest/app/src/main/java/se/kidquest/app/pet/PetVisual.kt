@@ -58,6 +58,10 @@ private val PET_SCALE_OVERRIDES: Map<String, Float> = mapOf(
 /** Applies when neither the stage nor the species has an override. */
 const val DEFAULT_PET_SCALE = 1f
 
+/** How far the frame is scaled past the band so its solid border reaches the edge and the
+ *  art's soft outer glow-cloud clips away. Tune with the frame art. */
+private const val FRAME_OVERSCAN = 1.12f
+
 fun petScaleFor(petType: String?, growthStage: Int): Float {
     val species = petType?.lowercase() ?: return DEFAULT_PET_SCALE
     val stage = growthStage.coerceIn(1, 5)
@@ -158,13 +162,21 @@ fun PetVisual(
         } else {
             Text(text = "🐾", style = MaterialTheme.typography.displayLarge)
         }
-        // The frame surrounds the whole scene, so it is drawn last, over everything, filling
-        // the box edge to edge.
+        // The frame surrounds the whole scene, drawn last over everything. It is overscanned
+        // slightly and the box clips the overflow: the generated frame art carries a soft
+        // outer glow-cloud beyond its border, which otherwise hazes the band edges and makes
+        // the border read as floating inward. Scaling past the edge pushes the solid border
+        // to the edge and clips the cloud (and a sliver of the corner ornaments) away.
         if (frameId != null) {
             Image(
                 painter = painterResource(id = frameId),
                 contentDescription = null,
-                modifier = Modifier.matchParentSize(),
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        scaleX = FRAME_OVERSCAN
+                        scaleY = FRAME_OVERSCAN
+                    },
                 contentScale = ContentScale.FillBounds,
             )
         }

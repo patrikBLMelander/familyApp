@@ -18,9 +18,10 @@ struct EggNamesTests {
     /// Serverns fjorton ägg, ur `PetService.EGG_TO_PET_MAP`. Listan är med flit skriven
     /// för hand: en ny rad här är det som ska tvinga fram en ny ledtråd nedan.
     static let allEggs = [
-        "black_egg", "blue_egg", "brown_egg", "cyan_egg", "golden_egg", "gray_egg",
-        "green_egg", "orange_egg", "pink_egg", "purple_egg", "red_egg", "silver_egg",
-        "teal_egg", "white_egg", "yellow_egg",
+        "amber_egg", "black_egg", "blue_egg", "brown_egg", "cyan_egg", "golden_egg", "gray_egg",
+        "clay_egg",
+        "green_egg", "ice_egg", "orange_egg", "pink_egg", "purple_egg", "red_egg", "sand_egg",
+        "silver_egg", "teal_egg", "white_egg", "yellow_egg",
     ]
 
     /// Det här testet betyder mer sedan namnen togs bort. Ett ägg utan bild ritas som
