@@ -29,42 +29,55 @@ struct EggCollectionBoard: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            selectableGrid
-            mysterySection
+            tiersSection
+            if !mystery.isEmpty {
+                Text("Skicka djuret på äventyr för att hitta fler.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(palette.inkFaint)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 2)
+            }
             collectedSection
         }
     }
 
-    private var selectableGrid: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(Array(selectable.enumerated()), id: \.element.id) { index, item in
-                EggTile(
-                    egg: item.eggType,
-                    selected: item.eggType == selectedEgg,
-                    ordinal: index + 1,
-                    total: selectable.count,
-                    palette: palette,
-                    action: { onSelect(item.eggType) }
-                )
-            }
-        }
-    }
+    /// Hela väljaren grupperad per sällsynthetstier. Ordning och rubriker på svenska.
+    private static let rarityTiers: [(key: String, label: String)] = [
+        ("COMMON", "Vanliga"),
+        ("RARE", "Sällsynta"),
+        ("LEGENDARY", "Legendariska"),
+        ("MYTHIC", "Mytiska"),
+    ]
 
+    /// Varje tier visar sina ägg som ännu inte samlats: de valbara (upplåsta, tryckbara)
+    /// först och de oupptäckta ("?") efter -- så en vunnen sällsynthet hamnar under
+    /// "Sällsynta", inte bland de vanliga.
     @ViewBuilder
-    private var mysterySection: some View {
-        if !mystery.isEmpty {
-            zoneDivider("Att upptäcka")
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(mystery) { item in
-                    MysteryTile(palette: palette).id(item.id)
+    private var tiersSection: some View {
+        ForEach(Self.rarityTiers, id: \.key) { tier in
+            let items = eggs
+                .filter { $0.rarity == tier.key && !$0.collected }
+                .sorted { ($0.unlocked ? 0 : 1) < ($1.unlocked ? 0 : 1) }
+            if !items.isEmpty {
+                zoneDivider(tier.label)
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(items) { item in
+                        if item.unlocked {
+                            EggTile(
+                                egg: item.eggType,
+                                selected: item.eggType == selectedEgg,
+                                ordinal: (selectable.firstIndex { $0.eggType == item.eggType } ?? 0) + 1,
+                                total: selectable.count,
+                                palette: palette,
+                                action: { onSelect(item.eggType) }
+                            )
+                        } else {
+                            MysteryTile(palette: palette).id(item.id)
+                        }
+                    }
                 }
             }
-            Text("Skicka djuret på äventyr för att hitta fler.")
-                .font(.system(size: 11))
-                .foregroundStyle(palette.inkFaint)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 2)
         }
     }
 

@@ -6,13 +6,16 @@ struct SelectEggSheet: View {
     /// `pets/select-egg` resolves the member from the device token, which is right for
     /// a child on their own phone and wrong for a parent in "Visa som barn": it would
     /// create a pet for the PARENT and leave the child without one. When this is set
-    /// the member-scoped route is used instead. Optional with a default so the child's
-    /// own dashboard keeps calling this sheet exactly as before.
+    /// the member-scoped route is used instead.
     var memberId: String?
     /// Vad barnet redan samlat. Tavlan visar de platserna som djur, inte som ägg.
     var history: [PetHistoryResponseDTO] = []
     var onDismiss: () -> Void = {}
     var onEggSelected: (PetResponseDTO) -> Void = { _ in }
+
+    /// Tre steg: välj ägg -> ägget kläcks -> namnge djuret (nu syns djuret). Namnet väljs
+    /// efter kläckningen, för ett barn kan inte döpa något det inte sett än.
+    private enum Phase { case board, hatching, naming }
 
     @State private var eggs: [EggCollectionItemDTO] = []
     @State private var selectedEgg: String?
@@ -20,7 +23,14 @@ struct SelectEggSheet: View {
     @State private var loading: Bool = true
     @State private var saving: Bool = false
     @State private var errorMessage: String?
-    @State private var showHint: Bool = false
+    @State private var phase: Phase = .board
+    @State private var hatchStage: Int = 1
+
+    private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
+
+    /// Djuret bakom det valda ägget -- servern ger petType per ägg, så kläckning och
+    /// namnsteg kan visa rätt djur innan pet:en ens skapats.
+    private var selectedPetType: String? { eggs.first { $0.eggType == selectedEgg }?.petType }
 
     var body: some View {
         NavigationStack {
@@ -29,37 +39,52 @@ struct SelectEggSheet: View {
                     ProgressView("Laddar ägg…")
                 } else if let errorMessage {
                     VStack(spacing: 12) {
-                        Text(errorMessage)
-                            .foregroundColor(.red)
+                        Text(errorMessage).foregroundColor(.red)
                         Button("Stäng") { onDismiss() }
                     }
                 } else {
-                    content
+                    switch phase {
+                    case .board: boardContent
+                    case .hatching: hatchingContent
+                    case .naming: namingContent
+                    }
                 }
             }
             .padding()
-            .navigationTitle("Välj ägg")
+            .navigationTitle(phaseTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") { onDismiss() }
+                    if phase == .board {
+                        Button("Välj senare") { onDismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Väljer…" : "Välj") {
-                        Task { await save() }
+                    switch phase {
+                    case .board:
+                        Button("Välj") { startHatching() }
+                            .disabled(selectedEgg == nil)
+                    case .hatching:
+                        EmptyView()
+                    case .naming:
+                        Button(saving ? "Sparar…" : "Spara") { Task { await save() } }
+                            .disabled(saving)
                     }
-                    .disabled(saving || selectedEgg == nil)
                 }
             }
         }
-        .task {
-            await loadEggTypes()
+        .task { await loadEggTypes() }
+    }
+
+    private var phaseTitle: String {
+        switch phase {
+        case .board: return "Välj ägg"
+        case .hatching: return "Ägget kläcks"
+        case .naming: return "Namnge ditt djur"
         }
     }
 
-    private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
-
-    private var content: some View {
+    private var boardContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView {
                 EggCollectionBoard(
@@ -71,22 +96,63 @@ struct SelectEggSheet: View {
                 )
                 .padding(.bottom, 4)
             }
-
-            // Hinten i en fast rad i stället för bakom "tryck igen". Den knappen fanns
-            // bara på det valda ägget och upptäcktes därför nästan aldrig, vilket gjorde
-            // att hälften av väljarens innehåll aldrig lästes.
+            // Hinten i en fast rad. Namnet frågas INTE här -- först efter kläckningen, när
+            // djuret syns.
             Text(selectedEgg.map { EggNames.hint(for: $0) }
                  ?? "Tryck på ett ägg för att höra vad som viskar därinne.")
                 .font(.footnote)
                 .italic(selectedEgg != nil)
                 .foregroundStyle(selectedEgg != nil ? palette.tipInk : palette.inkFaint)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-
-            TextField("Ge det ett namn (valfritt)", text: $petName)
-                .textFieldStyle(.roundedBorder)
         }
     }
 
+    private var hatchingContent: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            Text("Ägget kläcks…").font(.body).foregroundStyle(palette.ink)
+            if let egg = selectedEgg,
+               let name = PetImagesIOS.eggImageName(for: egg, stage: hatchStage),
+               let img = UIImage(named: name) {
+                Image(uiImage: img).resizable().scaledToFit().frame(height: 180)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var namingContent: some View {
+        VStack(spacing: 14) {
+            if let pt = selectedPetType,
+               let name = PetImagesIOS.petImageName(for: pt, growthStage: 1),
+               let img = UIImage(named: name) {
+                Image(uiImage: img).resizable().scaledToFit().frame(height: 180)
+            }
+            Text(selectedPetType.map { "Det blev en \(PetNameUtilsIOS.getPetNameSwedish($0))! Vad ska den heta?" }
+                 ?? "Vad ska ditt djur heta?")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(palette.ink)
+            TextField("Namn på djuret (valfritt)", text: $petName)
+                .textFieldStyle(.roundedBorder)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func startHatching() {
+        guard selectedEgg != nil else { return }
+        phase = .hatching
+        hatchStage = 1
+        Task {
+            for s in 1...5 {
+                await MainActor.run { hatchStage = s }
+                try? await Task.sleep(for: .seconds(0.65))
+            }
+            try? await Task.sleep(for: .seconds(0.25))
+            await MainActor.run { phase = .naming }
+        }
+    }
 
     private func loadEggTypes() async {
         loading = true
@@ -95,8 +161,6 @@ struct SelectEggSheet: View {
             let loaded = try await AdventureRepository.eggs(memberId: memberId)
             await MainActor.run {
                 self.eggs = loaded
-                // Förvalt: första valbara (upplåst och inte redan samlat). Är inget
-                // valbart lämnas det tomt och tavlan visar mystery + samlade.
                 self.selectedEgg = loaded.first(where: { $0.unlocked && !$0.collected })?.eggType
                 self.loading = false
             }
@@ -135,7 +199,4 @@ struct SelectEggSheet: View {
             }
         }
     }
-
-
 }
-

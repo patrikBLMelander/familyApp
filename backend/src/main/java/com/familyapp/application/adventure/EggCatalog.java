@@ -31,13 +31,13 @@ public final class EggCatalog {
             Map.entry("cyan_egg", EggRarity.RARE),      // kapybara
             Map.entry("gray_egg", EggRarity.RARE),      // sloth
             Map.entry("brown_egg", EggRarity.RARE),     // snake
-            // Legendary -- apex and mythical.
+            // Legendary -- apex real animals.
             Map.entry("golden_egg", EggRarity.LEGENDARY), // lion
             Map.entry("white_egg", EggRarity.LEGENDARY),  // shark
-            Map.entry("blue_egg", EggRarity.LEGENDARY),   // dragon
-            Map.entry("teal_egg", EggRarity.LEGENDARY),   // hydra
-            Map.entry("pink_egg", EggRarity.LEGENDARY)    // unicorn
-            // Mythic -- new variants of existing species, added with their art later.
+            // Mythic -- fantastical, impossible creatures.
+            Map.entry("blue_egg", EggRarity.MYTHIC),   // dragon
+            Map.entry("teal_egg", EggRarity.MYTHIC),   // hydra
+            Map.entry("pink_egg", EggRarity.MYTHIC)    // unicorn
     );
 
     /** The four eggs every child starts with unlocked. */

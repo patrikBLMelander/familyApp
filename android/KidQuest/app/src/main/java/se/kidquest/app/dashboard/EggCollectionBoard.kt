@@ -50,6 +50,15 @@ import se.kidquest.app.theme.SeasonPalette
  *
  * Hinten flyttade hit ur ett dolt "tryck igen" och ligger i en fast rad hos anroparen.
  */
+/** Ordning och svenska rubriker per sällsynthetstier. Hela väljaren grupperas på detta,
+ *  så en vunnen sällsynthet hamnar i sin egen tier och inte bland de vanliga. */
+private val RARITY_TIERS = listOf(
+    "COMMON" to "Vanliga",
+    "RARE" to "Sällsynta",
+    "LEGENDARY" to "Legendariska",
+    "MYTHIC" to "Mytiska",
+)
+
 @Composable
 fun EggCollectionBoard(
     eggs: List<EggOption>,
@@ -77,25 +86,36 @@ fun EggCollectionBoard(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        selectable.chunked(3).forEachIndexed { rowIndex, row ->
-            TileRow(row.size) { i ->
-                val egg = row[i]
-                EggTile(
-                    egg = egg.eggType,
-                    selected = egg.eggType == selectedEgg,
-                    ordinal = rowIndex * 3 + i + 1,
-                    total = selectable.size,
-                    season = season,
-                    onClick = { onSelect(egg.eggType) },
-                )
+        // Hela väljaren grupperas per sällsynthetstier. Inom varje tier ligger de valbara
+        // (upplåsta, tryckbara) äggen först och de oupptäckta ("?") efter -- så en vunnen
+        // sällsynthet hamnar under "Sällsynta", inte bland de vanliga.
+        RARITY_TIERS.forEach { (key, label) ->
+            val sel = selectable.filter { it.rarity == key }
+            val myst = mystery.filter { it.rarity == key }
+            if (sel.isNotEmpty() || myst.isNotEmpty()) {
+                ZoneDivider(label, season)
+                val cells: List<EggOption?> = sel + List(myst.size) { null }
+                cells.chunked(3).forEach { row ->
+                    TileRow(row.size) { i ->
+                        val cell = row[i]
+                        if (cell != null) {
+                            EggTile(
+                                egg = cell.eggType,
+                                selected = cell.eggType == selectedEgg,
+                                ordinal = selectable.indexOf(cell) + 1,
+                                total = selectable.size,
+                                season = season,
+                                onClick = { onSelect(cell.eggType) },
+                            )
+                        } else {
+                            MysteryTile(season)
+                        }
+                    }
+                }
             }
         }
 
         if (mystery.isNotEmpty()) {
-            ZoneDivider("Att upptäcka", season)
-            mystery.chunked(3).forEach { row ->
-                TileRow(row.size) { MysteryTile(season) }
-            }
             Text(
                 text = "Skicka djuret på äventyr för att hitta fler.",
                 style = MaterialTheme.typography.labelSmall,

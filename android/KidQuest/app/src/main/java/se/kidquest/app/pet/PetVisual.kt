@@ -2,7 +2,9 @@ package se.kidquest.app.pet
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -98,10 +100,14 @@ fun PetVisual(
     frameDrawableName: String? = null,
     sceneItemDrawableName: String? = null,
     sceneItemAtTop: Boolean = true,
+    backgroundDrawableName: String? = null,
 ) {
     val context = LocalContext.current
     val petId = PetImages.petDrawable(context, petType, growthStage)
-    val backgroundId = PetImages.seasonalBackgroundDrawable(context, season)
+    // An explicit background (an adventure scene) wins over the seasonal one; the pet is
+    // then drawn standing in wherever it has gone.
+    val backgroundId = backgroundDrawableName?.let { drawableId(context, it) }
+        ?: PetImages.seasonalBackgroundDrawable(context, season)
     val sceneItemId = sceneItemDrawableName?.let { drawableId(context, it) }
     val frameId = frameDrawableName?.let { drawableId(context, it) }
 
@@ -118,17 +124,22 @@ fun PetVisual(
             )
         }
         // Scene decoration sits between the background and the pet, anchored to the sky or
-        // the ground. Drawn on its own transparent canvas, so Fit keeps its proportions.
+        // the ground. A small accent -- roughly a third of the scene -- not a full overlay,
+        // so it never swallows the background.
         if (sceneItemId != null) {
-            Image(
-                painter = painterResource(id = sceneItemId),
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(6.dp),
-                alignment = if (sceneItemAtTop) Alignment.TopCenter else Alignment.BottomCenter,
-                contentScale = ContentScale.Fit,
-            )
+            Box(
+                modifier = Modifier.matchParentSize().padding(10.dp),
+                contentAlignment = if (sceneItemAtTop) Alignment.TopCenter else Alignment.BottomCenter,
+            ) {
+                Image(
+                    painter = painterResource(id = sceneItemId),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth(0.34f)
+                        .fillMaxHeight(0.34f),
+                    contentScale = ContentScale.Fit,
+                )
+            }
         }
         if (petId != null) {
             Image(

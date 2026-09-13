@@ -30,6 +30,11 @@ struct ChildDashboardView: View {
     @State private var viewingPast: PetHistoryResponseDTO?
     /// Scendekorations-id -> ankare, för var den utrustade dekorationen ritas på bandet.
     @State private var sceneItemAnchors: [String: String] = [:]
+    /// Det pågående äventyret (om något) och när det lästes, för bandets klocka.
+    @State private var activeAdventure: AdventureResponseDTO?
+    @State private var adventureLoadedAt = Date()
+    /// Loot från ett äventyr som hämtats direkt på bandet: kistan öppnas här.
+    @State private var claimedLoot: ClaimLootResponseDTO?
 
     /// Icke-nil renderar de här värdena i stället för att anropa nätet. Bara [fixture]
     /// sätter dem; de ligger utanför #if DEBUG så att typen har samma form i båda
@@ -76,6 +81,7 @@ struct ChildDashboardView: View {
                     .filter { $0.type == "SCENE_ITEM" }
                     .compactMap { item in item.anchor.map { (item.id, $0) } }
             )
+            await refreshAdventure()
         }
         // Sist i ZStacken: senare syskon ritar överst, och avskedet ska ligga över
         // hela barnvyn.
@@ -89,6 +95,15 @@ struct ChildDashboardView: View {
                     showSelectEgg = true
                 }, harnessAutoSave: harnessFarewell)
                 .transition(.opacity)
+            }
+        }
+        // Kist-öppningen efter att ett äventyr hämtats direkt på bandet.
+        .overlay {
+            if let loot = claimedLoot {
+                LootReveal(loot: loot, palette: palette) {
+                    claimedLoot = nil
+                    Task { await load(showLoadingSpinner: false); await refreshAdventure() }
+                }
             }
         }
         .onAppear {
@@ -140,6 +155,9 @@ struct ChildDashboardView: View {
             tasks: s.todaysTasks,
             history: history,
             sceneItemAnchors: sceneItemAnchors,
+            adventure: activeAdventure,
+            adventureLoadedAt: adventureLoadedAt,
+            onClaimAdventure: { Task { await claimAdventure() } },
             viewingPast: $viewingPast,
             isFeeding: isFeeding,
             onToggleTask: { task in Task { await toggleTask(task) } },
@@ -209,6 +227,25 @@ struct ChildDashboardView: View {
             await load(showLoadingSpinner: false)
         } catch {
             summary = s
+        }
+    }
+
+    /// Barnets egen vy: token-scopat, så memberId är nil.
+    private func refreshAdventure() async {
+        let state = try? await AdventureRepository.state(memberId: nil)
+        await MainActor.run {
+            activeAdventure = state?.adventures.first { $0.status == "ONGOING" }
+            adventureLoadedAt = Date()
+        }
+    }
+
+    /// Hämtar det färdiga äventyret direkt från bandet och öppnar kistan här.
+    private func claimAdventure() async {
+        guard let adv = activeAdventure else { return }
+        let loot = try? await AdventureRepository.claim(memberId: nil, adventureId: adv.id)
+        await MainActor.run {
+            activeAdventure = nil
+            claimedLoot = loot
         }
     }
 

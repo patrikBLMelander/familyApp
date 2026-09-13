@@ -495,15 +495,29 @@ class FeedAnimation {
      * timing som blänket, så konstbytet under blänket läser som tillväxt.
      */
     private suspend fun celebrate() = coroutineScope {
+        // levelUp gates the feed strip (disabled while a celebration plays). It MUST return
+        // to 0, or feeding stays disabled until the screen is rebuilt. Each animation resets
+        // its state in a finally, so if this coroutine is cancelled mid-way -- a recomposition,
+        // navigating away and back, an interrupting reload -- the plain assignments still run:
+        // the strip re-enables and the pet never sticks mid-scale. On normal completion the
+        // finally sets the same resting value the animation already reached, so timing and
+        // look are unchanged.
         launch {
             val a = Animatable(1f)
-            a.animateTo(0.88f, tween(180, easing = FastOutSlowInEasing)) { petPulse = value }
-            a.animateTo(1.24f, tween(420, easing = EaseOutBack)) { petPulse = value }
-            a.animateTo(1f, tween(400, easing = FastOutSlowInEasing)) { petPulse = value }
+            try {
+                a.animateTo(0.88f, tween(180, easing = FastOutSlowInEasing)) { petPulse = value }
+                a.animateTo(1.24f, tween(420, easing = EaseOutBack)) { petPulse = value }
+                a.animateTo(1f, tween(400, easing = FastOutSlowInEasing)) { petPulse = value }
+            } finally {
+                petPulse = 1f
+            }
         }
         val a = Animatable(0f)
-        a.animateTo(1f, tween(LEVEL_UP_MS, easing = LinearEasing)) { levelUp = value }
-        levelUp = 0f
+        try {
+            a.animateTo(1f, tween(LEVEL_UP_MS, easing = LinearEasing)) { levelUp = value }
+        } finally {
+            levelUp = 0f
+        }
     }
 
     /** Efter ett avbrutet flöde ska ingenting hänga kvar på skärmen. */

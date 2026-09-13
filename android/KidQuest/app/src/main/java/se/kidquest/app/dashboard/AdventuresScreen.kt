@@ -32,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -52,6 +54,7 @@ import se.kidquest.app.network.LootCatalogItemResponse
 import se.kidquest.app.network.LootResponse
 import se.kidquest.app.network.SceneItemRequest
 import se.kidquest.app.network.StartAdventureRequest
+import se.kidquest.app.pet.PetImages
 import se.kidquest.app.theme.LocalSeasonPalette
 import se.kidquest.app.theme.SeasonHeaderBar
 import se.kidquest.app.theme.SeasonPalette
@@ -150,7 +153,8 @@ fun AdventuresScreen(
                     if (actingAsParent) ApiClient.adventuresApi.startForMember(childId, body)
                     else ApiClient.adventuresApi.start(body)
                 }
-                refreshKey++
+                // Gå direkt tillbaka till bandet så barnet genast ser djuret på äventyr.
+                onBack()
             } catch (e: Exception) {
                 error = ApiErrors.message(e, "Kunde inte skicka iväg djuret")
             } finally {
@@ -254,7 +258,7 @@ fun AdventuresScreen(
                     fontWeight = FontWeight.Bold,
                     color = season.ink,
                 )
-                SceneGrid(enabled = !busy, season = season, onPick = { startAdventure(it.key) })
+                SceneList(enabled = !busy, season = season, onPick = { startAdventure(it.key) })
             } else if (ongoing.isEmpty()) {
                 Text(
                     text = "Klara fler nivåer för att få en äventyrsbiljett.",
@@ -333,58 +337,75 @@ private fun TicketBadge(balance: Long, season: SeasonPalette) {
     }
 }
 
+/** Stora, inbjudande scenkort i en kolumn. Varje kort fyller bredden, namnet ligger över
+ *  bilden och ett "Skicka"-märke gör tryckhandlingen tydlig. Ett tryck skickar iväg djuret
+ *  direkt. */
 @Composable
-private fun SceneGrid(
+private fun SceneList(
     enabled: Boolean,
     season: SeasonPalette,
     onPick: (AdventureScene) -> Unit,
 ) {
     val context = LocalContext.current
-    SCENES.chunked(3).forEach { row ->
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            row.forEach { scene ->
-                val drawable = remember(scene.drawable) {
-                    val id = context.resources.getIdentifier(scene.drawable, "drawable", context.packageName)
-                    if (id != 0) id else null
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SCENES.forEach { scene ->
+            val drawable = remember(scene.drawable) {
+                val id = context.resources.getIdentifier(scene.drawable, "drawable", context.packageName)
+                if (id != 0) id else null
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(season.surface)
+                    .clickable(enabled = enabled) { onPick(scene) },
+            ) {
+                if (drawable != null) {
+                    Image(
+                        painter = painterResource(id = drawable),
+                        contentDescription = scene.label,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
                 }
-                Column(
+                // Mörk toning nedtill så namnet syns mot vilken scen som helst.
+                Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(season.surface)
-                        .border(1.5.dp, season.cardEdge, RoundedCornerShape(12.dp))
-                        .clickable(enabled = enabled) { onPick(scene) }
-                        .padding(4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    if (drawable != null) {
-                        Image(
-                            painter = painterResource(id = drawable),
-                            contentDescription = scene.label,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop,
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.45f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.6f),
+                            )
                         )
-                    } else {
-                        Box(modifier = Modifier.fillMaxWidth().height(52.dp))
-                    }
+                )
+                Text(
+                    text = scene.label,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                )
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(12.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.9f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text("🗺️", style = MaterialTheme.typography.labelMedium)
                     Text(
-                        text = scene.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = season.ink,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
+                        text = "Skicka",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black.copy(alpha = 0.8f),
                     )
                 }
             }
-            repeat(3 - row.size) { Box(modifier = Modifier.weight(1f)) {} }
         }
     }
 }
@@ -450,7 +471,7 @@ private fun OngoingAdventureCard(
 }
 
 @Composable
-private fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () -> Unit) {
+internal fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () -> Unit) {
     val context = LocalContext.current
     // The chest opens through five stages, then the reward fades in -- the same beat as
     // the egg hatching. Nothing is dismissible until it has opened.
@@ -474,6 +495,17 @@ private fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () 
         "SCENE_ITEM" -> "✨" to "En ny dekoration till din scen!"
         else -> "🍎" to (if (loot.quantity == 1) "Du hittade 1 mat till ditt djur!"
         else "Du hittade ${loot.quantity} mat till ditt djur!")
+    }
+    // Den faktiska konsten för lootet: ett ägg visar hur det ser ut, så nyfikenheten
+    // byggs inför nästa månadsskifte. Faller tillbaka på emojin när konst saknas.
+    val rewardDrawable = remember(loot.type, loot.ref) {
+        when (loot.type) {
+            "EGG" -> PetImages.eggDrawable(context, loot.ref)
+            "FRAME", "SCENE_ITEM" ->
+                context.resources.getIdentifier(loot.ref, "drawable", context.packageName)
+                    .takeIf { it != 0 }
+            else -> null
+        }
     }
     AlertDialog(
         onDismissRequest = { if (revealed) onDismiss() },
@@ -500,7 +532,16 @@ private fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: () 
                     Text("🧰", style = MaterialTheme.typography.displaySmall)
                 }
                 if (revealed) {
-                    Text(emoji, style = MaterialTheme.typography.displaySmall)
+                    if (rewardDrawable != null) {
+                        Image(
+                            painter = painterResource(id = rewardDrawable),
+                            contentDescription = null,
+                            modifier = Modifier.size(96.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        Text(emoji, style = MaterialTheme.typography.displaySmall)
+                    }
                     Text(
                         text = message,
                         style = MaterialTheme.typography.bodyLarge,

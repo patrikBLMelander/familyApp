@@ -64,6 +64,9 @@ struct ChildDashboardHost: View {
     @State private var history: [PetHistoryResponseDTO] = []
     @State private var viewingPast: PetHistoryResponseDTO?
     @State private var sceneItemAnchors: [String: String] = [:]
+    @State private var activeAdventure: AdventureResponseDTO?
+    @State private var adventureLoadedAt = Date()
+    @State private var claimedLoot: ClaimLootResponseDTO?
 
     /// Icke-tom hoppar över nätanropet. Bara fixturen sätter den.
     var preloadedHistory: [PetHistoryResponseDTO] = []
@@ -114,6 +117,9 @@ struct ChildDashboardHost: View {
                     .filter { $0.type == "SCENE_ITEM" }
                     .compactMap { item in item.anchor.map { (item.id, $0) } }
             )
+            let advState = try? await AdventureRepository.state(memberId: activeChild.id)
+            activeAdventure = advState?.adventures.first { $0.status == "ONGOING" }
+            adventureLoadedAt = Date()
         }
         // Sist i ZStacken: senare syskon ritar överst, och avskedet ska ligga över
         // hela barnvyn.
@@ -155,6 +161,15 @@ struct ChildDashboardHost: View {
                 .transition(.opacity)
             }
         }
+        // Kist-öppningen efter att ett äventyr hämtats direkt på bandet.
+        .overlay {
+            if let loot = claimedLoot {
+                LootReveal(loot: loot, palette: palette) {
+                    claimedLoot = nil
+                    Task { await load(showSpinner: false); await refreshHostAdventure() }
+                }
+            }
+        }
         .sheet(isPresented: $showSelectEgg) {
             // The member id is what makes this the CHILD's egg and not the parent's.
             SelectEggSheet(
@@ -187,6 +202,9 @@ struct ChildDashboardHost: View {
             tasks: snapshot.todaysChores,
             history: history,
             sceneItemAnchors: sceneItemAnchors,
+            adventure: activeAdventure,
+            adventureLoadedAt: adventureLoadedAt,
+            onClaimAdventure: { Task { await claimAdventure() } },
             viewingPast: $viewingPast,
             isFeeding: isFeeding,
             onToggleTask: { item in Task { await toggle(item) } },
@@ -361,6 +379,24 @@ struct ChildDashboardHost: View {
     }
 
     // MARK: - Data
+
+    private func refreshHostAdventure() async {
+        let state = try? await AdventureRepository.state(memberId: activeChild.id)
+        await MainActor.run {
+            activeAdventure = state?.adventures.first { $0.status == "ONGOING" }
+            adventureLoadedAt = Date()
+        }
+    }
+
+    /// Hämtar det färdiga äventyret direkt från bandet och öppnar kistan här.
+    private func claimAdventure() async {
+        guard let adv = activeAdventure else { return }
+        let loot = try? await AdventureRepository.claim(memberId: activeChild.id, adventureId: adv.id)
+        await MainActor.run {
+            activeAdventure = nil
+            claimedLoot = loot
+        }
+    }
 
     private func loadIfNeeded() async {
         // Fixtures answer for whichever child is on screen, including after "Byt barn":

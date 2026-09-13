@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Barnets dag, ritad en gång.
 ///
@@ -39,6 +40,14 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     /// Scendekorations-id -> ankare ("top"/"bottom"), så den utrustade dekorationen ritas
     /// på rätt sida av bandet. Tom när katalogen inte lästs in; då antas himlen.
     var sceneItemAnchors: [String: String] = [:]
+    /// Det pågående äventyret, om något: då visar bandet äventyrsscenen och en klocka i
+    /// stället för djuret hemma. `adventureLoadedAt` är när tillståndet lästes, för
+    /// nedräkningen.
+    var adventure: AdventureResponseDTO? = nil
+    var adventureLoadedAt: Date = Date()
+    /// Anropas när barnet trycker på klockan och äventyret är klart: hämtar direkt på
+    /// bandet i stället för att gå till äventyrslistan.
+    var onClaimAdventure: (() -> Void)? = nil
     @Binding var viewingPast: PetHistoryResponseDTO?
     var isFeeding: Bool = false
 
@@ -71,6 +80,9 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     /// Brickornas läge i scenens koordinater, alltså varifrån maten lyfter.
     @State private var tilesCenter: CGPoint?
     @State private var harnessFired = false
+    /// Tickar en gång i sekunden så bandets äventyrsklocka räknar ned.
+    @State private var adventureNow = Date()
+    private let adventureTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
 
@@ -224,13 +236,43 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
 
     // MARK: - Bandet
 
+    private func adventureClock(remaining: Int) -> some View {
+        let ready = remaining <= 0
+        return Button {
+            // Klar: hämta direkt här (kistan öppnas på bandet). Inte klar än: gör inget --
+            // nedräkningen syns redan.
+            if ready { onClaimAdventure?() }
+        } label: {
+            HStack(spacing: 8) {
+                Text(ready ? "🎁" : "⏳").font(.title3)
+                Text(ready ? "Hemma! Tryck för att hämta"
+                     : "På äventyr · \(adventureRemainingText(remaining))")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(.black.opacity(0.5)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func adventureRemainingText(_ secs: Int) -> String {
+        let m = secs / 60
+        let s = secs % 60
+        return m >= 3 ? "\(m) min kvar" : String(format: "%d:%02d kvar", m, s)
+    }
+
     private var band: some View {
         ZStack(alignment: .bottomLeading) {
             if let shown = shownPet {
+                // Medan djuret är ute på äventyr står det i äventyrsscenen i stället för
+                // hemma, och hemmaramen/dekorationen läggs undan för resan.
+                let onAdventure = !isPast && adventure != nil
                 // Kosmetiken visas bara på det nuvarande djurets scen. En förfluten månad
                 // behåller ramen den pensionerades med, men inga dekorationer.
-                let frameName = isPast ? viewingPast?.frame : pet?.equippedFrame
-                let sceneItemId = isPast ? nil : pet?.equippedSceneItem
+                let frameName = isPast ? viewingPast?.frame : (onAdventure ? nil : pet?.equippedFrame)
+                let sceneItemId = (isPast || onAdventure) ? nil : pet?.equippedSceneItem
                 PetVisual(
                     petType: shown.type,
                     growthStage: shown.stage,
@@ -243,7 +285,8 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                     petScaleMultiplier: anim.petPulse,
                     frameName: PetImagesIOS.frameImageName(frameName),
                     sceneItemName: PetImagesIOS.sceneItemImageName(sceneItemId),
-                    sceneItemAtTop: sceneItemId.map { sceneItemAnchors[$0] != "bottom" } ?? true
+                    sceneItemAtTop: sceneItemId.map { sceneItemAnchors[$0] != "bottom" } ?? true,
+                    backgroundName: onAdventure ? PetImagesIOS.sceneImageName(adventure!.scene) : nil
                 )
                 .frame(height: bandHeight)
                 .clipped()
@@ -264,8 +307,19 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
             .allowsHitTesting(false)
 
             bandLabels
+
+            // Klockan medan djuret är på äventyr: tid kvar, eller "Hemma!" när det är dags
+            // att hämta. Trycksam — går till äventyrsskärmen.
+            if let adv = adventure, !isPast {
+                let elapsed = Int(adventureNow.timeIntervalSince(adventureLoadedAt))
+                adventureClock(remaining: max(0, adv.secondsRemaining - elapsed))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 64)
+            }
         }
         .frame(height: bandHeight)
+        // Uppdatera klockan bara medan ett äventyr pågår, annars ritar bandet om i onödan.
+        .onReceive(adventureTick) { if adventure != nil, !isPast { adventureNow = $0 } }
         .overlay(alignment: .top) { bandTopRow }
         // Effekterna ovanpå allt i bandet, och klippta till det: konfettin faller nedåt
         // och hade annars ritats ner över uppgiftskortet, vilket läser som en bugg och

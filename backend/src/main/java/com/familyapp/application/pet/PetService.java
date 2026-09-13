@@ -232,8 +232,12 @@ public class PetService {
      * Every egg with its rarity and whether this child has unlocked and already collected
      * it -- the data the three-zone picker needs (selectable / to discover / collected).
      * Commons are ensured first so a fresh child always has its four.
+     *
+     * NOT read-only: ensureCommonsUnlocked lazily seeds the four commons, and a read-only
+     * transaction suppresses those inserts (Hibernate never flushes), which left every
+     * child created after the V48 migration with no selectable egg at all.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public List<EggOption> getEggOptions(UUID memberId) {
         adventureService.ensureCommonsUnlocked(memberId);
         var unlocked = new HashSet<>(eggUnlockRepository.findEggTypesByMemberId(memberId));

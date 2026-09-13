@@ -112,29 +112,45 @@ struct AdventuresView: View {
         .background(Capsule().fill(palette.tipBg))
     }
 
+    /// Stora, inbjudande scenkort i en kolumn. Namnet ligger över bilden och ett
+    /// "Skicka"-märke gör tryckhandlingen tydlig. Ett tryck skickar iväg djuret direkt.
     private var sceneGrid: some View {
-        LazyVGrid(columns: cols, spacing: 8) {
+        VStack(spacing: 12) {
             ForEach(scenes) { scene in
                 Button {
                     Task { await startAdventure(scene.key) }
                 } label: {
-                    VStack(spacing: 4) {
+                    ZStack(alignment: .bottom) {
                         if let name = PetImagesIOS.sceneImageName(scene.key), let img = UIImage(named: name) {
                             Image(uiImage: img).resizable().scaledToFill()
-                                .frame(height: 52).frame(maxWidth: .infinity)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .frame(height: 150).frame(maxWidth: .infinity)
+                                .clipped()
                         } else {
-                            RoundedRectangle(cornerRadius: 8).fill(palette.cardEdge).frame(height: 52)
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(palette.cardEdge).frame(height: 150)
                         }
-                        Text(scene.label)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(palette.ink)
-                            .lineLimit(1)
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.6)],
+                            startPoint: .center, endPoint: .bottom
+                        )
+                        HStack(alignment: .bottom) {
+                            Text(scene.label)
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Text("🗺️").font(.footnote)
+                                Text("Skicka").font(.subheadline.weight(.bold))
+                                    .foregroundStyle(.black.opacity(0.8))
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Capsule().fill(.white.opacity(0.9)))
+                        }
+                        .padding(14)
                     }
-                    .padding(4)
+                    .frame(height: 150)
                     .frame(maxWidth: .infinity)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(palette.surface))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(palette.cardEdge, lineWidth: 1.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(busy)
@@ -306,7 +322,8 @@ struct AdventuresView: View {
         error = nil
         do {
             _ = try await AdventureRepository.start(memberId: memberId, scene: scene)
-            await load()
+            // Gå direkt tillbaka till bandet så barnet genast ser djuret på äventyr.
+            await MainActor.run { onBack() }
         } catch {
             await MainActor.run { self.error = "Kunde inte skicka iväg djuret." }
         }
@@ -362,7 +379,7 @@ struct AdventuresView: View {
 
 /// Kistan öppnas i fem steg och sedan tonar belöningen fram — samma dramaturgi som
 /// äggkläckningen. Går inte att stänga förrän kistan öppnats.
-private struct LootReveal: View {
+struct LootReveal: View {
     let loot: ClaimLootResponseDTO
     let palette: SeasonPalette
     let onDismiss: () -> Void
@@ -381,6 +398,17 @@ private struct LootReveal: View {
         }
     }
 
+    /// Den faktiska konsten för lootet, när den finns — ett ägg visar hur det ser ut, så
+    /// barnet blir nyfiket inför nästa månadsskifte. Faller tillbaka på emojin annars.
+    private var rewardImageName: String? {
+        switch loot.type {
+        case "EGG": return PetImagesIOS.eggImageName(for: loot.ref)
+        case "FRAME": return PetImagesIOS.frameImageName(loot.ref)
+        case "SCENE_ITEM": return PetImagesIOS.sceneItemImageName(loot.ref)
+        default: return nil
+        }
+    }
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.55).ignoresSafeArea()
@@ -394,7 +422,11 @@ private struct LootReveal: View {
                     Text("🧰").font(.system(size: 72))
                 }
                 if revealed {
-                    Text(reward.emoji).font(.system(size: 44))
+                    if let name = rewardImageName, let img = UIImage(named: name) {
+                        Image(uiImage: img).resizable().scaledToFit().frame(width: 96, height: 96)
+                    } else {
+                        Text(reward.emoji).font(.system(size: 44))
+                    }
                     Text(reward.message)
                         .font(.body)
                         .multilineTextAlignment(.center)

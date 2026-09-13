@@ -30,6 +30,9 @@ struct PetVisual: View {
     /// Scendekorationen (loot_item-id = bildnamn), eller nil, och om den sitter i himlen.
     var sceneItemName: String? = nil
     var sceneItemAtTop: Bool = true
+    /// En uttrycklig bakgrund (en äventyrsscen) som slår den säsongsbundna. Djuret ritas
+    /// då stående i scenen dit det gått.
+    var backgroundName: String? = nil
 
     var body: some View {
         let effectiveScale = min(
@@ -39,7 +42,7 @@ struct PetVisual: View {
 
         GeometryReader { geo in
             ZStack(alignment: alignment) {
-                if let backgroundName = PetImagesIOS.seasonalBackgroundName(season),
+                if let backgroundName = backgroundName ?? PetImagesIOS.seasonalBackgroundName(season),
                    let background = UIImage(named: backgroundName) {
                     Image(uiImage: background)
                         .resizable()
@@ -49,16 +52,16 @@ struct PetVisual: View {
                 }
 
                 // Scendekorationen ligger mellan bakgrunden och djuret, ankrad mot himlen
-                // eller marken. Ritad på egen genomskinlig canvas, så scaledToFit bevarar
-                // proportionerna.
+                // eller marken. En liten accent -- ungefär en tredjedel av scenen -- inte ett
+                // heltäckande lager, så den aldrig slukar bakgrunden.
                 if let sceneItemName, let deco = UIImage(named: sceneItemName) {
                     Image(uiImage: deco)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .padding(6)
+                        .frame(width: geo.size.width * 0.34, height: geo.size.height * 0.34)
                         .frame(width: geo.size.width, height: geo.size.height,
                                alignment: sceneItemAtTop ? .top : .bottom)
+                        .padding(.vertical, 10)
                 }
 
                 if let petName = PetImagesIOS.petImageName(for: petType, growthStage: growthStage),
