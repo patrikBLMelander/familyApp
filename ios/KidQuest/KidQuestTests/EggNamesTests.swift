@@ -19,8 +19,8 @@ struct EggNamesTests {
     /// för hand: en ny rad här är det som ska tvinga fram en ny ledtråd nedan.
     static let allEggs = [
         "black_egg", "blue_egg", "brown_egg", "cyan_egg", "golden_egg", "gray_egg",
-        "green_egg", "orange_egg", "pink_egg", "purple_egg", "red_egg", "teal_egg",
-        "white_egg", "yellow_egg",
+        "green_egg", "orange_egg", "pink_egg", "purple_egg", "red_egg", "silver_egg",
+        "teal_egg", "white_egg", "yellow_egg",
     ]
 
     /// Det här testet betyder mer sedan namnen togs bort. Ett ägg utan bild ritas som

@@ -31,6 +31,7 @@ public final class EggCatalog {
             Map.entry("cyan_egg", EggRarity.RARE),      // kapybara
             Map.entry("gray_egg", EggRarity.RARE),      // sloth
             Map.entry("brown_egg", EggRarity.RARE),     // snake
+            Map.entry("silver_egg", EggRarity.RARE),    // koala
             // Legendary -- apex real animals.
             Map.entry("golden_egg", EggRarity.LEGENDARY), // lion
             Map.entry("white_egg", EggRarity.LEGENDARY),  // shark

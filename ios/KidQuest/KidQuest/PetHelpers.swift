@@ -17,6 +17,7 @@ enum PetNameUtilsIOS {
         "kapybara": "Kapybara",
         "shark": "Haj",
         "lion": "Lejon",
+        "koala": "Koala",
     ]
 
     static func getPetNameSwedish(_ petType: String?) -> String {
@@ -41,6 +42,7 @@ enum PetFoodUtilsIOS {
         "kapybara": "🌿",
         "shark": "🐠",
         "lion": "🥩",
+        "koala": "🍃",
     ]
 
     private static let foodNames: [String: String] = [
@@ -58,6 +60,7 @@ enum PetFoodUtilsIOS {
         "kapybara": "gräs",
         "shark": "fiskar",
         "lion": "kött",
+        "koala": "löv",
     ]
 
     static func emoji(for petType: String?) -> String {
@@ -98,6 +101,7 @@ enum PetImagesIOS {
         "cyan_egg": "kapybara",
         "white_egg": "shark",
         "golden_egg": "lion",
+        "silver_egg": "koala",
     ]
 
     /// "dragon" for "blue_egg". Also accepts a petType directly, since the API returns both.
@@ -248,6 +252,7 @@ enum PetThemeIOS {
         "kapybara": palette(0xDCFCE7, 0x22C55E, 0x16A34A),
         "shark": palette(0xBAE6FD, 0x0369A1, 0x0369A1),
         "lion": palette(0xFEF3C7, 0xD97706, 0xD97706),
+        "koala": palette(0xE6EBE1, 0x6B8E5A, 0x556B2F),
     ]
 
     /// For a child who has not chosen an egg yet: the app's own background pastels.
@@ -305,6 +310,7 @@ enum EggNames {
         case "cyan_egg": return "Jag älskar att plaska runt med kompisar."
         case "golden_egg": return "Jag ryter så att alla hör att jag vaknat."
         case "white_egg": return "Jag simmar snabbast av alla där det är djupt."
+        case "silver_egg": return "Jag sover gärna högt uppe bland eukalyptuslöven."
         default: return "Jag längtar efter att få träffa dig."
         }
     }

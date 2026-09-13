@@ -35,6 +35,7 @@ object PetImages {
         "cyan_egg" to "kapybara",
         "white_egg" to "shark",
         "golden_egg" to "lion",
+        "silver_egg" to "koala",
     )
 
     /**
@@ -59,6 +60,7 @@ object PetImages {
         "kapybara" to "Kapybara",
         "shark" to "Haj",
         "lion" to "Lejon",
+        "koala" to "Koala",
     )
 
     /** Null for an unknown species, so the caller can decide what to say instead. */

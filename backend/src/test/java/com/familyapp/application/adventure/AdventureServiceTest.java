@@ -45,9 +45,9 @@ class AdventureServiceTest {
 
     private static final UUID MEMBER = UUID.randomUUID();
     private static final UUID ADVENTURE = UUID.randomUUID();
-    private static final List<String> ALL_FOURTEEN = List.of(
+    private static final List<String> ALL_EGGS = List.of(
             "green_egg", "red_egg", "purple_egg", "yellow_egg",
-            "orange_egg", "black_egg", "cyan_egg", "gray_egg", "brown_egg",
+            "orange_egg", "black_egg", "cyan_egg", "gray_egg", "brown_egg", "silver_egg",
             "golden_egg", "white_egg", "blue_egg", "teal_egg", "pink_egg");
     private static final List<String> ONLY_COMMONS = List.of("green_egg", "red_egg", "purple_egg", "yellow_egg");
 
@@ -144,7 +144,7 @@ class AdventureServiceTest {
     void guaranteedEggFallsBackToFoodWhenEverythingIsUnlocked() {
         when(adventures.findById(ADVENTURE)).thenReturn(Optional.of(ongoing(OffsetDateTime.now().minusHours(2), 3600)));
         when(adventures.countByMemberIdAndStatus(MEMBER, "CLAIMED")).thenReturn(0L); // first ever -> guaranteed egg
-        when(unlocks.findEggTypesByMemberId(MEMBER)).thenReturn(ALL_FOURTEEN); // nothing left to unlock
+        when(unlocks.findEggTypesByMemberId(MEMBER)).thenReturn(ALL_EGGS); // nothing left to unlock
 
         LootResult loot = service.claim(ADVENTURE);
 

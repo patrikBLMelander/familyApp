@@ -93,12 +93,15 @@ class PetServiceGateTest {
 
         var options = service.getEggOptions(MEMBER);
 
-        assertThat(options).hasSize(14);
+        assertThat(options).hasSize(15);
         var green = options.stream().filter(o -> o.eggType().equals("green_egg")).findFirst().orElseThrow();
         assertThat(green.rarity()).isEqualTo("COMMON");
         assertThat(green.unlocked()).isTrue();
         var dragon = options.stream().filter(o -> o.eggType().equals("blue_egg")).findFirst().orElseThrow();
-        assertThat(dragon.rarity()).isEqualTo("LEGENDARY");
+        assertThat(dragon.rarity()).isEqualTo("MYTHIC");
         assertThat(dragon.unlocked()).isFalse();
+        var koala = options.stream().filter(o -> o.eggType().equals("silver_egg")).findFirst().orElseThrow();
+        assertThat(koala.rarity()).isEqualTo("RARE");
+        assertThat(koala.unlocked()).isFalse();
     }
 }

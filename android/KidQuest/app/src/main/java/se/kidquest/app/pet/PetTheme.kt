@@ -65,6 +65,7 @@ object PetTheme {
         "kapybara" to palette(0xFFDCFCE7, 0xFF22C55E, 0xFF16A34A, LIGHT_GREEN),
         "shark" to palette(0xFFBAE6FD, 0xFF0369A1, 0xFF0369A1, LIGHT_BLUE),
         "lion" to palette(0xFFFEF3C7, 0xFFD97706, 0xFFD97706, LIGHT_AMBER),
+        "koala" to palette(0xFFE6EBE1, 0xFF6B8E5A, 0xFF556B2F, LIGHT_GREEN),
     )
 
     /** For a child who has not chosen an egg yet: the app's own background pastels. */
