@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
+import se.kidquest.app.network.EggOption
 import se.kidquest.app.network.PetHistoryResponse
 import se.kidquest.app.pet.PetImages
 import se.kidquest.app.pet.PetNameUtils
@@ -48,28 +50,34 @@ import se.kidquest.app.theme.SeasonPalette
  *
  * Hinten flyttade hit ur ett dolt "tryck igen" och ligger i en fast rad hos anroparen.
  */
+/** Ordning och svenska rubriker per sällsynthetstier. Hela väljaren grupperas på detta,
+ *  så en vunnen sällsynthet hamnar i sin egen tier och inte bland de vanliga. */
+private val RARITY_TIERS = listOf(
+    "COMMON" to "Vanliga",
+    "RARE" to "Sällsynta",
+    "LEGENDARY" to "Legendariska",
+    "MYTHIC" to "Mytiska",
+)
+
 @Composable
 fun EggCollectionBoard(
-    eggTypes: List<String>,
+    eggs: List<EggOption>,
     history: List<PetHistoryResponse>,
     selectedEgg: String?,
     season: SeasonPalette,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Ägget är nyckeln, inte arten. Historiken bär selectedEggType, så uppslagningen
-    // behöver ingen kopia av backendens EGG_TO_PET_MAP -- och en kopia av den kartan är
-    // precis vad som gjorde att lejonet och hajen saknade namn i somras.
-    val collected = remember(history) {
-        history.associateBy { it.selectedEggType.lowercase() }
+    // Tre zoner. Valbara = upplåsta och inte redan samlade. Oupptäckta = ännu inte
+    // upplåsta, visade som mystery utan att avslöja djur eller sällsynthet -- gåtan är
+    // poängen, och vägen dit är äventyr. Samlade ritas ur historiken, som bär månaden.
+    val selectable = eggs.filter { it.unlocked && !it.collected }
+    val mystery = eggs.filter { !it.unlocked }
+    val taken = remember(history) {
+        history.sortedWith(
+            compareByDescending<PetHistoryResponse> { it.year }.thenByDescending { it.month }
+        )
     }
-
-    // Valbara ägg först, samlade djur sist. Blandade låg de samlade som luckor mitt i
-    // det barnet faktiskt ska välja bland, och bröt läsrytmen för ingenting -- de går
-    // inte att välja. Samlingen är något att titta på efteråt, inte något att skanna
-    // förbi under tiden.
-    val available = eggTypes.filterNot { collected.containsKey(it.lowercase()) }
-    val taken = eggTypes.mapNotNull { collected[it.lowercase()] }
 
     // Vanliga rader och inte LazyVerticalGrid. Väljarens innehåll ligger i en Column med
     // verticalScroll, och ett lazy-rutnät därinne får obegränsad höjd -- alltså noll, och
@@ -78,53 +86,70 @@ fun EggCollectionBoard(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        available.chunked(3).forEachIndexed { rowIndex, row ->
-            TileRow(row.size) { i ->
-                val egg = row[i]
-                EggTile(
-                    egg = egg,
-                    selected = egg == selectedEgg,
-                    ordinal = rowIndex * 3 + i + 1,
-                    total = available.size,
-                    season = season,
-                    onClick = { onSelect(egg) },
-                )
+        // Hela väljaren grupperas per sällsynthetstier. Inom varje tier ligger de valbara
+        // (upplåsta, tryckbara) äggen först och de oupptäckta ("?") efter -- så en vunnen
+        // sällsynthet hamnar under "Sällsynta", inte bland de vanliga.
+        RARITY_TIERS.forEach { (key, label) ->
+            val sel = selectable.filter { it.rarity == key }
+            val myst = mystery.filter { it.rarity == key }
+            if (sel.isNotEmpty() || myst.isNotEmpty()) {
+                ZoneDivider(label, season)
+                val cells: List<EggOption?> = sel + List(myst.size) { null }
+                cells.chunked(3).forEach { row ->
+                    TileRow(row.size) { i ->
+                        val cell = row[i]
+                        if (cell != null) {
+                            EggTile(
+                                egg = cell.eggType,
+                                selected = cell.eggType == selectedEgg,
+                                ordinal = selectable.indexOf(cell) + 1,
+                                total = selectable.size,
+                                season = season,
+                                onClick = { onSelect(cell.eggType) },
+                            )
+                        } else {
+                            MysteryTile(season)
+                        }
+                    }
+                }
             }
         }
 
-        if (taken.isNotEmpty()) {
-            // Den vaga avdelaren. En hårfin linje och en rad som säger vad som följer --
-            // tillräckligt för att ögat ska förstå att listan tar slut här, utan att bli
-            // en rubrik som konkurrerar med äggen ovanför.
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(1.dp)
-                        .background(season.cardEdge)
-                )
-                Text(
-                    text = "${taken.size} av ${eggTypes.size} samlade",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = season.inkFaint,
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(1.dp)
-                        .background(season.cardEdge)
-                )
-            }
+        if (mystery.isNotEmpty()) {
+            Text(
+                text = "Skicka djuret på äventyr för att hitta fler.",
+                style = MaterialTheme.typography.labelSmall,
+                color = season.inkFaint,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+            )
+        }
 
+        if (taken.isNotEmpty()) {
+            ZoneDivider("${taken.size} av ${eggs.size} samlade", season)
             taken.chunked(3).forEach { row ->
                 TileRow(row.size) { i -> CollectedTile(row[i], season) }
             }
         }
+    }
+}
+
+/** Den vaga avdelaren mellan zonerna: en hårfin linje och vad som följer. */
+@Composable
+private fun ZoneDivider(label: String, season: SeasonPalette) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(modifier = Modifier.weight(1f).height(1.dp).background(season.cardEdge))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = season.inkFaint,
+        )
+        Box(modifier = Modifier.weight(1f).height(1.dp).background(season.cardEdge))
     }
 }
 
@@ -162,15 +187,34 @@ private fun CollectedTile(entry: PetHistoryResponse, season: SeasonPalette) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        if (drawable != null) {
-            Image(
-                painter = painterResource(id = drawable),
-                contentDescription = PetNameUtils.getPetNameSwedish(entry.petType),
-                modifier = Modifier.size(52.dp),
-                contentScale = ContentScale.Fit,
-            )
-        } else {
-            Text("🐾", style = MaterialTheme.typography.headlineSmall)
+        // Ramen djuret bar den månaden lägger sig runt porträttet -- en fyrkantig ram i
+        // en fyrkantig ruta. Saknas ram (eller dess bild) visas djuret som förut.
+        val frameDrawable = entry.frame?.let { name ->
+            val id = context.resources.getIdentifier(name, "drawable", context.packageName)
+            if (id != 0) id else null
+        }
+        Box(
+            modifier = Modifier.size(if (frameDrawable != null) 66.dp else 52.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (drawable != null) {
+                Image(
+                    painter = painterResource(id = drawable),
+                    contentDescription = PetNameUtils.getPetNameSwedish(entry.petType),
+                    modifier = Modifier.size(if (frameDrawable != null) 40.dp else 52.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Text("🐾", style = MaterialTheme.typography.headlineSmall)
+            }
+            if (frameDrawable != null) {
+                Image(
+                    painter = painterResource(id = frameDrawable),
+                    contentDescription = null,
+                    modifier = Modifier.size(66.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
         }
         Text(
             text = PetNameUtils.getPetNameSwedish(entry.petType),
@@ -244,6 +288,53 @@ private fun EggTile(
         } else {
             Box(modifier = Modifier.size(64.dp), contentAlignment = Alignment.Center) {
                 Text("🥚", style = MaterialTheme.typography.headlineSmall)
+            }
+        }
+    }
+}
+
+/**
+ * En oupptäckt plats. Ett tonat ägg med frågetecken tills `mystery_egg`-konsten finns --
+ * den byts in automatiskt så fort en drawable med det namnet läggs till. Går inte att
+ * trycka på, och avslöjar varken djur eller sällsynthet: gåtan är hela poängen.
+ */
+@Composable
+private fun MysteryTile(season: SeasonPalette) {
+    val context = LocalContext.current
+    val drawable = remember {
+        val id = context.resources.getIdentifier("mystery_egg", "drawable", context.packageName)
+        if (id != 0) id else null
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 104.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(season.surface)
+            .border(1.5.dp, season.cardEdge, RoundedCornerShape(15.dp))
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (drawable != null) {
+            Image(
+                painter = painterResource(id = drawable),
+                contentDescription = "Oupptäckt ägg",
+                modifier = Modifier.size(64.dp),
+                contentScale = ContentScale.Fit,
+            )
+        } else {
+            Box(modifier = Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "🥚",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.alpha(0.35f),
+                )
+                Text(
+                    text = "?",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = season.inkFaint,
+                )
             }
         }
     }

@@ -30,6 +30,11 @@ object EggNames {
             "cyan_egg" -> "Jag älskar att plaska runt med kompisar."
             "golden_egg" -> "Jag ryter så att alla hör att jag vaknat."
             "white_egg" -> "Jag simmar snabbast av alla där det är djupt."
+            "silver_egg" -> "Jag sover gärna högt uppe bland eukalyptuslöven."
+            "sand_egg" -> "Jag står på bakbenen och spanar efter faror."
+            "ice_egg" -> "Jag vaggar fram på isen och dyker gärna efter fisk."
+            "amber_egg" -> "Jag spinner nät och fångar flugor på morgonen."
+            "clay_egg" -> "Jag hoppar långt och bär min unge i fickan."
             else -> "Jag längtar efter att få träffa dig."
     }
 }

@@ -1,8 +1,12 @@
 package com.familyapp.application.pet;
 
+import com.familyapp.application.adventure.AdventureService;
+import com.familyapp.application.adventure.EggCatalog;
 import com.familyapp.application.xp.XpService;
 import com.familyapp.domain.pet.ChildPet;
 import com.familyapp.domain.pet.PetHistory;
+import com.familyapp.infrastructure.adventure.ChildEggUnlockJpaRepository;
+import com.familyapp.infrastructure.adventure.ChildInventoryJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.pet.ChildPetEntity;
 import com.familyapp.infrastructure.pet.ChildPetJpaRepository;
@@ -14,10 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -27,6 +34,9 @@ public class PetService {
     private final PetHistoryJpaRepository historyRepository;
     private final FamilyMemberJpaRepository memberRepository;
     private final XpService xpService;
+    private final ChildEggUnlockJpaRepository eggUnlockRepository;
+    private final ChildInventoryJpaRepository inventoryRepository;
+    private final AdventureService adventureService;
 
     // Deterministic mapping: egg type -> pet type
     private static final Map<String, String> EGG_TO_PET_MAP = new HashMap<>();
@@ -45,18 +55,29 @@ public class PetService {
         EGG_TO_PET_MAP.put("cyan_egg", "kapybara");
         EGG_TO_PET_MAP.put("white_egg", "shark");
         EGG_TO_PET_MAP.put("golden_egg", "lion");
+        EGG_TO_PET_MAP.put("silver_egg", "koala");
+        EGG_TO_PET_MAP.put("sand_egg", "meerkat");
+        EGG_TO_PET_MAP.put("ice_egg", "penguin");
+        EGG_TO_PET_MAP.put("amber_egg", "spider");
+        EGG_TO_PET_MAP.put("clay_egg", "kangaroo");
     }
 
     public PetService(
             ChildPetJpaRepository petRepository,
             PetHistoryJpaRepository historyRepository,
             FamilyMemberJpaRepository memberRepository,
-            XpService xpService
+            XpService xpService,
+            ChildEggUnlockJpaRepository eggUnlockRepository,
+            ChildInventoryJpaRepository inventoryRepository,
+            AdventureService adventureService
     ) {
         this.petRepository = petRepository;
         this.historyRepository = historyRepository;
         this.memberRepository = memberRepository;
         this.xpService = xpService;
+        this.eggUnlockRepository = eggUnlockRepository;
+        this.inventoryRepository = inventoryRepository;
+        this.adventureService = adventureService;
     }
 
     /**
@@ -77,6 +98,13 @@ public class PetService {
         // Validate egg type
         if (!EGG_TO_PET_MAP.containsKey(eggType)) {
             throw new IllegalArgumentException("Invalid egg type: " + eggType);
+        }
+
+        // The gate: only unlocked eggs can be picked. Commons are seeded lazily first so a
+        // brand-new child is never wrongly rejected for one of the four they start with.
+        adventureService.ensureCommonsUnlocked(memberId);
+        if (!eggUnlockRepository.existsByMemberAndEggType(memberId, eggType)) {
+            throw new IllegalArgumentException("Egg not unlocked: " + eggType);
         }
 
         LocalDate now = LocalDate.now();
@@ -206,6 +234,70 @@ public class PetService {
     }
 
     /**
+     * Every egg with its rarity and whether this child has unlocked and already collected
+     * it -- the data the three-zone picker needs (selectable / to discover / collected).
+     * Commons are ensured first so a fresh child always has its four.
+     *
+     * NOT read-only: ensureCommonsUnlocked lazily seeds the four commons, and a read-only
+     * transaction suppresses those inserts (Hibernate never flushes), which left every
+     * child created after the V48 migration with no selectable egg at all.
+     */
+    @Transactional
+    public List<EggOption> getEggOptions(UUID memberId) {
+        adventureService.ensureCommonsUnlocked(memberId);
+        var unlocked = new HashSet<>(eggUnlockRepository.findEggTypesByMemberId(memberId));
+        Set<String> collected = historyRepository.findByMemberIdOrderByYearDescMonthDesc(memberId).stream()
+                .map(PetHistoryEntity::getSelectedEggType)
+                .collect(Collectors.toSet());
+        return EGG_TO_PET_MAP.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new EggOption(
+                        entry.getKey(),
+                        entry.getValue(),
+                        EggCatalog.rarityOf(entry.getKey()).name(),
+                        unlocked.contains(entry.getKey()),
+                        collected.contains(entry.getKey())))
+                .toList();
+    }
+
+    /**
+     * Put a frame on this month's scene, or clear it with null. The child must own the
+     * frame (won on an adventure); an unowned frame is rejected.
+     */
+    public ChildPet equipFrame(UUID memberId, String frameId) {
+        LocalDate now = LocalDate.now();
+        var petEntity = petRepository.findByMemberIdAndYearAndMonth(memberId, now.getYear(), now.getMonthValue())
+                .orElseThrow(() -> new IllegalArgumentException("No pet this month"));
+        if (frameId != null && !inventoryRepository.existsByMemberAndItem(memberId, frameId)) {
+            throw new IllegalArgumentException("Frame not owned: " + frameId);
+        }
+        petEntity.setEquippedFrame(frameId);
+        petEntity.setUpdatedAt(OffsetDateTime.now());
+        return toDomain(petRepository.save(petEntity));
+    }
+
+    /**
+     * Put a scene decoration on this month's scene, or clear it with null. The child must
+     * own the item (won on an adventure); an unowned item is rejected.
+     */
+    public ChildPet equipSceneItem(UUID memberId, String itemId) {
+        LocalDate now = LocalDate.now();
+        var petEntity = petRepository.findByMemberIdAndYearAndMonth(memberId, now.getYear(), now.getMonthValue())
+                .orElseThrow(() -> new IllegalArgumentException("No pet this month"));
+        if (itemId != null && !inventoryRepository.existsByMemberAndItem(memberId, itemId)) {
+            throw new IllegalArgumentException("Scene item not owned: " + itemId);
+        }
+        petEntity.setEquippedSceneItem(itemId);
+        petEntity.setUpdatedAt(OffsetDateTime.now());
+        return toDomain(petRepository.save(petEntity));
+    }
+
+    /** One row of the egg picker: the egg, the animal it hatches, its rarity, and this
+     *  child's relationship to it. */
+    public record EggOption(String eggType, String petType, String rarity, boolean unlocked, boolean collected) {
+    }
+
+    /**
      * Feed the pet - awards XP to the member
      * This is called when the child feeds their pet with collected food
      * @param memberId The member ID
@@ -244,7 +336,9 @@ public class PetService {
                 entity.getGrowthStage(),
                 entity.getHatchedAt(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                entity.getEquippedFrame(),
+                entity.getEquippedSceneItem()
         );
     }
 
@@ -257,7 +351,8 @@ public class PetService {
                 entity.getSelectedEggType(),
                 entity.getPetType(),
                 entity.getFinalGrowthStage(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                entity.getFrame()
         );
     }
 }

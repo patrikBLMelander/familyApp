@@ -18,6 +18,8 @@ data class PetResponse(
     val hatchedAt: String?,
     val createdAt: String,
     val updatedAt: String,
+    val equippedFrame: String? = null, // loot_item-id på ramen på månadens scen, om någon
+    val equippedSceneItem: String? = null, // loot_item-id på scendekorationen, om någon
 )
 
 data class SelectEggRequest(
@@ -59,6 +61,28 @@ data class PetHistoryResponse(
     val selectedEggType: String,
     val petType: String,
     val finalGrowthStage: Int,
+    val frame: String? = null, // loot_item-id på ramen djuret bar, om någon
+)
+
+/**
+ * En rad i äggväljaren: ägget, djuret det kläcker, dess sällsynthet, och barnets relation
+ * till det. Driver tre-zonstavlan (valbara / att upptäcka / samlade). rarity och petType
+ * kommer från servern -- ingen lokal kopia av EGG_TO_PET_MAP som kan glida isär.
+ */
+data class EggOption(
+    val eggType: String,
+    val petType: String,
+    val rarity: String, // COMMON | RARE | LEGENDARY | MYTHIC
+    val unlocked: Boolean,
+    val collected: Boolean,
+)
+
+data class FrameRequest(
+    val frameId: String?, // null rensar ramen
+)
+
+data class SceneItemRequest(
+    val itemId: String?, // null rensar dekorationen
 )
 
 interface PetsApi {
@@ -67,6 +91,34 @@ interface PetsApi {
 
     @GET("pets/available-eggs")
     suspend fun getAvailableEggTypes(): List<String>
+
+    /** Tre-zonstavlans data: alla ägg med tier, unlocked och collected. */
+    @GET("pets/eggs")
+    suspend fun getEggs(): List<EggOption>
+
+    /** Samma, när en förälder tittar i barnets vy. */
+    @GET("pets/members/{memberId}/eggs")
+    suspend fun getEggsForMember(@Path("memberId") memberId: String): List<EggOption>
+
+    /** Sätt en ram på månadens scen, eller rensa med null. */
+    @POST("pets/current/frame")
+    suspend fun setFrame(@Body body: FrameRequest): PetResponse
+
+    @POST("pets/members/{memberId}/frame")
+    suspend fun setFrameForMember(
+        @Path("memberId") memberId: String,
+        @Body body: FrameRequest,
+    ): PetResponse
+
+    /** Sätt en scendekoration på månadens scen, eller rensa med null. */
+    @POST("pets/current/scene-item")
+    suspend fun setSceneItem(@Body body: SceneItemRequest): PetResponse
+
+    @POST("pets/members/{memberId}/scene-item")
+    suspend fun setSceneItemForMember(
+        @Path("memberId") memberId: String,
+        @Body body: SceneItemRequest,
+    ): PetResponse
 
     @POST("pets/select-egg")
     suspend fun selectEgg(@Body body: SelectEggRequest): PetResponse

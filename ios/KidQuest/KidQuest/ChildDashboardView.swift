@@ -12,6 +12,7 @@ struct ChildDashboardView: View {
     var onBack: () -> Void = {}
     var onOpenTasks: () -> Void = {}
     var onOpenWallet: () -> Void = {}
+    var onOpenAdventures: () -> Void = {}
 
     @State private var isLoading: Bool = true
     @State private var error: String?
@@ -27,6 +28,13 @@ struct ChildDashboardView: View {
     @State private var showAddChore: Bool = false
     @State private var history: [PetHistoryResponseDTO] = []
     @State private var viewingPast: PetHistoryResponseDTO?
+    /// Scendekorations-id -> ankare, för var den utrustade dekorationen ritas på bandet.
+    @State private var sceneItemAnchors: [String: String] = [:]
+    /// Det pågående äventyret (om något) och när det lästes, för bandets klocka.
+    @State private var activeAdventure: AdventureResponseDTO?
+    @State private var adventureLoadedAt = Date()
+    /// Loot från ett äventyr som hämtats direkt på bandet: kistan öppnas här.
+    @State private var claimedLoot: ClaimLootResponseDTO?
 
     /// Icke-nil renderar de här värdena i stället för att anropa nätet. Bara [fixture]
     /// sätter dem; de ligger utanför #if DEBUG så att typen har samma form i båda
@@ -67,6 +75,13 @@ struct ChildDashboardView: View {
             }
             await load()
             history = await ChildDashboardRepository.fetchPetHistory()
+            let catalog = await AdventureRepository.lootCatalog()
+            sceneItemAnchors = Dictionary(
+                uniqueKeysWithValues: catalog
+                    .filter { $0.type == "SCENE_ITEM" }
+                    .compactMap { item in item.anchor.map { (item.id, $0) } }
+            )
+            await refreshAdventure()
         }
         // Sist i ZStacken: senare syskon ritar överst, och avskedet ska ligga över
         // hela barnvyn.
@@ -80,6 +95,15 @@ struct ChildDashboardView: View {
                     showSelectEgg = true
                 }, harnessAutoSave: harnessFarewell)
                 .transition(.opacity)
+            }
+        }
+        // Kist-öppningen efter att ett äventyr hämtats direkt på bandet.
+        .overlay {
+            if let loot = claimedLoot {
+                LootReveal(loot: loot, palette: palette) {
+                    claimedLoot = nil
+                    Task { await load(showLoadingSpinner: false); await refreshAdventure() }
+                }
             }
         }
         .onAppear {
@@ -130,6 +154,10 @@ struct ChildDashboardView: View {
             balance: s.wallet?.balance,
             tasks: s.todaysTasks,
             history: history,
+            sceneItemAnchors: sceneItemAnchors,
+            adventure: activeAdventure,
+            adventureLoadedAt: adventureLoadedAt,
+            onClaimAdventure: { Task { await claimAdventure() } },
             viewingPast: $viewingPast,
             isFeeding: isFeeding,
             onToggleTask: { task in Task { await toggleTask(task) } },
@@ -137,6 +165,7 @@ struct ChildDashboardView: View {
             onOpenWallet: onOpenWallet,
             onSelectEgg: { showSelectEgg = true },
             onAddChore: { showAddChore = true },
+            onOpenAdventures: onOpenAdventures,
             harnessAutoFeed: harnessAutoFeed,
             // Barnets egen vy har ingen banner ovanför bandet -- bandet ligger kant i kant
             // som förut, och vägen ut är utloggningsraden längst ner.
@@ -198,6 +227,25 @@ struct ChildDashboardView: View {
             await load(showLoadingSpinner: false)
         } catch {
             summary = s
+        }
+    }
+
+    /// Barnets egen vy: token-scopat, så memberId är nil.
+    private func refreshAdventure() async {
+        let state = try? await AdventureRepository.state(memberId: nil)
+        await MainActor.run {
+            activeAdventure = state?.adventures.first { $0.status == "ONGOING" }
+            adventureLoadedAt = Date()
+        }
+    }
+
+    /// Hämtar det färdiga äventyret direkt från bandet och öppnar kistan här.
+    private func claimAdventure() async {
+        guard let adv = activeAdventure else { return }
+        let loot = try? await AdventureRepository.claim(memberId: nil, adventureId: adv.id)
+        await MainActor.run {
+            activeAdventure = nil
+            claimedLoot = loot
         }
     }
 
@@ -335,7 +383,8 @@ enum ChildFixtures {
         // Stadiet är nivån (calculateGrowthStage mappar 1:1), så en fixtur med
         // stadie 4 och nivå 3 beskriver ett tillstånd som inte kan uppstå.
         growthStage: 3, hatchedAt: nil,
-        createdAt: "2026-09-01T08:00:00Z", updatedAt: "2026-09-01T08:00:00Z"
+        createdAt: "2026-09-01T08:00:00Z", updatedAt: "2026-09-01T08:00:00Z",
+        equippedFrame: nil, equippedSceneItem: nil
     )
 
     static let xp = XpProgressResponseDTO(
@@ -359,11 +408,11 @@ enum ChildFixtures {
     static let history = [
         PetHistoryResponseDTO(
             id: "h1", memberId: "child-1", year: 2026, month: 8,
-            selectedEggType: "blue_egg", petType: "dragon", finalGrowthStage: 5
+            selectedEggType: "blue_egg", petType: "dragon", finalGrowthStage: 5, frame: nil
         ),
         PetHistoryResponseDTO(
             id: "h2", memberId: "child-1", year: 2026, month: 7,
-            selectedEggType: "pink_egg", petType: "unicorn", finalGrowthStage: 4
+            selectedEggType: "pink_egg", petType: "unicorn", finalGrowthStage: 4, frame: nil
         ),
     ]
 

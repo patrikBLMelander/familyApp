@@ -111,6 +111,71 @@ public class PetController {
         return petService.getAvailableEggTypes();
     }
 
+    /** The three-zone picker's data: every egg with rarity, unlocked and collected flags. */
+    @GetMapping("/eggs")
+    public List<PetService.EggOption> getEggOptions(
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        return petService.getEggOptions(requireMember(deviceToken));
+    }
+
+    /** Put a frame on this month's scene, or clear it by sending a null frameId. */
+    @PostMapping("/current/frame")
+    public PetResponse equipFrame(
+            @RequestBody EquipFrameRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID memberId = requireMember(deviceToken);
+        return toResponse(petService.equipFrame(memberId, request.frameId()));
+    }
+
+    /** Put a scene decoration on this month's scene, or clear it by sending a null itemId. */
+    @PostMapping("/current/scene-item")
+    public PetResponse equipSceneItem(
+            @RequestBody EquipSceneItemRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        UUID memberId = requireMember(deviceToken);
+        return toResponse(petService.equipSceneItem(memberId, request.itemId()));
+    }
+
+    /** Member-scoped picker data, for a parent acting in a child's view. */
+    @GetMapping("/members/{memberId}/eggs")
+    public List<PetService.EggOption> getEggOptionsForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        return petService.getEggOptions(memberId);
+    }
+
+    @PostMapping("/members/{memberId}/frame")
+    public PetResponse equipFrameForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody EquipFrameRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        return toResponse(petService.equipFrame(memberId, request.frameId()));
+    }
+
+    @PostMapping("/members/{memberId}/scene-item")
+    public PetResponse equipSceneItemForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody EquipSceneItemRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        return toResponse(petService.equipSceneItem(memberId, request.itemId()));
+    }
+
+    private UUID requireMember(String deviceToken) {
+        if (deviceToken == null || deviceToken.isEmpty()) {
+            throw new IllegalArgumentException("Device token is required");
+        }
+        return memberService.getMemberByDeviceToken(deviceToken).id();
+    }
+
     /**
      * 404 when the member has no pet this month, matching /pets/current.
      *
@@ -338,6 +403,12 @@ public class PetController {
         );
     }
 
+    public record EquipFrameRequest(String frameId) {
+    }
+
+    public record EquipSceneItemRequest(String itemId) {
+    }
+
     public record SelectEggRequest(String eggType, String name) {
     }
 
@@ -384,7 +455,9 @@ public class PetController {
                 pet.growthStage(),
                 pet.hatchedAt(),
                 pet.createdAt(),
-                pet.updatedAt()
+                pet.updatedAt(),
+                pet.equippedFrame(),
+                pet.equippedSceneItem()
         );
     }
 
@@ -397,7 +470,8 @@ public class PetController {
                 history.selectedEggType(),
                 history.petType(),
                 history.finalGrowthStage(),
-                history.createdAt()
+                history.createdAt(),
+                history.frame()
         );
     }
 
@@ -412,7 +486,9 @@ public class PetController {
             int growthStage,
             OffsetDateTime hatchedAt,
             OffsetDateTime createdAt,
-            OffsetDateTime updatedAt
+            OffsetDateTime updatedAt,
+            String equippedFrame,
+            String equippedSceneItem
     ) {
     }
 
@@ -424,7 +500,8 @@ public class PetController {
             String selectedEggType,
             String petType,
             int finalGrowthStage,
-            OffsetDateTime createdAt
+            OffsetDateTime createdAt,
+            String frame
     ) {
     }
 }

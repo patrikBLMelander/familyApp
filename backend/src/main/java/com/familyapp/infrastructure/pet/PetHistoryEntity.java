@@ -43,6 +43,9 @@ public class PetHistoryEntity {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    @Column(length = 50)
+    private String frame;
+
     public UUID getId() {
         return id;
     }
@@ -105,6 +108,14 @@ public class PetHistoryEntity {
 
     public void setCreatedAt(OffsetDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getFrame() {
+        return frame;
+    }
+
+    public void setFrame(String frame) {
+        this.frame = frame;
     }
 }
 

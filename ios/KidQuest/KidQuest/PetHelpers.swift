@@ -17,6 +17,11 @@ enum PetNameUtilsIOS {
         "kapybara": "Kapybara",
         "shark": "Haj",
         "lion": "Lejon",
+        "koala": "Koala",
+        "meerkat": "Surikat",
+        "penguin": "Pingvin",
+        "spider": "Spindel",
+        "kangaroo": "Känguru",
     ]
 
     static func getPetNameSwedish(_ petType: String?) -> String {
@@ -41,6 +46,11 @@ enum PetFoodUtilsIOS {
         "kapybara": "🌿",
         "shark": "🐠",
         "lion": "🥩",
+        "koala": "🍃",
+        "meerkat": "🦗",
+        "penguin": "🐟",
+        "spider": "🪰",
+        "kangaroo": "🌿",
     ]
 
     private static let foodNames: [String: String] = [
@@ -58,6 +68,11 @@ enum PetFoodUtilsIOS {
         "kapybara": "gräs",
         "shark": "fiskar",
         "lion": "kött",
+        "koala": "löv",
+        "meerkat": "insekter",
+        "penguin": "fisk",
+        "spider": "flugor",
+        "kangaroo": "gräs",
     ]
 
     static func emoji(for petType: String?) -> String {
@@ -98,6 +113,11 @@ enum PetImagesIOS {
         "cyan_egg": "kapybara",
         "white_egg": "shark",
         "golden_egg": "lion",
+        "silver_egg": "koala",
+        "sand_egg": "meerkat",
+        "ice_egg": "penguin",
+        "amber_egg": "spider",
+        "clay_egg": "kangaroo",
     ]
 
     /// "dragon" for "blue_egg". Also accepts a petType directly, since the API returns both.
@@ -131,6 +151,30 @@ enum PetImagesIOS {
 
     static func petImageName(forEgg eggType: String?, growthStage: Int) -> String? {
         petImageName(for: petType(forEgg: eggType), growthStage: growthStage)
+    }
+
+    // MARK: - Adventures + rarity art (nil when the asset is not in the catalog yet)
+
+    /// A frame's loot_item id is also its asset name (frame_forest, …).
+    static func frameImageName(_ frameId: String?) -> String? {
+        guard let frameId, UIImage(named: frameId) != nil else { return nil }
+        return frameId
+    }
+
+    static func sceneImageName(_ key: String) -> String? {
+        let name = "scene_\(key)"
+        return UIImage(named: name) != nil ? name : nil
+    }
+
+    /// A scene decoration's loot_item id is also its asset name (item_kite, …).
+    static func sceneItemImageName(_ itemId: String?) -> String? {
+        guard let itemId, UIImage(named: itemId) != nil else { return nil }
+        return itemId
+    }
+
+    static func chestStageImageName(_ stage: Int) -> String? {
+        let name = "chest_stage\(min(max(stage, minStage), maxStage))"
+        return UIImage(named: name) != nil ? name : nil
     }
 
     /// Mar–May spring, Jun–Aug summer, Sep–Nov autumn, otherwise winter — as on web.
@@ -224,6 +268,11 @@ enum PetThemeIOS {
         "kapybara": palette(0xDCFCE7, 0x22C55E, 0x16A34A),
         "shark": palette(0xBAE6FD, 0x0369A1, 0x0369A1),
         "lion": palette(0xFEF3C7, 0xD97706, 0xD97706),
+        "koala": palette(0xE6EBE1, 0x6B8E5A, 0x556B2F),
+        "meerkat": palette(0xEAD9B8, 0xB07A3E, 0x8A5A2E),
+        "penguin": palette(0xCDE3F0, 0x3F5A70, 0x2E4257),
+        "spider": palette(0xF7DFC0, 0xC96A1E, 0x7A3B12),
+        "kangaroo": palette(0xF6E3C8, 0xB06A3A, 0x8A4E28),
     ]
 
     /// For a child who has not chosen an egg yet: the app's own background pastels.
@@ -281,6 +330,11 @@ enum EggNames {
         case "cyan_egg": return "Jag älskar att plaska runt med kompisar."
         case "golden_egg": return "Jag ryter så att alla hör att jag vaknat."
         case "white_egg": return "Jag simmar snabbast av alla där det är djupt."
+        case "silver_egg": return "Jag sover gärna högt uppe bland eukalyptuslöven."
+        case "sand_egg": return "Jag står på bakbenen och spanar efter faror."
+        case "ice_egg": return "Jag vaggar fram på isen och dyker gärna efter fisk."
+        case "amber_egg": return "Jag spinner nät och fångar flugor på morgonen."
+        case "clay_egg": return "Jag hoppar långt och bär min unge i fickan."
         default: return "Jag längtar efter att få träffa dig."
         }
     }

@@ -25,6 +25,14 @@ struct PetVisual: View {
     /// landskapet med. Ankrad i nederkant så djuret växer upp från marken det står på.
     /// 1 är oförändrat, vilket är vad varje anropare som inte animerar får.
     var petScaleMultiplier: CGFloat = 1
+    /// Ramen som omger hela scenen (loot_item-id = bildnamn), eller nil.
+    var frameName: String? = nil
+    /// Scendekorationen (loot_item-id = bildnamn), eller nil, och om den sitter i himlen.
+    var sceneItemName: String? = nil
+    var sceneItemAtTop: Bool = true
+    /// En uttrycklig bakgrund (en äventyrsscen) som slår den säsongsbundna. Djuret ritas
+    /// då stående i scenen dit det gått.
+    var backgroundName: String? = nil
 
     var body: some View {
         let effectiveScale = min(
@@ -34,13 +42,26 @@ struct PetVisual: View {
 
         GeometryReader { geo in
             ZStack(alignment: alignment) {
-                if let backgroundName = PetImagesIOS.seasonalBackgroundName(season),
+                if let backgroundName = backgroundName ?? PetImagesIOS.seasonalBackgroundName(season),
                    let background = UIImage(named: backgroundName) {
                     Image(uiImage: background)
                         .resizable()
                         .scaledToFill()
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
+                }
+
+                // Scendekorationen ligger mellan bakgrunden och djuret, ankrad mot himlen
+                // eller marken. En liten accent -- ungefär en tredjedel av scenen -- inte ett
+                // heltäckande lager, så den aldrig slukar bakgrunden.
+                if let sceneItemName, let deco = UIImage(named: sceneItemName) {
+                    Image(uiImage: deco)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: geo.size.width * 0.34, height: geo.size.height * 0.34)
+                        .frame(width: geo.size.width, height: geo.size.height,
+                               alignment: sceneItemAtTop ? .top : .bottom)
+                        .padding(.vertical, 10)
                 }
 
                 if let petName = PetImagesIOS.petImageName(for: petType, growthStage: growthStage),
@@ -57,6 +78,17 @@ struct PetVisual: View {
                 } else {
                     Text("🐾")
                         .font(.system(size: 80))
+                }
+
+                // Ramen omger hela scenen, ritad sist. Den skalas något förbi kanten och
+                // klipps: den genererade ram-konsten bär ett mjukt glöd-moln utanför sin
+                // ram som annars disar bandets kanter och får ramen att se indragen ut.
+                // Överskalning trycker ut den solida ramen till kanten och klipper molnet.
+                if let frameName, let frame = UIImage(named: frameName) {
+                    Image(uiImage: frame)
+                        .resizable()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .scaleEffect(1.12)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: alignment)

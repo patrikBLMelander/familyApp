@@ -75,9 +75,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiClient
+import se.kidquest.app.network.LootResponse
 import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.DailyChoreResponse
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
+import se.kidquest.app.network.EggOption
 import se.kidquest.app.network.FeedPetRequest
 import se.kidquest.app.network.PetResponse
 import se.kidquest.app.network.SelectEggRequest
@@ -144,6 +146,7 @@ fun ChildDashboardScreen(
     actingAsParent: Boolean = false,
     onExitChildView: (() -> Unit)? = null,
     onSwitchChild: (() -> Unit)? = null,
+    onOpenAdventures: (() -> Unit)? = null,
     /**
      * Icke-null renderar de här värdena i stället för att anropa nätet.
      *
@@ -156,6 +159,28 @@ fun ChildDashboardScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var pet by remember { mutableStateOf<PetResponse?>(null) }
+    // Scene-item id -> anchor ("top"/"bottom"), so the equipped decoration renders on the
+    // right side of the band. Loaded once; the catalog is small and rarely changes.
+    var sceneItemAnchors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // While the pet is away on an adventure, the band shows the adventure scene + a clock
+    // instead of the pet at home. The first ONGOING adventure, and when its state was read
+    // (for the countdown).
+    var activeAdventure by remember { mutableStateOf<se.kidquest.app.network.AdventureResponse?>(null) }
+    var adventureLoadedAt by remember { mutableStateOf(0L) }
+    // Loot från ett äventyr som just hämtats på bandet: visar kist-öppningen direkt, utan
+    // omvägen till äventyrslistan.
+    var claimedLoot by remember { mutableStateOf<LootResponse?>(null) }
+    var claiming by remember { mutableStateOf(false) }
+    // Ticks once a second so the band clock recomputes; only runs while an adventure is out.
+    var adventureTick by remember { mutableStateOf(0L) }
+    LaunchedEffect(activeAdventure) {
+        if (activeAdventure != null) {
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                adventureTick++
+            }
+        }
+    }
     var xp by remember { mutableStateOf<XpProgressResponse?>(null) }
     var balance by remember { mutableStateOf<WalletBalanceResponse?>(null) }
     var todaysTasks by remember { mutableStateOf<List<DailyChoreWithCompletionResponse>>(emptyList()) }
@@ -173,6 +198,26 @@ fun ChildDashboardScreen(
     val taskToggleScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
     val taskToggleMutex = remember { Mutex() }
     var refreshDebounceJob by remember { mutableStateOf<Job?>(null) }
+
+    // Hämtar ett färdigt äventyr direkt från bandet: kistan öppnas här, och när barnet
+    // stänger den laddas bandet om (nästa äventyr, ny mat, uppdaterad äggsamling).
+    fun claimAdventureFromBand(adventureId: String) {
+        if (claiming) return
+        coroutineScope.launch {
+            claiming = true
+            try {
+                claimedLoot = withContext(Dispatchers.IO) {
+                    if (actingAsParent) ApiClient.adventuresApi.claimForMember(childId, adventureId)
+                    else ApiClient.adventuresApi.claim(adventureId)
+                }
+                activeAdventure = null
+            } catch (_: Exception) {
+                // Tyst: bandet visar fortfarande "Hemma!", barnet kan trycka igen.
+            } finally {
+                claiming = false
+            }
+        }
+    }
     val todayString = LocalDate.now().toString()
     // Barnets tidigare djur, och vilket som visas. Nil betyder dagens.
     var petHistory by remember { mutableStateOf<List<PetHistoryResponse>>(emptyList()) }
@@ -278,6 +323,15 @@ fun ChildDashboardScreen(
                     }.getOrNull()
                 }
                 val tasksDeferred = async { DailyChoreRepository.fetchChoresForToday(childId) }
+                val catalogDeferred = async {
+                    kotlin.runCatching { ApiClient.adventuresApi.getLootCatalog() }.getOrNull()
+                }
+                val adventureDeferred = async {
+                    kotlin.runCatching {
+                        if (actingAsParent) ApiClient.adventuresApi.getStateForMember(childId)
+                        else ApiClient.adventuresApi.getState()
+                    }.getOrNull()
+                }
 
                 val petResult = petDeferred.await()
                 val petResp = petResult.getOrNull()
@@ -287,6 +341,14 @@ fun ChildDashboardScreen(
                 todaysTasks = tasksDeferred.await()
 
                 pet = if (petResp?.isSuccessful == true) petResp.body() else null
+
+                catalogDeferred.await()
+                    ?.filter { it.type == "SCENE_ITEM" && it.anchor != null }
+                    ?.let { items -> sceneItemAnchors = items.associate { it.id to it.anchor!! } }
+
+                activeAdventure = adventureDeferred.await()
+                    ?.adventures?.firstOrNull { it.status == "ONGOING" }
+                adventureLoadedAt = System.currentTimeMillis()
 
                 // A 404 genuinely means "this child has no pet this month", which is what
                 // opens the egg picker. Anything else - a 500, a timeout, a dropped
@@ -683,6 +745,15 @@ fun ChildDashboardScreen(
                             .clipToBounds(),
                     ) {
                     if (shownPet != null) {
+                        // Cosmetics show only on the current pet's scene, not when looking
+                        // back at a past month. A past month keeps the frame it retired with.
+                        val past = viewingPast
+                        // While the pet is away on an adventure, it stands in the adventure
+                        // scene instead of at home, and the home frame/decoration are set
+                        // aside for the trip.
+                        val onAdventure = past == null && activeAdventure != null
+                        val currentFrame = if (onAdventure || past != null) past?.frame else pet?.equippedFrame
+                        val currentSceneItem = if (onAdventure || past != null) null else pet?.equippedSceneItem
                         PetVisual(
                             petType = shownPet.first,
                             growthStage = shownPet.second,
@@ -697,6 +768,10 @@ fun ChildDashboardScreen(
                             // Bara djuret pulsar. Skalar man hela PetVisual zoomar
                             // landskapet med.
                             petScaleMultiplier = feedAnim.petPulse,
+                            frameDrawableName = currentFrame,
+                            sceneItemDrawableName = currentSceneItem,
+                            sceneItemAtTop = currentSceneItem?.let { sceneItemAnchors[it] != "bottom" } ?: true,
+                            backgroundDrawableName = if (onAdventure) "scene_${activeAdventure!!.scene}" else null,
                         )
                     } else {
                         PetImages.seasonalBackgroundDrawable(context)?.let { bg ->
@@ -724,6 +799,26 @@ fun ChildDashboardScreen(
                                 )
                             )
                     )
+
+                    // Medan djuret är på äventyr: en klocka mitt på bandet som visar tiden
+                    // kvar (eller "Hemma!" när det är dags att hämta). Tryck går till
+                    // äventyrsskärmen.
+                    val adv = activeAdventure
+                    if (adv != null && viewingPast == null) {
+                        val elapsed = adventureTick.let { (System.currentTimeMillis() - adventureLoadedAt) / 1000 }
+                        val remaining = (adv.secondsRemaining - elapsed).coerceAtLeast(0)
+                        AdventureClockBadge(
+                            remainingSecs = remaining,
+                            season = season,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .padding(top = 56.dp),
+                            // Klar: hämta direkt här (kistan öppnas på bandet). Inte klar än:
+                            // gör inget -- nedräkningen syns redan.
+                            onClick = { if (remaining <= 0L && !claiming) claimAdventureFromBand(adv.id) },
+                        )
+                    }
 
                     // Djursamlingen och plånboken.
                     Row(
@@ -755,6 +850,24 @@ fun ChildDashboardScreen(
                             }
                         }
                         Spacer(modifier = Modifier.weight(1f))
+                        // Vägen till äventyr, bredvid plånboken. Bara i nuläget, inte när
+                        // ett tidigare djur bläddras fram.
+                        if (onOpenAdventures != null && viewingPast == null) {
+                            Surface(
+                                onClick = onOpenAdventures,
+                                shape = RoundedCornerShape(50),
+                                color = Color.White.copy(alpha = 0.92f),
+                                modifier = Modifier.padding(end = 8.dp),
+                            ) {
+                                Text(
+                                    text = "🗺️ Äventyr",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = season.accent,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                )
+                            }
+                        }
                         // Saldot, och vägen till plånboken. Ett tryck och inte ett kort:
                         // bandet ska inte konkurrera med listan om uppmärksamheten.
                         Surface(
@@ -1025,6 +1138,20 @@ fun ChildDashboardScreen(
         )
     }
 
+    // Kist-öppningen efter att ett äventyr hämtats direkt på bandet. När den stängs laddas
+    // bandet om så nästa äventyr, ny mat och äggsamlingen uppdateras.
+    val bandLoot = claimedLoot
+    if (bandLoot != null) {
+        LootDialog(
+            loot = bandLoot,
+            season = season,
+            onDismiss = {
+                claimedLoot = null
+                refreshKey++
+            },
+        )
+    }
+
     if (showConfetti) {
         Box(
             modifier = Modifier
@@ -1070,32 +1197,35 @@ private fun SelectEggDialog(
     childId: String = "",
 ) {
     val season = LocalSeasonPalette.current
-    var eggTypes by remember { mutableStateOf<List<String>>(emptyList()) }
+    var eggs by remember { mutableStateOf<List<EggOption>>(emptyList()) }
     var selectedEgg by remember { mutableStateOf<String?>(null) }
     var name by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var isNaming by remember { mutableStateOf(false) }
-    // Set once the pet is persisted. The hatching animation plays afterwards and
-    // hands this to onEggSelected, so nothing is celebrated before it is saved.
-    var savedPet by remember { mutableStateOf<PetResponse?>(null) }
-    var showHint by remember { mutableStateOf(false) }
+    // Flödet i tre steg: välj ägg -> ägget kläcks -> namnge djuret (nu syns djuret).
     var isHatching by remember { mutableStateOf(false) }
     var hatchingStage by remember { mutableStateOf(1) }
-    var showCelebrate by remember { mutableStateOf(false) }
+    var isNaming by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Djuret bakom det valda ägget. Servern ger petType per ägg, så både kläckningen och
+    // namnsteget kan visa rätt djur innan pet:en ens skapats.
+    val selectedPetType = eggs.firstOrNull { it.eggType == selectedEgg }?.petType
 
     LaunchedEffect(Unit) {
         loading = true
         error = null
         try {
-            eggTypes = withContext(Dispatchers.IO) {
-                ApiClient.petsApi.getAvailableEggTypes()
+            eggs = withContext(Dispatchers.IO) {
+                if (actingAsParent) ApiClient.petsApi.getEggsForMember(childId)
+                else ApiClient.petsApi.getEggs()
             }
-            if (eggTypes.isNotEmpty()) {
-                selectedEgg = eggTypes.first()
-            }
+            // Förvalt: första valbara (upplåst och inte redan samlat). Är inget valbart
+            // -- barnet har samlat allt upplåst -- lämnas det tomt och tavlan visar bara
+            // mystery + samlade, med vägen vidare via äventyr.
+            selectedEgg = eggs.firstOrNull { it.unlocked && !it.collected }?.eggType
         } catch (e: Exception) {
             error = ApiErrors.message(e, "Kunde inte hämta äggtyper")
         } finally {
@@ -1103,17 +1233,17 @@ private fun SelectEggDialog(
         }
     }
 
+    // Ägget kläcks i fem steg, sedan öppnas namnsteget där djuret syns. Pet:en skapas inte
+    // här utan först när namnet sparas, så att backa ur mitt i inte lämnar ett halvfött djur.
     LaunchedEffect(isHatching) {
-        val pet = savedPet
-        if (isHatching && pet != null) {
-            showCelebrate = false
+        if (isHatching) {
             for (stage in 1..5) {
                 hatchingStage = stage
-                delay(2000)
+                delay(650)
             }
-            showCelebrate = true
-            delay(2000)
-            onEggSelected(pet)
+            delay(250)
+            isHatching = false
+            isNaming = true
         }
     }
 
@@ -1140,19 +1270,8 @@ private fun SelectEggDialog(
                 } else if (error != null) {
                     Text(text = error!!, color = MaterialTheme.colorScheme.error)
                 } else if (isHatching) {
-                    val egg = selectedEgg
-                    val eggStageDrawable = PetImages.eggDrawable(LocalContext.current, egg, hatchingStage)
-                    if (showCelebrate) {
-                        Text(
-                            text = "Grattis! Ditt ägg har kläckts!",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    } else {
-                        Text(
-                            text = "Ägget kläcks...",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                    val eggStageDrawable = PetImages.eggDrawable(context, selectedEgg, hatchingStage)
+                    Text(text = "Ägget kläcks...", style = MaterialTheme.typography.bodyMedium)
                     Spacer(modifier = Modifier.height(12.dp))
                     if (eggStageDrawable != null) {
                         Image(
@@ -1166,7 +1285,7 @@ private fun SelectEggDialog(
                     }
                 } else if (!isNaming) {
                     EggCollectionBoard(
-                        eggTypes = eggTypes,
+                        eggs = eggs,
                         history = history,
                         selectedEgg = selectedEgg,
                         season = season,
@@ -1185,12 +1304,11 @@ private fun SelectEggDialog(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
                     )
                 } else {
-                    val egg = selectedEgg
-                    val namingEggDrawable = PetImages.eggDrawable(LocalContext.current, egg)
-                    if (namingEggDrawable != null) {
+                    val animalDrawable = PetImages.petDrawable(context, selectedPetType, 1)
+                    if (animalDrawable != null) {
                         Image(
-                            painter = painterResource(id = namingEggDrawable),
-                            contentDescription = "Ditt ägg",
+                            painter = painterResource(id = animalDrawable),
+                            contentDescription = "Ditt djur",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(160.dp),
@@ -1199,7 +1317,9 @@ private fun SelectEggDialog(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
                     Text(
-                        text = "Vad ska ditt djur heta?",
+                        text = selectedPetType?.let {
+                            "Det blev en ${PetNameUtils.getPetNameSwedish(it)}! Vad ska den heta?"
+                        } ?: "Vad ska ditt djur heta?",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1207,6 +1327,7 @@ private fun SelectEggDialog(
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("Namn på djuret (valfritt)") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -1218,10 +1339,10 @@ private fun SelectEggDialog(
                     val egg = selectedEgg ?: return@TextButton
                     if (isHatching) return@TextButton
                     if (!isNaming) {
-                        // Ask for the name first. The egg is not persisted yet, so
-                        // backing out here loses nothing the child was promised.
-                        isNaming = true
-                        showHint = false
+                        // Starta kläckningen. Pet:en skapas först när namnet sparas, så att
+                        // backa ur mitt i inte lämnar ett halvfött djur.
+                        hatchingStage = 1
+                        isHatching = true
                         return@TextButton
                     }
                     saving = true
@@ -1232,23 +1353,13 @@ private fun SelectEggDialog(
                                 if (actingAsParent) {
                                     ApiClient.petsApi.selectEggForMember(
                                         memberId = childId,
-                                        body = SelectEggRequest(
-                                            eggType = egg,
-                                            name = name.ifBlank { null },
-                                        ),
+                                        body = SelectEggRequest(eggType = egg, name = name.ifBlank { null }),
                                     )
                                 } else ApiClient.petsApi.selectEgg(
-                                    SelectEggRequest(
-                                        eggType = egg,
-                                        name = name.ifBlank { null },
-                                    ),
+                                    SelectEggRequest(eggType = egg, name = name.ifBlank { null }),
                                 )
                             }
-                            // Saved. Only now does the egg get to hatch.
-                            savedPet = pet
-                            isNaming = false
-                            hatchingStage = 1
-                            isHatching = true
+                            onEggSelected(pet)
                         } catch (e: Exception) {
                             error = ApiErrors.message(e, "Kunde inte välja ägg")
                         } finally {
@@ -1260,10 +1371,10 @@ private fun SelectEggDialog(
             ) {
                 Text(
                     when {
-                        saving -> "Väljer…"
+                        saving -> "Sparar…"
                         isHatching -> "Ägget kläcks…"
                         !isNaming -> "Välj"
-                        else -> "Spara och kläck"
+                        else -> "Spara"
                     },
                 )
             }
@@ -1625,6 +1736,42 @@ private fun BarAction(text: String, tint: Color, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
+}
+
+/** Klockan mitt på bandet medan djuret är ute på äventyr: tid kvar, eller "Hemma!" när det
+ *  är dags att hämta. Trycksam -- leder till äventyrsskärmen. */
+@Composable
+private fun AdventureClockBadge(
+    remainingSecs: Long,
+    season: SeasonPalette,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val ready = remainingSecs <= 0
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(if (ready) "🎁" else "⏳", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = if (ready) "Hemma! Tryck för att hämta"
+            else "På äventyr · ${formatBandRemaining(remainingSecs)}",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+        )
+    }
+}
+
+private fun formatBandRemaining(secs: Long): String {
+    val m = secs / 60
+    val s = secs % 60
+    return if (m >= 3) "$m min kvar" else "%d:%02d kvar".format(m, s)
 }
 
 /** Svensk genitiv: "Signes vy", men "Lukas vy" -- namn på s, x eller z får inget extra s. */

@@ -1,5 +1,6 @@
 package com.familyapp.application.xp;
 
+import com.familyapp.application.adventure.AdventureService;
 import com.familyapp.application.pet.PetService;
 import com.familyapp.domain.xp.MemberXpHistory;
 import com.familyapp.domain.xp.MemberXpProgress;
@@ -32,6 +33,7 @@ public class XpService {
     private final ChildPetJpaRepository petRepository;
     private final PetHistoryJpaRepository petHistoryRepository;
     private final PetService petService;
+    private final AdventureService adventureService;
 
     public XpService(
             MemberXpProgressJpaRepository progressRepository,
@@ -39,7 +41,8 @@ public class XpService {
             FamilyMemberJpaRepository memberRepository,
             ChildPetJpaRepository petRepository,
             PetHistoryJpaRepository petHistoryRepository,
-            @Lazy PetService petService
+            @Lazy PetService petService,
+            AdventureService adventureService
     ) {
         this.progressRepository = progressRepository;
         this.historyRepository = historyRepository;
@@ -47,6 +50,7 @@ public class XpService {
         this.petRepository = petRepository;
         this.petHistoryRepository = petHistoryRepository;
         this.petService = petService;
+        this.adventureService = adventureService;
     }
 
     /**
@@ -84,12 +88,16 @@ public class XpService {
                 });
 
         // Update XP and level
+        int oldLevel = progressEntity.getCurrentLevel();
         int newXp = progressEntity.getCurrentXp() + xpPoints;
         int newLevel = MemberXpProgress.calculateLevel(newXp);
         
         progressEntity.setCurrentXp(newXp);
         progressEntity.setCurrentLevel(newLevel);
         progressEntity.setTotalTasksCompleted(progressEntity.getTotalTasksCompleted() + 1);
+        if (newLevel > oldLevel) {
+            adventureService.awardTicketsForLevelUp(memberId, year, month, oldLevel, newLevel);
+        }
         progressEntity.setUpdatedAt(OffsetDateTime.now());
 
         progressRepository.save(progressEntity);
@@ -134,11 +142,15 @@ public class XpService {
                 });
 
         // Update XP and level (but NOT task completion count)
+        int oldLevel = progressEntity.getCurrentLevel();
         int newXp = progressEntity.getCurrentXp() + xpPoints;
         int newLevel = MemberXpProgress.calculateLevel(newXp);
         
         progressEntity.setCurrentXp(newXp);
         progressEntity.setCurrentLevel(newLevel);
+        if (newLevel > oldLevel) {
+            adventureService.awardTicketsForLevelUp(memberId, year, month, oldLevel, newLevel);
+        }
         // Note: totalTasksCompleted is NOT incremented for bonus XP
         progressEntity.setUpdatedAt(OffsetDateTime.now());
 
@@ -258,6 +270,7 @@ public class XpService {
             petHistory.setSelectedEggType(pet.getSelectedEggType());
             petHistory.setPetType(pet.getPetType());
             petHistory.setFinalGrowthStage(pet.getGrowthStage());
+            petHistory.setFrame(pet.getEquippedFrame());
             petHistory.setCreatedAt(OffsetDateTime.now());
             petHistoryRepository.save(petHistory);
 
