@@ -16,6 +16,10 @@ object PetFoodUtils {
         "kapybara" to "🌿",
         "shark" to "🐠",
         "lion" to "🥩",
+        "scorpion" to "🦗",
+        "octopus" to "🦐",
+        "snowleopard" to "🥩",
+        "tiger" to "🍖",
     )
 
     private val foodNameMap = mapOf(
@@ -33,6 +37,10 @@ object PetFoodUtils {
         "kapybara" to "gräs",
         "shark" to "fiskar",
         "lion" to "kött",
+        "scorpion" to "syrsor",
+        "octopus" to "räkor",
+        "snowleopard" to "kött",
+        "tiger" to "kött",
     )
 
     fun getPetFoodEmoji(petType: String?): String =

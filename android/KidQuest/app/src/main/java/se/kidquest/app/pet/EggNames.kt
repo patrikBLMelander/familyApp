@@ -35,6 +35,10 @@ object EggNames {
             "ice_egg" -> "Jag vaggar fram på isen och dyker gärna efter fisk."
             "amber_egg" -> "Jag spinner nät och fångar flugor på morgonen."
             "clay_egg" -> "Jag hoppar långt och bär min unge i fickan."
+            "ember_egg" -> "Jag har en stark svans och gömmer mig gärna bland stenar."
+            "indigo_egg" -> "Jag har åtta armar och gömmer mig gärna bland koraller."
+            "frost_egg" -> "Jag smyger tyst över snöiga berg och gömmer mig i dimman."
+            "tiger_egg" -> "Jag har ränder och smyger tyst genom den höga gräsdjungeln."
             else -> "Jag längtar efter att få träffa dig."
     }
 }

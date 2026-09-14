@@ -93,7 +93,7 @@ class PetServiceGateTest {
 
         var options = service.getEggOptions(MEMBER);
 
-        assertThat(options).hasSize(19);
+        assertThat(options).hasSize(23);
         var green = options.stream().filter(o -> o.eggType().equals("green_egg")).findFirst().orElseThrow();
         assertThat(green.rarity()).isEqualTo("COMMON");
         assertThat(green.unlocked()).isTrue();

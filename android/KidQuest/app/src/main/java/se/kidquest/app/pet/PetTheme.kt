@@ -70,6 +70,10 @@ object PetTheme {
         "penguin" to palette(0xFFCDE3F0, 0xFF3F5A70, 0xFF2E4257, LIGHT_BLUE),
         "spider" to palette(0xFFF7DFC0, 0xFFC96A1E, 0xFF7A3B12, LIGHT_AMBER),
         "kangaroo" to palette(0xFFF6E3C8, 0xFFB06A3A, 0xFF8A4E28, LIGHT_AMBER),
+        "scorpion" to palette(0xFFF6D9B0, 0xFFE0791B, 0xFF5A3212, LIGHT_AMBER),
+        "octopus" to palette(0xFFDCC9F0, 0xFF7C5CC0, 0xFF3F2A78, LIGHT_VIOLET),
+        "snowleopard" to palette(0xFFE8EAEE, 0xFF64748B, 0xFF334155, LIGHT_GREY),
+        "tiger" to palette(0xFFFCE3B0, 0xFFE07B1E, 0xFF5A3410, LIGHT_AMBER),
     )
 
     /** For a child who has not chosen an egg yet: the app's own background pastels. */
