@@ -80,6 +80,7 @@ import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.DailyChoreResponse
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.network.EggOption
+import se.kidquest.app.network.FamilyMemberResponse
 import se.kidquest.app.network.FeedPetRequest
 import se.kidquest.app.network.PetResponse
 import se.kidquest.app.network.SelectEggRequest
@@ -145,7 +146,13 @@ fun ChildDashboardScreen(
     onOpenWallet: () -> Unit,
     actingAsParent: Boolean = false,
     onExitChildView: (() -> Unit)? = null,
-    onSwitchChild: (() -> Unit)? = null,
+    /**
+     * Byter vilket barn föräldern tittar på, PÅ PLATS -- vyn stannar kvar i barnläget (samma
+     * barnlås). Den får INTE navigera ut till förälderns hem: "Byt barn" som väg ut vore att
+     * gå runt koden, vilket den gjorde förut. Anroparen re-navigerar till samma
+     * child-as-parent-vy för det nya barnet.
+     */
+    onSwitchChild: ((childId: String, childName: String) -> Unit)? = null,
     onOpenAdventures: (() -> Unit)? = null,
     /**
      * Icke-null renderar de här värdena i stället för att anropa nätet.
@@ -255,9 +262,23 @@ fun ChildDashboardScreen(
     var parentPin by remember { mutableStateOf<String?>(null) }
     var pinPurpose by remember { mutableStateOf<PinPurpose?>(null) }
 
+    // "Byt barn": syskonlistan för att byta barn PÅ PLATS. Att byta stannar kvar i barnvyn
+    // (samma barnlås) -- det lämnar aldrig vyn till förälderns hem, vilket vore att kringgå
+    // koden. Hämtas bara när en förälder faktiskt kan byta.
+    var showSwitchChild by remember { mutableStateOf(false) }
+    var siblings by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
+
     LaunchedEffect(actingAsParent) {
         if (fixture != null || !actingAsParent) return@LaunchedEffect
         parentPin = TokenStore.parentPin()
+    }
+
+    LaunchedEffect(actingAsParent, onSwitchChild != null) {
+        if (fixture != null || !actingAsParent || onSwitchChild == null) return@LaunchedEffect
+        siblings = runCatching {
+            ApiClient.familyMembersApi.getAllMembers()
+                .filter { it.role == "CHILD" || it.role == "ASSISTANT" }
+        }.getOrDefault(emptyList())
     }
 
     // Gesten måste spärras, inte bara knappen. En spärr man går runt med ett svep är
@@ -689,7 +710,9 @@ fun ChildDashboardScreen(
                     ActingAsParentBanner(
                         childName = childName,
                         hasPin = parentPin != null,
-                        onSwitchChild = onSwitchChild,
+                        // "Byt barn" öppnar syskonväljaren i stället för att navigera ut. Bytet
+                        // sker på plats och stannar i barnläget, så barnlåset kringgås inte.
+                        onSwitchChild = onSwitchChild?.let { { showSwitchChild = true } },
                         onExit = onExitChildView?.let { exit ->
                             {
                                 // Utan kod är vägen ut öppen, som förut.
@@ -1104,6 +1127,19 @@ fun ChildDashboardScreen(
                 )
             }
 
+            if (showSwitchChild) {
+                SwitchChildDialog(
+                    siblings = siblings,
+                    currentChildId = childId,
+                    season = season,
+                    onPick = { id, name ->
+                        showSwitchChild = false
+                        if (id != childId) onSwitchChild?.invoke(id, name)
+                    },
+                    onDismiss = { showSwitchChild = false },
+                )
+            }
+
             val farewellNow = farewell
             if (farewellNow != null) {
                 MonthFarewell(
@@ -1183,6 +1219,60 @@ fun ChildDashboardScreen(
             }
         }
     }
+}
+
+/**
+ * Syskonväljaren för "Byt barn" i barnläget. Speglar iOS: en lista över familjens barn med
+ * det aktiva barnet bockat. Att välja ett annat barn byter vy PÅ PLATS -- föräldern stannar i
+ * barnläget hela tiden, så barnlåset kringgås aldrig (till skillnad från förut, då "Byt barn"
+ * navigerade ut till förälderns hem och gick runt koden).
+ */
+@Composable
+private fun SwitchChildDialog(
+    siblings: List<FamilyMemberResponse>,
+    currentChildId: String,
+    season: SeasonPalette,
+    onPick: (childId: String, childName: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Byt barn") },
+        text = {
+            if (siblings.isEmpty()) {
+                Text(
+                    text = "Inga andra barn i familjen.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = season.inkFaint,
+                )
+            } else {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    siblings.forEach { child ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onPick(child.id, child.name) }
+                                .padding(horizontal = 12.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = child.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (child.id == currentChildId) {
+                                Text(text = "✓", color = season.accent)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Avbryt") }
+        },
+    )
 }
 
 @Composable

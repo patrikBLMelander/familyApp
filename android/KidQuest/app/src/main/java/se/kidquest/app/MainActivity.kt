@@ -155,7 +155,7 @@ class MainActivity : ComponentActivity() {
                         onOpenWallet = {},
                         actingAsParent = asParent,
                         onExitChildView = if (asParent) ({}) else null,
-                        onSwitchChild = if (asParent) ({}) else null,
+                        onSwitchChild = if (asParent) ({ _, _ -> }) else null,
                         fixture = ChildDashboardFixture.signe(
                             allDone = forcedScreen == "child-done",
                             viewingPast = forcedScreen == "child-past",
@@ -426,7 +426,12 @@ class MainActivity : ComponentActivity() {
                             // No token juggling: the parent stays signed in throughout,
                             // which is the entire point of this route.
                             onExitChildView = { currentScreen = AppScreen.Home },
-                            onSwitchChild = { currentScreen = AppScreen.Home },
+                            // "Byt barn" byter barn PÅ PLATS: vi re-navigerar till samma
+                            // child-as-parent-vy för det nya barnet i stället för att gå ut
+                            // till hemmet. Att gå ut via "Byt barn" kringgick barnlåset.
+                            onSwitchChild = { id, name ->
+                                currentScreen = AppScreen.ChildViewAsParent(id, name)
+                            },
                             onBack = { backAction?.invoke() },
                             onOpenTasks = {
                                 returnToChildDashboard = screen.childId to screen.childName
