@@ -64,6 +64,10 @@ public class PetService {
         EGG_TO_PET_MAP.put("indigo_egg", "octopus");
         EGG_TO_PET_MAP.put("frost_egg", "snowleopard");
         EGG_TO_PET_MAP.put("tiger_egg", "tiger");
+        EGG_TO_PET_MAP.put("snow_egg", "polarbear");
+        EGG_TO_PET_MAP.put("savanna_egg", "giraffe");
+        EGG_TO_PET_MAP.put("ivory_egg", "elephant");
+        EGG_TO_PET_MAP.put("swamp_egg", "crocodile");
     }
 
     public PetService(

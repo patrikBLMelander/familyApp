@@ -25,6 +25,10 @@ object PetNameUtils {
         "octopus" to "Bläckfisk",
         "snowleopard" to "Snöleopard",
         "tiger" to "Tiger",
+        "polarbear" to "Isbjörn",
+        "giraffe" to "Giraff",
+        "elephant" to "Elefant",
+        "crocodile" to "Krokodil",
     )
 
     private val petNameLowercaseMap = mapOf(
@@ -51,6 +55,10 @@ object PetNameUtils {
         "octopus" to "bläckfisk",
         "snowleopard" to "snöleopard",
         "tiger" to "tiger",
+        "polarbear" to "isbjörn",
+        "giraffe" to "giraff",
+        "elephant" to "elefant",
+        "crocodile" to "krokodil",
     )
 
     fun getPetNameSwedish(petType: String?): String =

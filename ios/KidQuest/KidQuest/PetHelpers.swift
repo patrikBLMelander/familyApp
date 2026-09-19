@@ -26,6 +26,10 @@ enum PetNameUtilsIOS {
         "octopus": "Bläckfisk",
         "snowleopard": "Snöleopard",
         "tiger": "Tiger",
+        "polarbear": "Isbjörn",
+        "giraffe": "Giraff",
+        "elephant": "Elefant",
+        "crocodile": "Krokodil",
     ]
 
     static func getPetNameSwedish(_ petType: String?) -> String {
@@ -59,6 +63,10 @@ enum PetFoodUtilsIOS {
         "octopus": "🦐",
         "snowleopard": "🥩",
         "tiger": "🍖",
+        "polarbear": "🐟",
+        "giraffe": "🌿",
+        "elephant": "🥜",
+        "crocodile": "🍖",
     ]
 
     private static let foodNames: [String: String] = [
@@ -85,6 +93,10 @@ enum PetFoodUtilsIOS {
         "octopus": "räkor",
         "snowleopard": "kött",
         "tiger": "kött",
+        "polarbear": "fisk",
+        "giraffe": "blad",
+        "elephant": "jordnötter",
+        "crocodile": "kött",
     ]
 
     static func emoji(for petType: String?) -> String {
@@ -134,6 +146,10 @@ enum PetImagesIOS {
         "indigo_egg": "octopus",
         "frost_egg": "snowleopard",
         "tiger_egg": "tiger",
+        "snow_egg": "polarbear",
+        "savanna_egg": "giraffe",
+        "ivory_egg": "elephant",
+        "swamp_egg": "crocodile",
     ]
 
     /// "dragon" for "blue_egg". Also accepts a petType directly, since the API returns both.
@@ -293,6 +309,10 @@ enum PetThemeIOS {
         "octopus": palette(0xDCC9F0, 0x7C5CC0, 0x3F2A78),
         "snowleopard": palette(0xE8EAEE, 0x64748B, 0x334155),
         "tiger": palette(0xFCE3B0, 0xE07B1E, 0x5A3410),
+        "polarbear": palette(0xEAF2F8, 0x7FA8C9, 0x3E5C74),
+        "giraffe": palette(0xF6E0B8, 0xCE8A3A, 0x7A4A1E),
+        "elephant": palette(0xDDE1E6, 0x8B95A1, 0x4A525C),
+        "crocodile": palette(0xDDE9C8, 0x6E8B3D, 0x3E4F22),
     ]
 
     /// For a child who has not chosen an egg yet: the app's own background pastels.
@@ -359,6 +379,10 @@ enum EggNames {
         case "indigo_egg": return "Jag har åtta armar och gömmer mig gärna bland koraller."
         case "frost_egg": return "Jag smyger tyst över snöiga berg och gömmer mig i dimman."
         case "tiger_egg": return "Jag har ränder och smyger tyst genom den höga gräsdjungeln."
+        case "snow_egg": return "Jag är vit som snö och trivs bäst där det är riktigt kallt."
+        case "savanna_egg": return "Jag är lång i halsen och når löven högst upp i träden."
+        case "ivory_egg": return "Jag har en lång snabel och glömmer aldrig en vän."
+        case "swamp_egg": return "Jag ligger stilla i vattnet och visar bara ögonen."
         default: return "Jag längtar efter att få träffa dig."
         }
     }

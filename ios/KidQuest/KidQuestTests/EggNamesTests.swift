@@ -19,7 +19,8 @@ struct EggNamesTests {
     /// för hand: en ny rad här är det som ska tvinga fram en ny ledtråd nedan.
     static let allEggs = [
         "amber_egg", "black_egg", "blue_egg", "brown_egg", "cyan_egg", "golden_egg", "gray_egg",
-        "clay_egg", "ember_egg", "indigo_egg", "frost_egg", "tiger_egg",
+        "clay_egg", "ember_egg", "indigo_egg", "frost_egg", "tiger_egg", "snow_egg", "savanna_egg",
+        "ivory_egg", "swamp_egg",
         "green_egg", "ice_egg", "orange_egg", "pink_egg", "purple_egg", "red_egg", "sand_egg",
         "silver_egg", "teal_egg", "white_egg", "yellow_egg",
     ]
