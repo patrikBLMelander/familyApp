@@ -47,6 +47,8 @@ public final class EggCatalog {
             Map.entry("savanna_egg", EggRarity.LEGENDARY),// giraffe
             Map.entry("ivory_egg", EggRarity.LEGENDARY),  // elephant
             Map.entry("swamp_egg", EggRarity.LEGENDARY),  // crocodile
+            Map.entry("onyx_egg", EggRarity.LEGENDARY),   // panther
+            Map.entry("moon_egg", EggRarity.LEGENDARY),   // wolf
             // Mythic -- fantastical, impossible creatures.
             Map.entry("blue_egg", EggRarity.MYTHIC),   // dragon
             Map.entry("teal_egg", EggRarity.MYTHIC),   // hydra

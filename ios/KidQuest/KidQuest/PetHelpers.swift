@@ -30,6 +30,8 @@ enum PetNameUtilsIOS {
         "giraffe": "Giraff",
         "elephant": "Elefant",
         "crocodile": "Krokodil",
+        "panther": "Panter",
+        "wolf": "Varg",
     ]
 
     static func getPetNameSwedish(_ petType: String?) -> String {
@@ -67,6 +69,8 @@ enum PetFoodUtilsIOS {
         "giraffe": "🌿",
         "elephant": "🥜",
         "crocodile": "🍖",
+        "panther": "🥩",
+        "wolf": "🍖",
     ]
 
     private static let foodNames: [String: String] = [
@@ -97,6 +101,8 @@ enum PetFoodUtilsIOS {
         "giraffe": "blad",
         "elephant": "jordnötter",
         "crocodile": "kött",
+        "panther": "kött",
+        "wolf": "kött",
     ]
 
     static func emoji(for petType: String?) -> String {
@@ -150,6 +156,8 @@ enum PetImagesIOS {
         "savanna_egg": "giraffe",
         "ivory_egg": "elephant",
         "swamp_egg": "crocodile",
+        "onyx_egg": "panther",
+        "moon_egg": "wolf",
     ]
 
     /// "dragon" for "blue_egg". Also accepts a petType directly, since the API returns both.
@@ -313,6 +321,8 @@ enum PetThemeIOS {
         "giraffe": palette(0xF6E0B8, 0xCE8A3A, 0x7A4A1E),
         "elephant": palette(0xDDE1E6, 0x8B95A1, 0x4A525C),
         "crocodile": palette(0xDDE9C8, 0x6E8B3D, 0x3E4F22),
+        "panther": palette(0xD8D6DC, 0x2E2E36, 0x141418),
+        "wolf": palette(0xDDDCE0, 0x7C7A85, 0x44424C),
     ]
 
     /// For a child who has not chosen an egg yet: the app's own background pastels.
@@ -383,6 +393,8 @@ enum EggNames {
         case "savanna_egg": return "Jag är lång i halsen och når löven högst upp i träden."
         case "ivory_egg": return "Jag har en lång snabel och glömmer aldrig en vän."
         case "swamp_egg": return "Jag ligger stilla i vattnet och visar bara ögonen."
+        case "onyx_egg": return "Jag smyger i mörkret på helt tysta tassar."
+        case "moon_egg": return "Jag ylar mot månen och springer i flock."
         default: return "Jag längtar efter att få träffa dig."
         }
     }

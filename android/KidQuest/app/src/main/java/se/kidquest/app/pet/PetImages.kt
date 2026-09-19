@@ -48,6 +48,8 @@ object PetImages {
         "savanna_egg" to "giraffe",
         "ivory_egg" to "elephant",
         "swamp_egg" to "crocodile",
+        "onyx_egg" to "panther",
+        "moon_egg" to "wolf",
     )
 
     /**
@@ -85,6 +87,8 @@ object PetImages {
         "giraffe" to "Giraff",
         "elephant" to "Elefant",
         "crocodile" to "Krokodil",
+        "panther" to "Panter",
+        "wolf" to "Varg",
     )
 
     /** Null for an unknown species, so the caller can decide what to say instead. */

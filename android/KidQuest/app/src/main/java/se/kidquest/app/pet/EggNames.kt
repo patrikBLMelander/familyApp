@@ -43,6 +43,8 @@ object EggNames {
             "savanna_egg" -> "Jag är lång i halsen och når löven högst upp i träden."
             "ivory_egg" -> "Jag har en lång snabel och glömmer aldrig en vän."
             "swamp_egg" -> "Jag ligger stilla i vattnet och visar bara ögonen."
+            "onyx_egg" -> "Jag smyger i mörkret på helt tysta tassar."
+            "moon_egg" -> "Jag ylar mot månen och springer i flock."
             else -> "Jag längtar efter att få träffa dig."
     }
 }

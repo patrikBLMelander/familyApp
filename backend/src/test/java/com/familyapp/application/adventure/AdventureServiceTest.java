@@ -48,7 +48,7 @@ class AdventureServiceTest {
     private static final List<String> ALL_EGGS = List.of(
             "green_egg", "red_egg", "purple_egg", "yellow_egg",
             "orange_egg", "black_egg", "cyan_egg", "gray_egg", "brown_egg", "silver_egg",
-            "sand_egg", "ice_egg", "amber_egg", "clay_egg", "ember_egg", "indigo_egg", "golden_egg", "white_egg", "frost_egg", "tiger_egg", "snow_egg", "savanna_egg", "ivory_egg", "swamp_egg", "blue_egg", "teal_egg", "pink_egg");
+            "sand_egg", "ice_egg", "amber_egg", "clay_egg", "ember_egg", "indigo_egg", "golden_egg", "white_egg", "frost_egg", "tiger_egg", "snow_egg", "savanna_egg", "ivory_egg", "swamp_egg", "onyx_egg", "moon_egg", "blue_egg", "teal_egg", "pink_egg");
     private static final List<String> ONLY_COMMONS = List.of("green_egg", "red_egg", "purple_egg", "yellow_egg");
 
     private AdventureJpaRepository adventures;

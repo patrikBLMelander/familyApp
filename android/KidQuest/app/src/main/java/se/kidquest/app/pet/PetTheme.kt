@@ -78,6 +78,8 @@ object PetTheme {
         "giraffe" to palette(0xFFF6E0B8, 0xFFCE8A3A, 0xFF7A4A1E, LIGHT_AMBER),
         "elephant" to palette(0xFFDDE1E6, 0xFF8B95A1, 0xFF4A525C, LIGHT_GREY),
         "crocodile" to palette(0xFFDDE9C8, 0xFF6E8B3D, 0xFF3E4F22, LIGHT_GREEN),
+        "panther" to palette(0xFFD8D6DC, 0xFF2E2E36, 0xFF141418, LIGHT_GREY),
+        "wolf" to palette(0xFFDDDCE0, 0xFF7C7A85, 0xFF44424C, LIGHT_GREY),
     )
 
     /** For a child who has not chosen an egg yet: the app's own background pastels. */
