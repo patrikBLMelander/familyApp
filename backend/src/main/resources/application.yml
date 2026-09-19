@@ -67,3 +67,15 @@ kidquest:
     # Sandbox purchases apply to entitlement, so a Play licence tester can exercise the
     # whole chain. Turn this off before launch.
     accept-sandbox: ${KIDQUEST_SUBSCRIPTION_ACCEPT_SANDBOX:true}
+  affiliate:
+    # Comma-separated emails allowed to reach the affiliate admin endpoints. Empty means
+    # nobody is admin (the safe default) -- set this to your own parent-account email.
+    admin-emails: ${AFFILIATE_ADMIN_EMAILS:}
+    # Prefix for an affiliate's shareable link; their code is appended.
+    link-base: ${AFFILIATE_LINK_BASE:https://www.kidquest.se/?ref=}
+    # Default commission terms for a newly invited affiliate (overridable per row later).
+    commission-pct: ${AFFILIATE_COMMISSION_PCT:20.00}
+    month-cap: ${AFFILIATE_MONTH_CAP:12}
+    # Fallback share the developer keeps after store fees, used only when RevenueCat
+    # omits takehome_percentage on an event.
+    default-takehome-ratio: ${AFFILIATE_DEFAULT_TAKEHOME_RATIO:0.85}

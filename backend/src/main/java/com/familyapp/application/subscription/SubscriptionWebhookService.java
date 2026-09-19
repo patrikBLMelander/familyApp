@@ -61,17 +61,20 @@ public class SubscriptionWebhookService {
     private final SubscriptionEventJpaRepository eventRepository;
     private final FamilySubscriptionJpaRepository subscriptionRepository;
     private final FamilyJpaRepository familyRepository;
+    private final com.familyapp.application.affiliate.AffiliateCommissionService affiliateCommissionService;
     private final boolean acceptSandbox;
 
     public SubscriptionWebhookService(
             SubscriptionEventJpaRepository eventRepository,
             FamilySubscriptionJpaRepository subscriptionRepository,
             FamilyJpaRepository familyRepository,
+            com.familyapp.application.affiliate.AffiliateCommissionService affiliateCommissionService,
             @Value("${kidquest.subscription.accept-sandbox:true}") boolean acceptSandbox
     ) {
         this.eventRepository = eventRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.familyRepository = familyRepository;
+        this.affiliateCommissionService = affiliateCommissionService;
         this.acceptSandbox = acceptSandbox;
     }
 
@@ -155,6 +158,9 @@ public class SubscriptionWebhookService {
                 entity.setStatus(SubscriptionStatus.ACTIVE.name());
                 entity.setCancelAtPeriodEnd(false);
                 applyPeriodEnd(entity, event.expirationAtMs());
+                // Affiliate commission accrues from a paid period. No-op unless the family is
+                // attributed and this is a real (non-trial) paid period; shares this transaction.
+                affiliateCommissionService.recordPaidPeriod(familyId, event);
             }
             case "CANCELLATION" -> {
                 if (isRefund(event)) {
@@ -164,6 +170,8 @@ public class SubscriptionWebhookService {
                     entity.setCurrentPeriodEnd(now);
                     entity.setCancelAtPeriodEnd(false);
                     log.info("Family {} refunded ({}); entitlement ended now", familyId, event.cancelReason());
+                    // The money went back, so any commission earned on it is reversed.
+                    affiliateCommissionService.clawback(familyId, event.cancelReason());
                 } else {
                     // Auto-renew is off. They keep what they paid for until it runs
                     // out, which is both fair and what the stores expect.
