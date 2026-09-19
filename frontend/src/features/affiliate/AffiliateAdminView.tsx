@@ -3,6 +3,7 @@ import { KID_QUEST, PublicPage } from "../legal/LegalPage";
 import {
   adminCreateAffiliate,
   adminListAffiliates,
+  adminPayout,
   type AffiliateAdminRow,
 } from "../../shared/api/affiliate";
 
@@ -45,7 +46,7 @@ export function AffiliateAdminView() {
       {rows !== null && rows.length === 0 && (
         <p style={{ color: KID_QUEST.muted }}>Inga affiliates ännu — bjud in den första ovan.</p>
       )}
-      {rows !== null && rows.length > 0 && <AffiliateTable rows={rows} />}
+      {rows !== null && rows.length > 0 && <AffiliateTable rows={rows} onPaid={load} />}
     </PublicPage>
   );
 }
@@ -105,11 +106,30 @@ function InviteForm({ onCreated }: { onCreated: () => void }) {
   );
 }
 
-function AffiliateTable({ rows }: { rows: AffiliateAdminRow[] }) {
+function AffiliateTable({ rows, onPaid }: { rows: AffiliateAdminRow[]; onPaid: () => void }) {
   const totalPayable = rows.reduce((sum, r) => sum + (r.payable ?? 0), 0);
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const payOut = async (row: AffiliateAdminRow) => {
+    if (row.payable <= 0) return;
+    if (!window.confirm(`Markera ${formatKr(row.payable)} till ${row.name} som utbetald?`)) return;
+    setPayingId(row.id);
+    setError(null);
+    try {
+      await adminPayout(row.id, "manual");
+      onPaid();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kunde inte registrera utbetalningen.");
+    } finally {
+      setPayingId(null);
+    }
+  };
+
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9rem", minWidth: 560 }}>
+      {error && <p style={{ color: "#B91C1C", margin: "0 0 0.75rem", fontSize: "0.85rem" }}>{error}</p>}
+      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9rem", minWidth: 640 }}>
         <thead>
           <tr style={{ textAlign: "left", color: KID_QUEST.muted, borderBottom: `1px solid ${KID_QUEST.rule}` }}>
             <th style={th}>Namn</th>
@@ -119,6 +139,7 @@ function AffiliateTable({ rows }: { rows: AffiliateAdminRow[] }) {
             <th style={{ ...th, textAlign: "right" }}>Väntande</th>
             <th style={{ ...th, textAlign: "right" }}>Att betala</th>
             <th style={{ ...th, textAlign: "right" }}>Utbetalt</th>
+            <th style={th} />
           </tr>
         </thead>
         <tbody>
@@ -134,6 +155,15 @@ function AffiliateTable({ rows }: { rows: AffiliateAdminRow[] }) {
               <td style={{ ...td, textAlign: "right" }}>{formatKr(r.pending)}</td>
               <td style={{ ...td, textAlign: "right", fontWeight: 700, color: KID_QUEST.accent }}>{formatKr(r.payable)}</td>
               <td style={{ ...td, textAlign: "right" }}>{formatKr(r.paidOut)}</td>
+              <td style={{ ...td, textAlign: "right" }}>
+                {r.payable > 0 ? (
+                  <button onClick={() => payOut(r)} disabled={payingId === r.id} style={payButton(payingId === r.id)}>
+                    {payingId === r.id ? "…" : "Markera utbetald"}
+                  </button>
+                ) : (
+                  <span style={{ color: KID_QUEST.muted }}>—</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -143,7 +173,7 @@ function AffiliateTable({ rows }: { rows: AffiliateAdminRow[] }) {
               Totalt att betala ut
             </td>
             <td style={{ ...td, textAlign: "right", fontWeight: 700, color: KID_QUEST.accent }}>{formatKr(totalPayable)}</td>
-            <td style={td} />
+            <td style={td} colSpan={2} />
           </tr>
         </tfoot>
       </table>
@@ -188,3 +218,17 @@ const buttonStyle: React.CSSProperties = {
 
 const th: React.CSSProperties = { padding: "0.55rem 0.6rem", fontWeight: 600 };
 const td: React.CSSProperties = { padding: "0.6rem 0.6rem", verticalAlign: "top" };
+
+function payButton(busy: boolean): React.CSSProperties {
+  return {
+    padding: "0.4rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${KID_QUEST.accent}`,
+    background: busy ? KID_QUEST.rule : "transparent",
+    color: KID_QUEST.accent,
+    fontWeight: 600,
+    fontSize: "0.82rem",
+    whiteSpace: "nowrap",
+    cursor: busy ? "default" : "pointer",
+  };
+}

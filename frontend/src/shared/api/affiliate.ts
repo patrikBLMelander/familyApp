@@ -90,6 +90,24 @@ export async function adminListAffiliates(): Promise<AffiliateAdminRow[]> {
   return parse<AffiliateAdminRow[]>(res);
 }
 
+/** What a recorded payout covered. */
+export type PayoutResult = {
+  payoutId: string;
+  total: number;
+  currency: string;
+  commissionCount: number;
+};
+
+/** Record a manual payout of everything payable for one affiliate (marks it PAID). */
+export async function adminPayout(affiliateId: string, method = "manual"): Promise<PayoutResult> {
+  const res = await fetch(`${API_BASE_URL}/admin/affiliates/${affiliateId}/payout`, {
+    method: "POST",
+    headers: deviceHeaders(),
+    body: JSON.stringify({ method }),
+  });
+  return parse<PayoutResult>(res);
+}
+
 /** Invite a new affiliate. Admin-only. */
 export async function adminCreateAffiliate(
   name: string,
