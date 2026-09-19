@@ -79,3 +79,6 @@ kidquest:
     # Fallback share the developer keeps after store fees, used only when RevenueCat
     # omits takehome_percentage on an event.
     default-takehome-ratio: ${AFFILIATE_DEFAULT_TAKEHOME_RATIO:0.85}
+    # Days a commission must age (past the store refund window) before it becomes payable
+    # (PENDING -> APPROVED). A daily job promotes them; payout itself is manual.
+    clearance-days: ${AFFILIATE_CLEARANCE_DAYS:30}

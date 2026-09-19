@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +23,12 @@ public interface AffiliateCommissionJpaRepository extends JpaRepository<Affiliat
             UUID familyId, List<String> statuses);
 
     List<AffiliateCommissionEntity> findByAffiliateId(UUID affiliateId);
+
+    /** Commissions in a status, for the clearance job (PENDING older than the window). */
+    List<AffiliateCommissionEntity> findByStatusAndEarnedAtBefore(String status, OffsetDateTime cutoff);
+
+    /** Commissions in a status for one affiliate, e.g. APPROVED ones to include in a payout. */
+    List<AffiliateCommissionEntity> findByAffiliateIdAndStatus(UUID affiliateId, String status);
 
     /** Summed amount for one affiliate in one status (0 when none). */
     @Query("SELECT COALESCE(SUM(c.amount), 0) FROM AffiliateCommissionEntity c "
