@@ -45,8 +45,9 @@ class AffiliateServiceTest {
         when(encoder.matches(any(), any()))
                 .thenAnswer(i -> ("hash:" + i.getArgument(0)).equals(i.getArgument(1)));
         when(affiliates.save(any())).thenAnswer(i -> i.getArgument(0));
+        var subscriptions = mock(com.familyapp.infrastructure.subscription.FamilySubscriptionJpaRepository.class);
         service = new AffiliateService(
-                affiliates, referrals, commissions, payouts, encoder,
+                affiliates, referrals, commissions, payouts, subscriptions, encoder,
                 "patrik@cubeia.com", "https://www.kidquest.se/?ref=", new BigDecimal("20.00"), 12);
     }
 

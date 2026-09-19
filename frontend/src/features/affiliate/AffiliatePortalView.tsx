@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   activateAffiliate,
+  getAffiliateReferrals,
   getAffiliateStats,
   loginAffiliate,
   type AffiliateStats,
   type MonthPoint,
   type PayoutPoint,
+  type ReferralRow,
 } from "../../shared/api/affiliate";
 
 const TOKEN_KEY = "affiliateToken";
@@ -123,6 +125,7 @@ function AuthForm({ onSession }: { onSession: (token: string) => void }) {
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [data, setData] = useState<AffiliateStats | null>(null);
+  const [referrals, setReferrals] = useState<ReferralRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -131,6 +134,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     getAffiliateStats(token)
       .then((d) => !cancelled && setData(d))
       .catch((err) => !cancelled && setError(err instanceof Error ? err.message : "Kunde inte hämta din data."));
+    getAffiliateReferrals(token)
+      .then((r) => !cancelled && setReferrals(r))
+      .catch(() => !cancelled && setReferrals([]));
     return () => {
       cancelled = true;
     };
@@ -222,6 +228,55 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           <Payouts payouts={data.payouts} />
         </div>
       </div>
+
+      <div className="affp-card">
+        <h2>Dina värvningar</h2>
+        <p className="affp-cap">Anonymt — hur länge de varit med och om de fortfarande ger provision.</p>
+        <Referrals referrals={referrals} />
+      </div>
+    </>
+  );
+}
+
+function Referrals({ referrals }: { referrals: ReferralRow[] | null }) {
+  const [showAll, setShowAll] = useState(false);
+  if (referrals === null) {
+    return <p className="affp-empty">Laddar…</p>;
+  }
+  if (referrals.length === 0) {
+    return <p className="affp-empty">Inga värvningar ännu. Dela din länk för att komma igång!</p>;
+  }
+  const paying = referrals.filter((r) => r.status === "PAYING").length;
+  const trial = referrals.filter((r) => r.status === "TRIAL").length;
+  const ended = referrals.filter((r) => r.status === "ENDED").length;
+  const shown = showAll ? referrals : referrals.slice(0, 10);
+  return (
+    <>
+      <div className="affp-refsummary">
+        <span><b>{paying}</b> betalar</span>
+        <span><b>{trial}</b> provgratis</span>
+        <span><b>{ended}</b> avslutade</span>
+      </div>
+      <div className="affp-reflist">
+        {shown.map((r, i) => (
+          <div className="affp-refrow" key={i}>
+            <span className="affp-refage">{ageLabel(r.joinedMonthsAgo)}</span>
+            <span className={`affp-refbadge ${refClass(r.status)}`}>{statusLabel(r.status)}</span>
+            <span className="affp-refprov">
+              {r.earningCommission ? (
+                <><span className="affp-dotc" style={{ background: "var(--affp-money)" }} /> ger provision</>
+              ) : (
+                <span className="affp-refmuted">—</span>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+      {referrals.length > 10 && (
+        <button className="affp-linkbtn" style={{ marginTop: 10 }} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? "Visa färre" : `Visa alla (${referrals.length})`}
+        </button>
+      )}
     </>
   );
 }
@@ -413,6 +468,27 @@ function formatDate(iso: string): string {
     return iso;
   }
 }
+function ageLabel(monthsAgo: number): string {
+  if (monthsAgo <= 0) return "Ny denna månad";
+  if (monthsAgo === 1) return "1 månad";
+  return `${monthsAgo} månader`;
+}
+function statusLabel(status: string): string {
+  switch (status) {
+    case "PAYING": return "Betalar";
+    case "TRIAL": return "Provgratis";
+    case "ENDED": return "Avslutad";
+    default: return "Okänd";
+  }
+}
+function refClass(status: string): string {
+  switch (status) {
+    case "PAYING": return "paying";
+    case "TRIAL": return "trial";
+    case "ENDED": return "ended";
+    default: return "unknown";
+  }
+}
 
 const CSS = `
 .affp{
@@ -468,6 +544,19 @@ const CSS = `
 .affp-linkbtn{border:none;background:transparent;color:var(--accent);font-weight:600;font-size:.85rem;cursor:pointer;}
 .affp-empty{color:var(--muted);font-size:.9rem;}
 .affp-loading{color:var(--muted);text-align:center;padding:60px 0;}
+.affp-refsummary{display:flex;gap:18px;flex-wrap:wrap;font-size:.9rem;color:var(--ink2);margin-bottom:14px;}
+.affp-refsummary b{color:var(--ink);}
+.affp-reflist{display:flex;flex-direction:column;}
+.affp-refrow{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--line2);font-size:.9rem;}
+.affp-refrow:last-child{border-bottom:none;}
+.affp-refage{color:var(--ink2);}
+.affp-refbadge{font-size:.74rem;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap;}
+.affp-refbadge.paying{background:var(--affp-money-soft);color:var(--affp-money);}
+.affp-refbadge.trial{background:var(--line2);color:var(--ink2);}
+.affp-refbadge.ended{background:var(--line2);color:var(--muted);}
+.affp-refbadge.unknown{background:var(--line2);color:var(--muted);}
+.affp-refprov{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--ink2);justify-content:flex-end;min-width:110px;}
+.affp-refmuted{color:var(--muted);}
 .affp-authcard{max-width:400px;margin:8vh auto 0;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px 26px;box-shadow:var(--shadow);}
 .affp-logo{font-size:.8rem;font-weight:700;letter-spacing:.04em;color:var(--accent);margin-bottom:14px;}
 .affp-h1{font-size:1.4rem;font-weight:800;margin:0 0 .3rem;}

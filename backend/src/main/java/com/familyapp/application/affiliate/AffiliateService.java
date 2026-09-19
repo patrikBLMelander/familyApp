@@ -11,6 +11,8 @@ import com.familyapp.infrastructure.affiliate.AffiliatePayoutEntity;
 import com.familyapp.infrastructure.affiliate.AffiliatePayoutJpaRepository;
 import com.familyapp.infrastructure.affiliate.AffiliateReferralEntity;
 import com.familyapp.infrastructure.affiliate.AffiliateReferralJpaRepository;
+import com.familyapp.infrastructure.subscription.FamilySubscriptionEntity;
+import com.familyapp.infrastructure.subscription.FamilySubscriptionJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,11 +27,13 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -53,6 +57,7 @@ public class AffiliateService {
     private final AffiliateReferralJpaRepository referralRepository;
     private final AffiliateCommissionJpaRepository commissionRepository;
     private final AffiliatePayoutJpaRepository payoutRepository;
+    private final FamilySubscriptionJpaRepository subscriptionRepository;
     private final PasswordEncoder passwordEncoder;
     private final Set<String> adminEmails;
     private final String linkBase;
@@ -64,6 +69,7 @@ public class AffiliateService {
             AffiliateReferralJpaRepository referralRepository,
             AffiliateCommissionJpaRepository commissionRepository,
             AffiliatePayoutJpaRepository payoutRepository,
+            FamilySubscriptionJpaRepository subscriptionRepository,
             PasswordEncoder passwordEncoder,
             @Value("${kidquest.affiliate.admin-emails:}") String adminEmailsCsv,
             @Value("${kidquest.affiliate.link-base:https://www.kidquest.se/?ref=}") String linkBase,
@@ -74,6 +80,7 @@ public class AffiliateService {
         this.referralRepository = referralRepository;
         this.commissionRepository = commissionRepository;
         this.payoutRepository = payoutRepository;
+        this.subscriptionRepository = subscriptionRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminEmails = Arrays.stream(adminEmailsCsv.split(","))
                 .map(s -> s.trim().toLowerCase(Locale.ROOT))
@@ -244,6 +251,51 @@ public class AffiliateService {
                 total, pending, payable, paidOut, thisMonthEarned, months, payoutPoints);
     }
 
+    /**
+     * The affiliate's referred families, ANONYMISED: how long ago each joined, a coarse
+     * status, and whether it still earns commission. Never any name or contact detail --
+     * these are the app's customers, not the affiliate's to identify.
+     */
+    @Transactional(readOnly = true)
+    public List<ReferralRow> referralsView(AffiliateEntity affiliate) {
+        var referrals = referralRepository.findByAffiliateId(affiliate.getId()).stream()
+                .sorted((a, b) -> b.getAttributedAt().compareTo(a.getAttributedAt()))
+                .toList();
+        if (referrals.isEmpty()) {
+            return List.of();
+        }
+        var familyIds = referrals.stream().map(AffiliateReferralEntity::getFamilyId).distinct().toList();
+        Map<UUID, String> statusByFamily = subscriptionRepository.findAllById(familyIds).stream()
+                .collect(Collectors.toMap(FamilySubscriptionEntity::getFamilyId, FamilySubscriptionEntity::getStatus, (a, b) -> a));
+        Map<UUID, Long> periodsByFamily = commissionRepository.findByAffiliateId(affiliate.getId()).stream()
+                .filter(c -> !CommissionStatus.CLAWED_BACK.name().equals(c.getStatus()))
+                .collect(Collectors.groupingBy(AffiliateCommissionEntity::getFamilyId, Collectors.counting()));
+
+        var now = OffsetDateTime.now();
+        var cap = affiliate.getCommissionMonthCap();
+        return referrals.stream().map(r -> {
+            var monthsAgo = (int) Math.max(0, ChronoUnit.MONTHS.between(r.getAttributedAt(), now));
+            var raw = statusByFamily.get(r.getFamilyId());
+            var paying = "ACTIVE".equals(raw) || "GRACE".equals(raw);
+            var used = periodsByFamily.getOrDefault(r.getFamilyId(), 0L);
+            var earning = paying && used < cap;
+            return new ReferralRow(monthsAgo, coarseStatus(raw), earning);
+        }).toList();
+    }
+
+    /** Collapses the internal subscription status to the three states an affiliate may see. */
+    private static String coarseStatus(String raw) {
+        if (raw == null) {
+            return "UNKNOWN";
+        }
+        return switch (raw) {
+            case "TRIAL" -> "TRIAL";
+            case "ACTIVE", "GRACE", "COMPED" -> "PAYING";
+            case "EXPIRED", "CANCELED" -> "ENDED";
+            default -> "UNKNOWN";
+        };
+    }
+
     // ---- helpers -------------------------------------------------------------
 
     private static BigDecimal statusSum(List<AffiliateCommissionEntity> commissions, CommissionStatus status) {
@@ -359,6 +411,13 @@ public class AffiliateService {
 
     /** One month in the time series. */
     public record MonthPoint(String month, BigDecimal earned, long referrals) {}
+
+    /**
+     * One referred family, anonymised for the affiliate's eyes. No id, name or contact --
+     * only how long ago they joined, a coarse status (TRIAL/PAYING/ENDED/UNKNOWN) and
+     * whether they still earn the affiliate commission.
+     */
+    public record ReferralRow(int joinedMonthsAgo, String status, boolean earningCommission) {}
 
     /** One payout in the history. */
     public record PayoutPoint(OffsetDateTime paidAt, String method, BigDecimal amount, String currency) {}

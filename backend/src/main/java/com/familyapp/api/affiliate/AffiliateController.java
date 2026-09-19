@@ -4,6 +4,8 @@ import com.familyapp.application.affiliate.AffiliateService;
 import com.familyapp.application.affiliate.AffiliateService.AffiliateSelf;
 import com.familyapp.application.affiliate.AffiliateService.AffiliateSession;
 import com.familyapp.application.affiliate.AffiliateService.AffiliateStats;
+import com.familyapp.application.affiliate.AffiliateService.ReferralRow;
+import java.util.List;
 import com.familyapp.application.familymember.FamilyMemberService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -70,6 +72,15 @@ public class AffiliateController {
     ) {
         var affiliate = affiliateService.authenticate(token);
         return affiliateService.statsView(affiliate);
+    }
+
+    /** The affiliate's referred families, anonymised: age, coarse status, still-earning flag. */
+    @GetMapping("/affiliate/referrals")
+    public List<ReferralRow> referrals(
+            @RequestHeader(value = "X-Affiliate-Token", required = false) String token
+    ) {
+        var affiliate = affiliateService.authenticate(token);
+        return affiliateService.referralsView(affiliate);
     }
 
     private UUID familyIdFor(String deviceToken) {

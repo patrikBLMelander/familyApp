@@ -13,6 +13,9 @@ export type MonthPoint = { month: string; earned: number; referrals: number };
 /** One payout in the affiliate's history. */
 export type PayoutPoint = { paidAt: string; method: string; amount: number; currency: string };
 
+/** One referred family, anonymised (no id/name/contact). */
+export type ReferralRow = { joinedMonthsAgo: number; status: string; earningCommission: boolean };
+
 /** The affiliate's analytics dashboard. */
 export type AffiliateStats = {
   name: string;
@@ -105,6 +108,14 @@ export async function getAffiliateStats(token: string): Promise<AffiliateStats> 
     headers: { "X-Affiliate-Token": token },
   });
   return parse<AffiliateStats>(res);
+}
+
+/** The affiliate's referred families, anonymised (age, coarse status, still-earning flag). */
+export async function getAffiliateReferrals(token: string): Promise<ReferralRow[]> {
+  const res = await fetch(`${API_BASE_URL}/affiliate/referrals`, {
+    headers: { "X-Affiliate-Token": token },
+  });
+  return parse<ReferralRow[]>(res);
 }
 
 // ---- admin (uses the logged-in parent's device token) ----------------------
