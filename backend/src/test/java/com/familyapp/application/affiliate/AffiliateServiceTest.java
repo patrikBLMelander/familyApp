@@ -30,6 +30,7 @@ class AffiliateServiceTest {
     private AffiliateJpaRepository affiliates;
     private AffiliateReferralJpaRepository referrals;
     private AffiliateCommissionJpaRepository commissions;
+    private com.familyapp.infrastructure.affiliate.AffiliatePayoutJpaRepository payouts;
     private PasswordEncoder encoder;
     private AffiliateService service;
 
@@ -38,13 +39,14 @@ class AffiliateServiceTest {
         affiliates = mock(AffiliateJpaRepository.class);
         referrals = mock(AffiliateReferralJpaRepository.class);
         commissions = mock(AffiliateCommissionJpaRepository.class);
+        payouts = mock(com.familyapp.infrastructure.affiliate.AffiliatePayoutJpaRepository.class);
         encoder = mock(PasswordEncoder.class);
         when(encoder.encode(any())).thenAnswer(i -> "hash:" + i.getArgument(0));
         when(encoder.matches(any(), any()))
                 .thenAnswer(i -> ("hash:" + i.getArgument(0)).equals(i.getArgument(1)));
         when(affiliates.save(any())).thenAnswer(i -> i.getArgument(0));
         service = new AffiliateService(
-                affiliates, referrals, commissions, encoder,
+                affiliates, referrals, commissions, payouts, encoder,
                 "patrik@cubeia.com", "https://www.kidquest.se/?ref=", new BigDecimal("20.00"), 12);
     }
 

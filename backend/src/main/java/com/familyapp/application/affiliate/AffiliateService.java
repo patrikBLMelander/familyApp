@@ -3,9 +3,12 @@ package com.familyapp.application.affiliate;
 import com.familyapp.domain.affiliate.AffiliateStatus;
 import com.familyapp.domain.affiliate.CommissionStatus;
 import com.familyapp.domain.affiliate.ReferralSource;
+import com.familyapp.infrastructure.affiliate.AffiliateCommissionEntity;
 import com.familyapp.infrastructure.affiliate.AffiliateCommissionJpaRepository;
 import com.familyapp.infrastructure.affiliate.AffiliateEntity;
 import com.familyapp.infrastructure.affiliate.AffiliateJpaRepository;
+import com.familyapp.infrastructure.affiliate.AffiliatePayoutEntity;
+import com.familyapp.infrastructure.affiliate.AffiliatePayoutJpaRepository;
 import com.familyapp.infrastructure.affiliate.AffiliateReferralEntity;
 import com.familyapp.infrastructure.affiliate.AffiliateReferralJpaRepository;
 import org.slf4j.Logger;
@@ -20,6 +23,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
@@ -41,9 +47,12 @@ public class AffiliateService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final char[] CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
 
+    private static final int MONTHS_IN_CHART = 8;
+
     private final AffiliateJpaRepository affiliateRepository;
     private final AffiliateReferralJpaRepository referralRepository;
     private final AffiliateCommissionJpaRepository commissionRepository;
+    private final AffiliatePayoutJpaRepository payoutRepository;
     private final PasswordEncoder passwordEncoder;
     private final Set<String> adminEmails;
     private final String linkBase;
@@ -54,6 +63,7 @@ public class AffiliateService {
             AffiliateJpaRepository affiliateRepository,
             AffiliateReferralJpaRepository referralRepository,
             AffiliateCommissionJpaRepository commissionRepository,
+            AffiliatePayoutJpaRepository payoutRepository,
             PasswordEncoder passwordEncoder,
             @Value("${kidquest.affiliate.admin-emails:}") String adminEmailsCsv,
             @Value("${kidquest.affiliate.link-base:https://www.kidquest.se/?ref=}") String linkBase,
@@ -63,6 +73,7 @@ public class AffiliateService {
         this.affiliateRepository = affiliateRepository;
         this.referralRepository = referralRepository;
         this.commissionRepository = commissionRepository;
+        this.payoutRepository = payoutRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminEmails = Arrays.stream(adminEmailsCsv.split(","))
                 .map(s -> s.trim().toLowerCase(Locale.ROOT))
@@ -192,7 +203,55 @@ public class AffiliateService {
         );
     }
 
+    /** The affiliate's analytics dashboard: totals, per-month time series, and payout history. */
+    @Transactional(readOnly = true)
+    public AffiliateStats statsView(AffiliateEntity affiliate) {
+        var zone = ZoneId.of("Europe/Stockholm");
+        var commissions = commissionRepository.findByAffiliateId(affiliate.getId());
+        var referrals = referralRepository.findByAffiliateId(affiliate.getId());
+        var payouts = payoutRepository.findByAffiliateIdOrderByCreatedAtDesc(affiliate.getId());
+
+        var pending = statusSum(commissions, CommissionStatus.PENDING);
+        var payable = statusSum(commissions, CommissionStatus.APPROVED);
+        var paidOut = statusSum(commissions, CommissionStatus.PAID);
+        var total = pending.add(payable).add(paidOut);
+        var thisMonth = YearMonth.now(zone);
+
+        // Last MONTHS_IN_CHART months, oldest first, always continuous so the chart has a full axis.
+        var months = new ArrayList<MonthPoint>();
+        for (int i = MONTHS_IN_CHART - 1; i >= 0; i--) {
+            var ym = thisMonth.minusMonths(i);
+            var earned = commissions.stream()
+                    .filter(c -> !CommissionStatus.CLAWED_BACK.name().equals(c.getStatus()))
+                    .filter(c -> YearMonth.from(c.getEarnedAt().atZoneSameInstant(zone)).equals(ym))
+                    .map(AffiliateCommissionEntity::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            var count = referrals.stream()
+                    .filter(r -> YearMonth.from(r.getAttributedAt().atZoneSameInstant(zone)).equals(ym))
+                    .count();
+            months.add(new MonthPoint(ym.toString(), earned, count));
+        }
+        var thisMonthEarned = months.getLast().earned();
+
+        var payoutPoints = payouts.stream()
+                .map(p -> new PayoutPoint(p.getPaidAt(), p.getMethod(), p.getTotalAmount(), p.getCurrency()))
+                .toList();
+
+        return new AffiliateStats(
+                affiliate.getName(), affiliate.getReferralCode(),
+                linkBase + affiliate.getReferralCode(), affiliate.getCommissionPct(),
+                referralRepository.countByAffiliateId(affiliate.getId()),
+                total, pending, payable, paidOut, thisMonthEarned, months, payoutPoints);
+    }
+
     // ---- helpers -------------------------------------------------------------
+
+    private static BigDecimal statusSum(List<AffiliateCommissionEntity> commissions, CommissionStatus status) {
+        return commissions.stream()
+                .filter(c -> status.name().equals(c.getStatus()))
+                .map(AffiliateCommissionEntity::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 
     private AffiliateSession issueSession(AffiliateEntity affiliate) {
         var raw = randomToken();
@@ -281,6 +340,28 @@ public class AffiliateService {
             BigDecimal approved,
             BigDecimal paidOut
     ) {}
+
+    /** The affiliate's analytics dashboard. */
+    public record AffiliateStats(
+            String name,
+            String referralCode,
+            String referralLink,
+            BigDecimal commissionPct,
+            long referralCount,
+            BigDecimal totalEarned,
+            BigDecimal pending,
+            BigDecimal payable,
+            BigDecimal paidOut,
+            BigDecimal thisMonthEarned,
+            List<MonthPoint> monthly,
+            List<PayoutPoint> payouts
+    ) {}
+
+    /** One month in the time series. */
+    public record MonthPoint(String month, BigDecimal earned, long referrals) {}
+
+    /** One payout in the history. */
+    public record PayoutPoint(OffsetDateTime paidAt, String method, BigDecimal amount, String currency) {}
 
     /** One row of the admin's affiliate list. */
     public record AffiliateAdminRow(

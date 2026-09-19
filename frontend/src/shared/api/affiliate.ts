@@ -7,6 +7,28 @@ export type AffiliateSession = {
   name: string;
 };
 
+/** One month in the affiliate's time series. */
+export type MonthPoint = { month: string; earned: number; referrals: number };
+
+/** One payout in the affiliate's history. */
+export type PayoutPoint = { paidAt: string; method: string; amount: number; currency: string };
+
+/** The affiliate's analytics dashboard. */
+export type AffiliateStats = {
+  name: string;
+  referralCode: string;
+  referralLink: string;
+  commissionPct: number;
+  referralCount: number;
+  totalEarned: number;
+  pending: number;
+  payable: number;
+  paidOut: number;
+  thisMonthEarned: number;
+  monthly: MonthPoint[];
+  payouts: PayoutPoint[];
+};
+
 /** The affiliate's own dashboard numbers. */
 export type AffiliateSelf = {
   name: string;
@@ -75,6 +97,14 @@ export async function getAffiliateSelf(token: string): Promise<AffiliateSelf> {
     headers: { "X-Affiliate-Token": token },
   });
   return parse<AffiliateSelf>(res);
+}
+
+/** The affiliate's analytics dashboard: totals, per-month series, payout history. */
+export async function getAffiliateStats(token: string): Promise<AffiliateStats> {
+  const res = await fetch(`${API_BASE_URL}/affiliate/stats`, {
+    headers: { "X-Affiliate-Token": token },
+  });
+  return parse<AffiliateStats>(res);
 }
 
 // ---- admin (uses the logged-in parent's device token) ----------------------

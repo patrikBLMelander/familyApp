@@ -1,21 +1,19 @@
 import { useEffect, useState } from "react";
-import { KID_QUEST, PublicPage } from "../legal/LegalPage";
 import {
   activateAffiliate,
-  getAffiliateSelf,
+  getAffiliateStats,
   loginAffiliate,
-  type AffiliateSelf,
+  type AffiliateStats,
+  type MonthPoint,
+  type PayoutPoint,
 } from "../../shared/api/affiliate";
 
 const TOKEN_KEY = "affiliateToken";
 
 /**
- * The affiliate portal at /affiliate on the website.
- *
- * A separate audience from families: affiliates are recruited partners, not app users,
- * so this stands outside the family login and carries its own token. Accounts are
- * invite-only -- an admin creates the row first, and activation only sets a password on
- * an invite that already exists.
+ * The affiliate portal at /affiliate: invite-only login/activation, then an analytics
+ * dashboard (earnings over time, what's payable, total earned). Its own visual identity,
+ * deliberately not the KidQuest family theme -- this is a partner-facing tool.
  */
 export function AffiliatePortalView() {
   const [token, setToken] = useState<string | null>(() => {
@@ -30,7 +28,7 @@ export function AffiliatePortalView() {
     try {
       localStorage.setItem(TOKEN_KEY, value);
     } catch {
-      /* private window: keep it in memory for this session */
+      /* private window: memory only */
     }
     setToken(value);
   };
@@ -45,13 +43,16 @@ export function AffiliatePortalView() {
   };
 
   return (
-    <PublicPage>
-      {token ? <Dashboard token={token} onLogout={logout} /> : <AuthForm onSession={saveToken} />}
-    </PublicPage>
+    <div className="affp">
+      <style>{CSS}</style>
+      <div className="affp-wrap">
+        {token ? <Dashboard token={token} onLogout={logout} /> : <AuthForm onSession={saveToken} />}
+      </div>
+    </div>
   );
 }
 
-// ---- auth (login / activate) -----------------------------------------------
+// ---- auth -------------------------------------------------------------------
 
 function AuthForm({ onSession }: { onSession: (token: string) => void }) {
   const [mode, setMode] = useState<"login" | "activate">("login");
@@ -78,46 +79,39 @@ function AuthForm({ onSession }: { onSession: (token: string) => void }) {
   };
 
   return (
-    <div>
-      <h1 style={{ fontSize: "1.5rem", margin: "0 0 0.35rem" }}>Affiliate-portal</h1>
-      <p style={{ color: KID_QUEST.textSecondary, margin: "0 0 1.5rem" }}>
+    <div className="affp-authcard">
+      <div className="affp-logo">KidQuest · Affiliates</div>
+      <h1 className="affp-h1">{mode === "login" ? "Logga in" : "Aktivera konto"}</h1>
+      <p className="affp-sub">
         {mode === "login"
-          ? "Logga in för att se dina värvningar och intjäning."
-          : "Aktivera ditt konto genom att välja ett lösenord. Fungerar bara om du blivit inbjuden."}
+          ? "Se dina värvningar och din intjäning."
+          : "Välj ett lösenord. Fungerar bara om du blivit inbjuden."}
       </p>
-
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.25rem" }}>
-        <TabButton active={mode === "login"} onClick={() => setMode("login")}>
+      <div className="affp-tabs">
+        <button className={`affp-tab ${mode === "login" ? "on" : ""}`} onClick={() => setMode("login")} type="button">
           Logga in
-        </TabButton>
-        <TabButton active={mode === "activate"} onClick={() => setMode("activate")}>
+        </button>
+        <button className={`affp-tab ${mode === "activate" ? "on" : ""}`} onClick={() => setMode("activate")} type="button">
           Aktivera konto
-        </TabButton>
+        </button>
       </div>
-
-      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <Field label="E-post">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={inputStyle}
-            autoComplete="email"
-          />
-        </Field>
-        <Field label="Lösenord">
+      <form onSubmit={submit} className="affp-form">
+        <label className="affp-field">
+          E-post
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        </label>
+        <label className="affp-field">
+          Lösenord
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={inputStyle}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
           />
-        </Field>
-        {error && <p style={{ color: "#B91C1C", margin: 0, fontSize: "0.9rem" }}>{error}</p>}
-        <button type="submit" disabled={busy} style={primaryButton(busy)}>
+        </label>
+        {error && <p className="affp-err">{error}</p>}
+        <button type="submit" disabled={busy} className="affp-primary">
           {busy ? "…" : mode === "login" ? "Logga in" : "Aktivera"}
         </button>
       </form>
@@ -128,19 +122,15 @@ function AuthForm({ onSession }: { onSession: (token: string) => void }) {
 // ---- dashboard --------------------------------------------------------------
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [data, setData] = useState<AffiliateSelf | null>(null);
+  const [data, setData] = useState<AffiliateStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getAffiliateSelf(token)
+    getAffiliateStats(token)
       .then((d) => !cancelled && setData(d))
-      .catch((err) => {
-        if (cancelled) return;
-        // A stale or invalid token: send them back to the login form.
-        setError(err instanceof Error ? err.message : "Kunde inte hämta din data.");
-      });
+      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : "Kunde inte hämta din data."));
     return () => {
       cancelled = true;
     };
@@ -148,17 +138,16 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   if (error) {
     return (
-      <div>
-        <p style={{ color: KID_QUEST.textSecondary, margin: "0 0 1rem" }}>{error}</p>
-        <button onClick={onLogout} style={primaryButton(false)}>
+      <div className="affp-authcard">
+        <p className="affp-sub">{error}</p>
+        <button className="affp-primary" onClick={onLogout}>
           Till inloggningen
         </button>
       </div>
     );
   }
-
   if (!data) {
-    return <p style={{ color: KID_QUEST.muted, margin: 0 }}>Laddar…</p>;
+    return <p className="affp-loading">Laddar…</p>;
   }
 
   const copyLink = async () => {
@@ -167,141 +156,329 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* clipboard blocked; the link is visible to copy by hand */
+      /* clipboard blocked */
     }
   };
 
+  const cumulative = data.monthly.reduce<number[]>((acc, m) => {
+    acc.push((acc.length ? acc[acc.length - 1] : 0) + m.earned);
+    return acc;
+  }, []);
+
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <h1 style={{ fontSize: "1.5rem", margin: "0 0 0.25rem" }}>Hej {data.name}!</h1>
-        <button onClick={onLogout} style={linkButton}>
-          Logga ut
-        </button>
-      </div>
-      <p style={{ color: KID_QUEST.textSecondary, margin: "0 0 1.5rem" }}>
-        Din provision: {formatPct(data.commissionPct)} av varje betald månad.
-      </p>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem", marginBottom: "1.5rem" }}>
-        <Stat label="Värvade familjer" value={String(data.referralCount)} />
-        <Stat label="Väntande" value={formatKr(data.pending)} />
-        <Stat label="Att betala ut" value={formatKr(data.approved)} accent />
-        <Stat label="Utbetalt" value={formatKr(data.paidOut)} />
-      </div>
-
-      <div style={cardStyle}>
-        <div style={{ fontSize: "0.8rem", color: KID_QUEST.muted, marginBottom: "0.35rem" }}>DIN KOD</div>
-        <div style={{ fontSize: "1.6rem", fontWeight: 700, letterSpacing: "0.05em", color: KID_QUEST.accent }}>
-          {data.referralCode}
+    <>
+      <header className="affp-header">
+        <div>
+          <h1 className="affp-hi">Hej {data.name.split(" ")[0]} 👋</h1>
+          <p className="affp-provision">
+            Du tjänar <b>{formatPct(data.commissionPct)}</b> av varje betald månad, i upp till 12 månader per värvad familj.
+          </p>
         </div>
-        <div style={{ marginTop: "0.9rem", fontSize: "0.8rem", color: KID_QUEST.muted }}>DIN LÄNK</div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginTop: "0.35rem", flexWrap: "wrap" }}>
-          <code style={{ fontSize: "0.9rem", wordBreak: "break-all", flex: 1 }}>{data.referralLink}</code>
-          <button onClick={copyLink} style={smallButton}>
-            {copied ? "Kopierad!" : "Kopiera"}
+        <div className="affp-codechip">
+          <div>
+            <div className="affp-chiplab">Din kod</div>
+            <div className="affp-chipval">{data.referralCode}</div>
+          </div>
+          <button className="affp-copy" onClick={copyLink}>
+            {copied ? "Kopierad!" : "Kopiera länk"}
           </button>
         </div>
+      </header>
+
+      <div className="affp-kpis">
+        <Kpi label="Totalt intjänat" value={kr(data.totalEarned)} dot="money" valueClass="money" />
+        <Kpi label="Att betala ut" value={kr(data.payable)} dot="amber" valueClass="amber" hint="redo att betalas" />
+        <Kpi label="Väntande (karens)" value={kr(data.pending)} dot="slate" hint="mognar inom 30 dgr" />
+        <Kpi label="Denna månad" value={kr(data.thisMonthEarned)} dot="money" hint={`${data.referralCount} värvade totalt`} />
       </div>
+
+      <div className="affp-grid2">
+        <div className="affp-card">
+          <h2>Intjäning över tid</h2>
+          <p className="affp-cap">Ackumulerat, kr</p>
+          <AreaChart cumulative={cumulative} months={data.monthly} />
+        </div>
+        <div className="affp-card">
+          <h2>Var pengarna är</h2>
+          <p className="affp-cap">Fördelning av allt du tjänat</p>
+          <SplitBar paid={data.paidOut} payable={data.payable} pending={data.pending} />
+        </div>
+      </div>
+
+      <div className="affp-grid2">
+        <div className="affp-card">
+          <h2>Per månad</h2>
+          <p className="affp-cap">Intjänat per månad, kr</p>
+          <BarChart months={data.monthly} />
+        </div>
+        <div className="affp-card">
+          <div className="affp-cardhead">
+            <h2>Utbetalningar</h2>
+            <button className="affp-linkbtn" onClick={onLogout}>
+              Logga ut
+            </button>
+          </div>
+          <p className="affp-cap">Historik</p>
+          <Payouts payouts={data.payouts} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  dot,
+  valueClass,
+  hint,
+}: {
+  label: string;
+  value: string;
+  dot: string;
+  valueClass?: string;
+  hint?: string;
+}) {
+  return (
+    <div className="affp-kpi">
+      <div className="affp-kpil">
+        <span className={`affp-dot ${dot}`} />
+        {label}
+      </div>
+      <div className={`affp-kpiv ${valueClass ?? ""}`}>{value}</div>
+      {hint && <div className="affp-kpid">{hint}</div>}
     </div>
   );
 }
 
-// ---- little building blocks -------------------------------------------------
+// ---- charts (inline SVG) ----------------------------------------------------
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function AreaChart({ cumulative, months }: { cumulative: number[]; months: MonthPoint[] }) {
+  const W = 640, H = 220, L = 46, R = 12, T = 16, B = 28;
+  const total = cumulative.length ? cumulative[cumulative.length - 1] : 0;
+  const max = Math.max(500, Math.ceil(total / 500) * 500);
+  const n = Math.max(months.length, 2);
+  const x = (i: number) => L + ((W - L - R) * i) / (n - 1);
+  const y = (v: number) => T + (H - T - B) * (1 - v / max);
+  const line = cumulative.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${L},${y(0)} ${line} ${x(cumulative.length - 1)},${y(0)}`;
+  const last = cumulative.length - 1;
+  const ticks = [0, max / 2, max];
   return (
-    <div style={cardStyle}>
-      <div style={{ fontSize: "0.78rem", color: KID_QUEST.muted, marginBottom: "0.3rem" }}>{label}</div>
-      <div style={{ fontSize: "1.35rem", fontWeight: 700, color: accent ? KID_QUEST.accent : KID_QUEST.textPrimary }}>
-        {value}
+    <svg viewBox={`0 0 ${W} ${H}`} className="affp-svg" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="affp-ag" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="var(--affp-money)" stopOpacity="0.28" />
+          <stop offset="1" stopColor="var(--affp-money)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {ticks.map((t) => (
+        <g key={t}>
+          <line className="affp-gridline" x1={L} y1={y(t)} x2={W - R} y2={y(t)} />
+          <text className="affp-axis" x={L - 8} y={y(t) + 4} textAnchor="end">
+            {t.toLocaleString("sv-SE")}
+          </text>
+        </g>
+      ))}
+      {cumulative.length > 1 && <polygon points={area} fill="url(#affp-ag)" />}
+      <polyline points={line} fill="none" stroke="var(--affp-money)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      {last >= 0 && (
+        <>
+          <circle cx={x(last)} cy={y(cumulative[last])} r="9" fill="var(--affp-money)" opacity="0.18" />
+          <circle cx={x(last)} cy={y(cumulative[last])} r="4.5" fill="var(--affp-money)" />
+        </>
+      )}
+      {months.map((m, i) => (
+        <text key={m.month} className="affp-axis" x={x(i)} y={H - 8} textAnchor="middle">
+          {shortMonth(m.month)}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+function BarChart({ months }: { months: MonthPoint[] }) {
+  const W = 640, H = 200, L = 46, R = 12, T = 14, B = 28;
+  const vals = months.map((m) => m.earned);
+  const max = Math.max(100, Math.ceil(Math.max(...vals, 0) / 100) * 100);
+  const n = Math.max(months.length, 1);
+  const cx = (i: number) => L + (W - L - R) * ((i + 0.5) / n);
+  const bw = ((W - L - R) / n) * 0.55;
+  const y = (v: number) => T + (H - T - B) * (1 - v / max);
+  const ticks = [0, max / 2, max];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="affp-svg">
+      {ticks.map((t) => (
+        <g key={t}>
+          <line className="affp-gridline" x1={L} y1={y(t)} x2={W - R} y2={y(t)} />
+          <text className="affp-axis" x={L - 8} y={y(t) + 4} textAnchor="end">
+            {t}
+          </text>
+        </g>
+      ))}
+      {months.map((m, i) => {
+        const isLast = i === months.length - 1;
+        const h = (H - T - B) * (m.earned / max);
+        return (
+          <rect
+            key={m.month}
+            x={cx(i) - bw / 2}
+            y={y(m.earned)}
+            width={bw}
+            height={Math.max(0, h)}
+            rx="4"
+            fill={isLast ? "var(--affp-money)" : "var(--affp-money-soft)"}
+            stroke={isLast ? "none" : "var(--affp-money)"}
+            strokeOpacity="0.5"
+          />
+        );
+      })}
+      {months.map((m, i) => (
+        <text key={m.month} className="affp-axis" x={cx(i)} y={H - 8} textAnchor="middle">
+          {shortMonth(m.month)}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+function SplitBar({ paid, payable, pending }: { paid: number; payable: number; pending: number }) {
+  const parts = [
+    { k: "Utbetalt", v: paid, c: "var(--affp-money)" },
+    { k: "Att betala ut", v: payable, c: "var(--affp-amber)" },
+    { k: "Väntande (karens)", v: pending, c: "var(--affp-slate)" },
+  ];
+  const sum = Math.max(1, parts.reduce((a, p) => a + p.v, 0));
+  return (
+    <>
+      <div className="affp-splitbar">
+        {parts.map((p) => (
+          <div key={p.k} style={{ width: `${(100 * p.v) / sum}%`, background: p.c }} />
+        ))}
       </div>
+      <div className="affp-legend">
+        {parts.map((p) => (
+          <div className="affp-legrow" key={p.k}>
+            <span className="affp-lft">
+              <span className="affp-dotc" style={{ background: p.c }} />
+              {p.k}
+            </span>
+            <span className="affp-amt">{kr(p.v)}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function Payouts({ payouts }: { payouts: PayoutPoint[] }) {
+  if (payouts.length === 0) {
+    return <p className="affp-empty">Inga utbetalningar ännu.</p>;
+  }
+  return (
+    <div className="affp-payouts">
+      {payouts.map((p, i) => (
+        <div className="affp-prow" key={i}>
+          <div>
+            <div className="affp-when">{formatDate(p.paidAt)}</div>
+            <div className="affp-method">{p.method}</div>
+          </div>
+          <div className="affp-prowr">
+            <span className="affp-tag">Betald</span>
+            <span className="affp-amt">{kr(p.amount)}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem", fontSize: "0.9rem", color: KID_QUEST.textSecondary }}>
-      {label}
-      {children}
-    </label>
-  );
+// ---- helpers ----------------------------------------------------------------
+
+function kr(v: number): string {
+  return `${(v ?? 0).toLocaleString("sv-SE", { maximumFractionDigits: 2 })} kr`;
+}
+function formatPct(v: number): string {
+  return `${(v ?? 0).toLocaleString("sv-SE", { maximumFractionDigits: 2 })} %`;
+}
+const SV_MONTHS = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+function shortMonth(ym: string): string {
+  const m = parseInt(ym.slice(5, 7), 10);
+  return SV_MONTHS[m - 1] ?? ym;
+}
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return iso;
+  }
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1,
-        padding: "0.55rem",
-        borderRadius: 10,
-        border: `1px solid ${active ? KID_QUEST.accent : KID_QUEST.rule}`,
-        background: active ? KID_QUEST.accent : "transparent",
-        color: active ? "#fff" : KID_QUEST.textSecondary,
-        fontWeight: 600,
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
-  );
+const CSS = `
+.affp{
+  --bg:#f4f6f9; --panel:#fff; --panel2:#f8fafc; --ink:#0f1729; --ink2:#5a6478; --muted:#8a93a6;
+  --line:#e7ebf1; --line2:#eef2f7; --affp-money:#0e9f6e; --affp-money-soft:#d8f3e7;
+  --affp-amber:#d98a0b; --affp-slate:#5b6b8c; --accent:#3b6fe0;
+  --shadow:0 1px 2px rgba(16,23,41,.04),0 8px 24px rgba(16,23,41,.06);
+  min-height:100vh; background:var(--bg); color:var(--ink);
+  font-family:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: "0.65rem 0.75rem",
-  borderRadius: 10,
-  border: `1px solid ${KID_QUEST.rule}`,
-  fontSize: "1rem",
-  fontFamily: "inherit",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "#fff",
-  border: `1px solid ${KID_QUEST.rule}`,
-  borderRadius: 14,
-  padding: "1rem 1.1rem",
-};
-
-const smallButton: React.CSSProperties = {
-  padding: "0.45rem 0.85rem",
-  borderRadius: 9,
-  border: "none",
-  background: KID_QUEST.accent,
-  color: "#fff",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const linkButton: React.CSSProperties = {
-  border: "none",
-  background: "transparent",
-  color: KID_QUEST.accent,
-  cursor: "pointer",
-  fontSize: "0.9rem",
-  fontWeight: 600,
-};
-
-function primaryButton(busy: boolean): React.CSSProperties {
-  return {
-    padding: "0.7rem 1rem",
-    borderRadius: 11,
-    border: "none",
-    background: KID_QUEST.accent,
-    color: "#fff",
-    fontWeight: 700,
-    fontSize: "1rem",
-    cursor: busy ? "default" : "pointer",
-    opacity: busy ? 0.7 : 1,
-  };
-}
-
-function formatKr(value: number): string {
-  return `${(value ?? 0).toLocaleString("sv-SE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} kr`;
-}
-
-function formatPct(value: number): string {
-  return `${(value ?? 0).toLocaleString("sv-SE", { maximumFractionDigits: 2 })} %`;
-}
+@media (prefers-color-scheme:dark){ .affp{
+  --bg:#0c1018; --panel:#141a24; --panel2:#1a212d; --ink:#eaf0f8; --ink2:#a3adc0; --muted:#7a869c;
+  --line:#242c39; --line2:#1e2532; --affp-money:#34d399; --affp-money-soft:#123026;
+  --affp-amber:#f2b34d; --affp-slate:#93a2c2; --accent:#6b9bff;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.4);
+}}
+.affp-wrap{max-width:1000px;margin:0 auto;padding:28px 18px 72px;}
+.affp *{box-sizing:border-box}
+.affp-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:22px;}
+.affp-hi{font-size:1.45rem;font-weight:800;letter-spacing:-.02em;margin:0;}
+.affp-provision{color:var(--ink2);font-size:.9rem;margin:.2rem 0 0;}
+.affp-codechip{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px 8px 14px;box-shadow:var(--shadow);}
+.affp-chiplab{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);}
+.affp-chipval{font-weight:700;letter-spacing:.06em;color:var(--accent);}
+.affp-copy{border:none;background:var(--panel2);color:var(--ink2);border-radius:8px;padding:6px 10px;font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;}
+.affp-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+.affp-kpi{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);}
+.affp-kpil{font-size:.76rem;color:var(--muted);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.affp-kpiv{font-size:1.7rem;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;}
+.affp-kpiv.money{color:var(--affp-money);} .affp-kpiv.amber{color:var(--affp-amber);}
+.affp-kpid{font-size:.76rem;margin-top:7px;font-weight:600;color:var(--muted);}
+.affp-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.affp-dot.money{background:var(--affp-money);} .affp-dot.amber{background:var(--affp-amber);} .affp-dot.slate{background:var(--affp-slate);}
+.affp-grid2{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;margin-bottom:14px;}
+.affp-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 18px 14px;box-shadow:var(--shadow);}
+.affp-cardhead{display:flex;justify-content:space-between;align-items:baseline;}
+.affp-card h2{font-size:.95rem;font-weight:700;margin:0 0 2px;}
+.affp-cap{font-size:.78rem;color:var(--muted);margin:0 0 12px;}
+.affp-svg{display:block;width:100%;height:auto;overflow:visible;}
+.affp-axis{fill:var(--muted);font-size:11px;font-family:"IBM Plex Mono",monospace;}
+.affp-gridline{stroke:var(--line2);stroke-width:1;}
+.affp-splitbar{display:flex;height:14px;border-radius:8px;overflow:hidden;margin:4px 0 14px;}
+.affp-legend{display:flex;flex-direction:column;gap:12px;}
+.affp-legrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.9rem;}
+.affp-lft{display:flex;align-items:center;gap:9px;color:var(--ink2);}
+.affp-dotc{width:10px;height:10px;border-radius:3px;display:inline-block;}
+.affp-amt{font-weight:700;font-variant-numeric:tabular-nums;}
+.affp-payouts .affp-prow{display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line2);}
+.affp-payouts .affp-prow:last-child{border-bottom:none;}
+.affp-when{font-size:.9rem;font-weight:600;} .affp-method{font-size:.78rem;color:var(--muted);}
+.affp-prowr{display:flex;align-items:center;gap:10px;}
+.affp-tag{font-size:.72rem;padding:2px 8px;border-radius:999px;background:var(--affp-money-soft);color:var(--affp-money);font-weight:700;}
+.affp-linkbtn{border:none;background:transparent;color:var(--accent);font-weight:600;font-size:.85rem;cursor:pointer;}
+.affp-empty{color:var(--muted);font-size:.9rem;}
+.affp-loading{color:var(--muted);text-align:center;padding:60px 0;}
+.affp-authcard{max-width:400px;margin:8vh auto 0;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px 26px;box-shadow:var(--shadow);}
+.affp-logo{font-size:.8rem;font-weight:700;letter-spacing:.04em;color:var(--accent);margin-bottom:14px;}
+.affp-h1{font-size:1.4rem;font-weight:800;margin:0 0 .3rem;}
+.affp-sub{color:var(--ink2);font-size:.9rem;margin:0 0 1.3rem;line-height:1.5;}
+.affp-tabs{display:flex;gap:8px;margin-bottom:1.1rem;}
+.affp-tab{flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink2);font-weight:600;cursor:pointer;font-family:inherit;}
+.affp-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.affp-form{display:flex;flex-direction:column;gap:1rem;}
+.affp-field{display:flex;flex-direction:column;gap:.35rem;font-size:.85rem;color:var(--ink2);}
+.affp-field input{padding:.65rem .75rem;border-radius:10px;border:1px solid var(--line);font-size:1rem;font-family:inherit;background:var(--panel2);color:var(--ink);}
+.affp-err{color:#dc2626;font-size:.85rem;margin:0;}
+.affp-primary{padding:.7rem 1rem;border-radius:11px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;font-family:inherit;}
+@media (max-width:760px){ .affp-kpis{grid-template-columns:repeat(2,1fr);} .affp-grid2{grid-template-columns:1fr;} }
+`;

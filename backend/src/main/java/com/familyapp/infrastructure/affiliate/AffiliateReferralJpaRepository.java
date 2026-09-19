@@ -3,6 +3,7 @@ package com.familyapp.infrastructure.affiliate;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,4 +15,6 @@ public interface AffiliateReferralJpaRepository extends JpaRepository<AffiliateR
     boolean existsByFamilyId(UUID familyId);
 
     long countByAffiliateId(UUID affiliateId);
+
+    List<AffiliateReferralEntity> findByAffiliateId(UUID affiliateId);
 }

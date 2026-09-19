@@ -3,6 +3,7 @@ package com.familyapp.api.affiliate;
 import com.familyapp.application.affiliate.AffiliateService;
 import com.familyapp.application.affiliate.AffiliateService.AffiliateSelf;
 import com.familyapp.application.affiliate.AffiliateService.AffiliateSession;
+import com.familyapp.application.affiliate.AffiliateService.AffiliateStats;
 import com.familyapp.application.familymember.FamilyMemberService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,6 +61,15 @@ public class AffiliateController {
     ) {
         var affiliate = affiliateService.authenticate(token);
         return affiliateService.selfView(affiliate);
+    }
+
+    /** The affiliate's analytics dashboard: totals, per-month time series, payout history. */
+    @GetMapping("/affiliate/stats")
+    public AffiliateStats stats(
+            @RequestHeader(value = "X-Affiliate-Token", required = false) String token
+    ) {
+        var affiliate = affiliateService.authenticate(token);
+        return affiliateService.statsView(affiliate);
     }
 
     private UUID familyIdFor(String deviceToken) {
