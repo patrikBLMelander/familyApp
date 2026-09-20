@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KidQuest · Affiliates</title>
+<meta name="description" content="Logga in för att se dina värvningar och din intjäning i KidQuests affiliate-program.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+.affp{
+  --bg:#f4f6f9; --panel:#fff; --panel2:#f8fafc; --ink:#0f1729; --ink2:#5a6478; --muted:#8a93a6;
+  --line:#e7ebf1; --line2:#eef2f7; --money:#0e9f6e; --money-soft:#d8f3e7;
+  --amber:#d98a0b; --slate:#5b6b8c; --accent:#3b6fe0;
+  --shadow:0 1px 2px rgba(16,23,41,.04),0 8px 24px rgba(16,23,41,.06);
+  min-height:100vh; background:var(--bg); color:var(--ink);
+  font-family:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){ .affp{
+  --bg:#0c1018; --panel:#141a24; --panel2:#1a212d; --ink:#eaf0f8; --ink2:#a3adc0; --muted:#7a869c;
+  --line:#242c39; --line2:#1e2532; --money:#34d399; --money-soft:#123026;
+  --amber:#f2b34d; --slate:#93a2c2; --accent:#6b9bff;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.4);
+}}
+html,body{margin:0;background:#f4f6f9;}
+@media (prefers-color-scheme:dark){ html,body{background:#0c1018;} }
+.affp *{box-sizing:border-box}
+.affp-wrap{max-width:1000px;margin:0 auto;padding:28px 18px 72px;}
+.affp-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:22px;}
+.affp-hi{font-size:1.45rem;font-weight:800;letter-spacing:-.02em;margin:0;}
+.affp-provision{color:var(--ink2);font-size:.9rem;margin:.2rem 0 0;}
+.affp-codechip{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px 8px 14px;box-shadow:var(--shadow);}
+.affp-chiplab{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);}
+.affp-chipval{font-weight:700;letter-spacing:.06em;color:var(--accent);}
+.affp-copy{border:none;background:var(--panel2);color:var(--ink2);border-radius:8px;padding:6px 10px;font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;}
+.affp-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+.affp-kpi{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);}
+.affp-kpil{font-size:.76rem;color:var(--muted);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.affp-kpiv{font-size:1.7rem;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;}
+.affp-kpiv.money{color:var(--money);} .affp-kpiv.amber{color:var(--amber);}
+.affp-kpid{font-size:.76rem;margin-top:7px;font-weight:600;color:var(--muted);}
+.affp-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.affp-dot.money{background:var(--money);} .affp-dot.amber{background:var(--amber);} .affp-dot.slate{background:var(--slate);}
+.affp-grid2{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;margin-bottom:14px;}
+.affp-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 18px 14px;box-shadow:var(--shadow);}
+.affp-cardhead{display:flex;justify-content:space-between;align-items:baseline;}
+.affp-card h2{font-size:.95rem;font-weight:700;margin:0 0 2px;}
+.affp-cap{font-size:.78rem;color:var(--muted);margin:0 0 12px;}
+.affp-svg{display:block;width:100%;height:auto;overflow:visible;}
+.affp-axis{fill:var(--muted);font-size:11px;font-family:"IBM Plex Mono",monospace;}
+.affp-gridline{stroke:var(--line2);stroke-width:1;}
+.affp-splitbar{display:flex;height:14px;border-radius:8px;overflow:hidden;margin:4px 0 14px;}
+.affp-legend{display:flex;flex-direction:column;gap:12px;}
+.affp-legrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.9rem;}
+.affp-lft{display:flex;align-items:center;gap:9px;color:var(--ink2);}
+.affp-dotc{width:10px;height:10px;border-radius:3px;display:inline-block;}
+.affp-amt{font-weight:700;font-variant-numeric:tabular-nums;}
+.affp-payouts .affp-prow{display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line2);}
+.affp-payouts .affp-prow:last-child{border-bottom:none;}
+.affp-when{font-size:.9rem;font-weight:600;} .affp-method{font-size:.78rem;color:var(--muted);}
+.affp-prowr{display:flex;align-items:center;gap:10px;}
+.affp-tag{font-size:.72rem;padding:2px 8px;border-radius:999px;background:var(--money-soft);color:var(--money);font-weight:700;}
+.affp-linkbtn{border:none;background:transparent;color:var(--accent);font-weight:600;font-size:.85rem;cursor:pointer;font-family:inherit;}
+.affp-empty{color:var(--muted);font-size:.9rem;}
+.affp-loading{color:var(--muted);text-align:center;padding:60px 0;}
+.affp-refsummary{display:flex;gap:18px;flex-wrap:wrap;font-size:.9rem;color:var(--ink2);margin-bottom:14px;}
+.affp-refsummary b{color:var(--ink);}
+.affp-reflist{display:flex;flex-direction:column;}
+.affp-refrow{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--line2);font-size:.9rem;}
+.affp-refrow:last-child{border-bottom:none;}
+.affp-refage{color:var(--ink2);}
+.affp-refbadge{font-size:.74rem;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap;}
+.affp-refbadge.paying{background:var(--money-soft);color:var(--money);}
+.affp-refbadge.trial{background:var(--line2);color:var(--ink2);}
+.affp-refbadge.ended{background:var(--line2);color:var(--muted);}
+.affp-refbadge.unknown{background:var(--line2);color:var(--muted);}
+.affp-refprov{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--ink2);justify-content:flex-end;min-width:110px;}
+.affp-refmuted{color:var(--muted);}
+.affp-authcard{max-width:400px;margin:8vh auto 0;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px 26px;box-shadow:var(--shadow);}
+.affp-logo{font-size:.8rem;font-weight:700;letter-spacing:.04em;color:var(--accent);margin-bottom:14px;}
+.affp-h1{font-size:1.4rem;font-weight:800;margin:0 0 .3rem;}
+.affp-sub{color:var(--ink2);font-size:.9rem;margin:0 0 1.3rem;line-height:1.5;}
+.affp-tabs{display:flex;gap:8px;margin-bottom:1.1rem;}
+.affp-tab{flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink2);font-weight:600;cursor:pointer;font-family:inherit;}
+.affp-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.affp-form{display:flex;flex-direction:column;gap:1rem;}
+.affp-field{display:flex;flex-direction:column;gap:.35rem;font-size:.85rem;color:var(--ink2);}
+.affp-field input{padding:.65rem .75rem;border-radius:10px;border:1px solid var(--line);font-size:1rem;font-family:inherit;background:var(--panel2);color:var(--ink);}
+.affp-err{color:#dc2626;font-size:.85rem;margin:0;}
+.affp-primary{padding:.7rem 1rem;border-radius:11px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;font-family:inherit;}
+.affp-primary:disabled{opacity:.7;cursor:default;}
+@media (max-width:760px){ .affp-kpis{grid-template-columns:repeat(2,1fr);} .affp-grid2{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div class="affp"><div class="affp-wrap" id="root"><p class="affp-loading">Laddar…</p></div></div>
+<script>
+"use strict";
+var API = "/api/v1";
+var TOKEN_KEY = "affiliateToken";
+
+function getToken(){ try { return localStorage.getItem(TOKEN_KEY); } catch(e){ return null; } }
+function setToken(v){ try { localStorage.setItem(TOKEN_KEY, v); } catch(e){} }
+function clearToken(){ try { localStorage.removeItem(TOKEN_KEY); } catch(e){} }
+
+async function parse(res){
+  if(!res.ok){
+    var msg = "Något gick fel ("+res.status+")";
+    try { var b = await res.json(); if(b && b.message) msg = b.message; else if(b && b.error) msg = b.error; else if(typeof b === "string") msg = b; } catch(e){}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+function authPost(path, email, password){
+  return fetch(API+path, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({email:email, password:password}) }).then(parse);
+}
+function tokenGet(path, token){
+  return fetch(API+path, { headers:{"X-Affiliate-Token": token} }).then(parse);
+}
+
+// ---- helpers ----
+function kr(v){ return (v==null?0:v).toLocaleString("sv-SE",{maximumFractionDigits:2})+" kr"; }
+function formatPct(v){ return (v==null?0:v).toLocaleString("sv-SE",{maximumFractionDigits:2})+" %"; }
+var SV_MONTHS=["jan","feb","mar","apr","maj","jun","jul","aug","sep","okt","nov","dec"];
+function shortMonth(ym){ var m=parseInt(String(ym).slice(5,7),10); return SV_MONTHS[m-1]||ym; }
+function formatDate(iso){ try { return new Date(iso).toLocaleDateString("sv-SE",{day:"numeric",month:"short",year:"numeric"}); } catch(e){ return iso; } }
+function ageLabel(m){ if(m<=0) return "Ny denna månad"; if(m===1) return "1 månad"; return m+" månader"; }
+function statusLabel(s){ return s==="PAYING"?"Betalar":s==="TRIAL"?"Provgratis":s==="ENDED"?"Avslutad":"Okänd"; }
+function refClass(s){ return s==="PAYING"?"paying":s==="TRIAL"?"trial":s==="ENDED"?"ended":"unknown"; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+var root = document.getElementById("root");
+
+// ---- auth screen ----
+function renderAuth(){
+  var mode = "login";
+  function draw(){
+    root.innerHTML =
+      '<div class="affp-authcard">'
+      + '<div class="affp-logo">KidQuest · Affiliates</div>'
+      + '<h1 class="affp-h1">'+(mode==="login"?"Logga in":"Aktivera konto")+'</h1>'
+      + '<p class="affp-sub">'+(mode==="login"?"Se dina värvningar och din intjäning.":"Välj ett lösenord. Fungerar bara om du blivit inbjuden.")+'</p>'
+      + '<div class="affp-tabs">'
+      + '<button class="affp-tab '+(mode==="login"?"on":"")+'" type="button" data-mode="login">Logga in</button>'
+      + '<button class="affp-tab '+(mode==="activate"?"on":"")+'" type="button" data-mode="activate">Aktivera konto</button>'
+      + '</div>'
+      + '<form class="affp-form" id="f">'
+      + '<label class="affp-field">E-post<input type="email" required id="email" autocomplete="email"></label>'
+      + '<label class="affp-field">Lösenord<input type="password" required id="password" autocomplete="'+(mode==="login"?"current-password":"new-password")+'"></label>'
+      + '<p class="affp-err" id="err" hidden></p>'
+      + '<button type="submit" class="affp-primary" id="submit">'+(mode==="login"?"Logga in":"Aktivera")+'</button>'
+      + '</form></div>';
+    var tabs = root.querySelectorAll(".affp-tab");
+    for(var i=0;i<tabs.length;i++){ tabs[i].onclick = function(){ mode = this.getAttribute("data-mode"); draw(); }; }
+    root.querySelector("#f").onsubmit = async function(e){
+      e.preventDefault();
+      var btn = root.querySelector("#submit"); var err = root.querySelector("#err");
+      var email = root.querySelector("#email").value.trim(); var password = root.querySelector("#password").value;
+      btn.disabled = true; btn.textContent = "…"; err.hidden = true;
+      try {
+        var s = await authPost(mode==="login"?"/affiliate-auth/login":"/affiliate-auth/activate", email, password);
+        setToken(s.token); renderDashboard(s.token);
+      } catch(ex){
+        err.textContent = ex.message || "Något gick fel."; err.hidden = false;
+        btn.disabled = false; btn.textContent = mode==="login"?"Logga in":"Aktivera";
+      }
+    };
+  }
+  draw();
+}
+
+// ---- charts ----
+function areaChart(cumulative, months){
+  var W=640,H=220,L=46,R=12,T=16,B=28;
+  var total = cumulative.length ? cumulative[cumulative.length-1] : 0;
+  var max = Math.max(500, Math.ceil(total/500)*500);
+  var n = Math.max(months.length,2);
+  var x=function(i){ return L + (W-L-R)*i/(n-1); };
+  var y=function(v){ return T + (H-T-B)*(1-v/max); };
+  var line = cumulative.map(function(v,i){ return x(i).toFixed(1)+","+y(v).toFixed(1); }).join(" ");
+  var area = L+","+y(0)+" "+line+" "+x(cumulative.length-1)+","+y(0);
+  var last = cumulative.length-1;
+  var ticks=[0,max/2,max];
+  var s='<svg viewBox="0 0 '+W+' '+H+'" class="affp-svg" preserveAspectRatio="none">'
+    + '<defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="var(--money)" stop-opacity="0.28"/><stop offset="1" stop-color="var(--money)" stop-opacity="0"/></linearGradient></defs>';
+  ticks.forEach(function(t){
+    s+='<line class="affp-gridline" x1="'+L+'" y1="'+y(t)+'" x2="'+(W-R)+'" y2="'+y(t)+'"/>'
+     + '<text class="affp-axis" x="'+(L-8)+'" y="'+(y(t)+4)+'" text-anchor="end">'+t.toLocaleString("sv-SE")+'</text>';
+  });
+  if(cumulative.length>1) s+='<polygon points="'+area+'" fill="url(#ag)"/>';
+  s+='<polyline points="'+line+'" fill="none" stroke="var(--money)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  if(last>=0){
+    s+='<circle cx="'+x(last)+'" cy="'+y(cumulative[last])+'" r="9" fill="var(--money)" opacity="0.18"/>'
+     + '<circle cx="'+x(last)+'" cy="'+y(cumulative[last])+'" r="4.5" fill="var(--money)"/>';
+  }
+  months.forEach(function(m,i){ s+='<text class="affp-axis" x="'+x(i)+'" y="'+(H-8)+'" text-anchor="middle">'+shortMonth(m.month)+'</text>'; });
+  return s+'</svg>';
+}
+function barChart(months){
+  var W=640,H=200,L=46,R=12,T=14,B=28;
+  var vals = months.map(function(m){ return m.earned; });
+  var max = Math.max(100, Math.ceil(Math.max.apply(null, vals.concat([0]))/100)*100);
+  var n = Math.max(months.length,1);
+  var cx=function(i){ return L+(W-L-R)*((i+0.5)/n); };
+  var bw=((W-L-R)/n)*0.55;
+  var y=function(v){ return T+(H-T-B)*(1-v/max); };
+  var ticks=[0,max/2,max];
+  var s='<svg viewBox="0 0 '+W+' '+H+'" class="affp-svg">';
+  ticks.forEach(function(t){
+    s+='<line class="affp-gridline" x1="'+L+'" y1="'+y(t)+'" x2="'+(W-R)+'" y2="'+y(t)+'"/>'
+     + '<text class="affp-axis" x="'+(L-8)+'" y="'+(y(t)+4)+'" text-anchor="end">'+t+'</text>';
+  });
+  months.forEach(function(m,i){
+    var isLast = i===months.length-1;
+    var h=(H-T-B)*(m.earned/max);
+    s+='<rect x="'+(cx(i)-bw/2)+'" y="'+y(m.earned)+'" width="'+bw+'" height="'+Math.max(0,h)+'" rx="4" '
+      + 'fill="'+(isLast?"var(--money)":"var(--money-soft)")+'" stroke="'+(isLast?"none":"var(--money)")+'" stroke-opacity="0.5"/>';
+  });
+  months.forEach(function(m,i){ s+='<text class="affp-axis" x="'+cx(i)+'" y="'+(H-8)+'" text-anchor="middle">'+shortMonth(m.month)+'</text>'; });
+  return s+'</svg>';
+}
+function splitBar(paid, payable, pending){
+  var parts=[{k:"Utbetalt",v:paid,c:"var(--money)"},{k:"Att betala ut",v:payable,c:"var(--amber)"},{k:"Väntande (karens)",v:pending,c:"var(--slate)"}];
+  var sum = Math.max(1, parts.reduce(function(a,p){ return a+p.v; },0));
+  var s='<div class="affp-splitbar">';
+  parts.forEach(function(p){ s+='<div style="width:'+(100*p.v/sum)+'%;background:'+p.c+'"></div>'; });
+  s+='</div><div class="affp-legend">';
+  parts.forEach(function(p){ s+='<div class="affp-legrow"><span class="affp-lft"><span class="affp-dotc" style="background:'+p.c+'"></span>'+p.k+'</span><span class="affp-amt">'+kr(p.v)+'</span></div>'; });
+  return s+'</div>';
+}
+function payoutsList(payouts){
+  if(!payouts.length) return '<p class="affp-empty">Inga utbetalningar ännu.</p>';
+  var s='<div class="affp-payouts">';
+  payouts.forEach(function(p){
+    s+='<div class="affp-prow"><div><div class="affp-when">'+formatDate(p.paidAt)+'</div><div class="affp-method">'+esc(p.method)+'</div></div>'
+     + '<div class="affp-prowr"><span class="affp-tag">Betald</span><span class="affp-amt">'+kr(p.amount)+'</span></div></div>';
+  });
+  return s+'</div>';
+}
+function referralsBlock(refs){
+  if(refs===null) return '<p class="affp-empty">Laddar…</p>';
+  if(!refs.length) return '<p class="affp-empty">Inga värvningar ännu. Dela din länk för att komma igång!</p>';
+  var paying=refs.filter(function(r){return r.status==="PAYING";}).length;
+  var trial=refs.filter(function(r){return r.status==="TRIAL";}).length;
+  var ended=refs.filter(function(r){return r.status==="ENDED";}).length;
+  var html='<div class="affp-refsummary"><span><b>'+paying+'</b> betalar</span><span><b>'+trial+'</b> provgratis</span><span><b>'+ended+'</b> avslutade</span></div>'
+    + '<div class="affp-reflist" id="reflist"></div>';
+  if(refs.length>10) html+='<button class="affp-linkbtn" id="toggleRefs" style="margin-top:10px">Visa alla ('+refs.length+')</button>';
+  return html;
+}
+function drawRefRows(refs, showAll){
+  var shown = showAll ? refs : refs.slice(0,10);
+  var s="";
+  shown.forEach(function(r){
+    s+='<div class="affp-refrow"><span class="affp-refage">'+ageLabel(r.joinedMonthsAgo)+'</span>'
+     + '<span class="affp-refbadge '+refClass(r.status)+'">'+statusLabel(r.status)+'</span>'
+     + '<span class="affp-refprov">'+(r.earningCommission?'<span class="affp-dotc" style="background:var(--money)"></span> ger provision':'<span class="affp-refmuted">—</span>')+'</span></div>';
+  });
+  return s;
+}
+
+// ---- dashboard ----
+async function renderDashboard(token){
+  root.innerHTML = '<p class="affp-loading">Laddar…</p>';
+  var data, refs = null;
+  try {
+    data = await tokenGet("/affiliate/stats", token);
+  } catch(ex){
+    root.innerHTML = '<div class="affp-authcard"><p class="affp-sub">'+esc(ex.message||"Kunde inte hämta din data.")+'</p>'
+      + '<button class="affp-primary" id="back">Till inloggningen</button></div>';
+    root.querySelector("#back").onclick = function(){ clearToken(); renderAuth(); };
+    return;
+  }
+  try { refs = await tokenGet("/affiliate/referrals", token); } catch(e){ refs = []; }
+
+  var cumulative = data.monthly.reduce(function(acc,m){ acc.push((acc.length?acc[acc.length-1]:0)+m.earned); return acc; },[]);
+  var firstName = (data.name||"").split(" ")[0];
+
+  root.innerHTML =
+    '<header class="affp-header"><div>'
+    + '<h1 class="affp-hi">Hej '+esc(firstName)+' 👋</h1>'
+    + '<p class="affp-provision">Du tjänar <b>'+formatPct(data.commissionPct)+'</b> av varje betald månad, i upp till 12 månader per värvad familj.</p>'
+    + '</div><div class="affp-codechip"><div><div class="affp-chiplab">Din kod</div><div class="affp-chipval">'+esc(data.referralCode)+'</div></div>'
+    + '<button class="affp-copy" id="copy">Kopiera länk</button></div></header>'
+    + '<div class="affp-kpis">'
+    + kpi("Totalt intjänat", kr(data.totalEarned), "money", "money", "")
+    + kpi("Att betala ut", kr(data.payable), "amber", "amber", "redo att betalas")
+    + kpi("Väntande (karens)", kr(data.pending), "slate", "", "mognar inom 30 dgr")
+    + kpi("Denna månad", kr(data.thisMonthEarned), "money", "", data.referralCount+" värvade totalt")
+    + '</div>'
+    + '<div class="affp-grid2">'
+    + '<div class="affp-card"><h2>Intjäning över tid</h2><p class="affp-cap">Ackumulerat, kr</p>'+areaChart(cumulative, data.monthly)+'</div>'
+    + '<div class="affp-card"><h2>Var pengarna är</h2><p class="affp-cap">Fördelning av allt du tjänat</p>'+splitBar(data.paidOut, data.payable, data.pending)+'</div>'
+    + '</div>'
+    + '<div class="affp-grid2">'
+    + '<div class="affp-card"><h2>Per månad</h2><p class="affp-cap">Intjänat per månad, kr</p>'+barChart(data.monthly)+'</div>'
+    + '<div class="affp-card"><div class="affp-cardhead"><h2>Utbetalningar</h2><button class="affp-linkbtn" id="logout">Logga ut</button></div><p class="affp-cap">Historik</p>'+payoutsList(data.payouts)+'</div>'
+    + '</div>'
+    + '<div class="affp-card"><h2>Dina värvningar</h2><p class="affp-cap">Anonymt — hur länge de varit med och om de fortfarande ger provision.</p>'+referralsBlock(refs)+'</div>';
+
+  root.querySelector("#logout").onclick = function(){ clearToken(); renderAuth(); };
+  root.querySelector("#copy").onclick = async function(){
+    try { await navigator.clipboard.writeText(data.referralLink); this.textContent = "Kopierad!"; var b=this; setTimeout(function(){ b.textContent="Kopiera länk"; },1500); } catch(e){}
+  };
+  if(refs && refs.length){
+    var listEl = root.querySelector("#reflist");
+    var showAll = false;
+    listEl.innerHTML = drawRefRows(refs, showAll);
+    var toggle = root.querySelector("#toggleRefs");
+    if(toggle){ toggle.onclick = function(){ showAll=!showAll; listEl.innerHTML = drawRefRows(refs, showAll); this.textContent = showAll?"Visa färre":"Visa alla ("+refs.length+")"; }; }
+  }
+}
+function kpi(label,value,dot,valueClass,hint){
+  return '<div class="affp-kpi"><div class="affp-kpil"><span class="affp-dot '+dot+'"></span>'+label+'</div>'
+    + '<div class="affp-kpiv '+(valueClass||"")+'">'+value+'</div>'
+    + (hint?'<div class="affp-kpid">'+esc(hint)+'</div>':'')+'</div>';
+}
+
+// ---- boot ----
+var t = getToken();
+if(t) renderDashboard(t); else renderAuth();
+</script>
+</body>
+</html>

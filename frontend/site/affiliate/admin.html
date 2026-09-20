@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Affiliates · Admin — KidQuest</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="../favicon.png">
+<link rel="stylesheet" href="../_style.css">
+<style>
+  .adm-login{max-width:24rem;margin:2rem auto 0;}
+  .adm-field{display:flex;flex-direction:column;gap:.35rem;margin-bottom:1rem;font-size:.85rem;color:var(--soft);}
+  .adm-field input{padding:.65rem .75rem;border-radius:10px;border:1px solid var(--line);font-size:1rem;font-family:inherit;background:#fff;color:var(--ink);}
+  .adm-err{color:#B91C1C;font-size:.9rem;margin:.25rem 0 0;}
+  .adm-ok{color:#166534;font-size:.9rem;margin:.25rem 0 0;}
+  .adm-inv{display:grid;gap:.75rem;}
+  .adm-invrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;}
+  .adm-invrow input{padding:.6rem .7rem;border-radius:9px;border:1px solid var(--line);font-size:.95rem;font-family:inherit;}
+  td.num, th.num{text-align:right;white-space:nowrap;}
+  td.pay{font-weight:700;color:var(--accent);}
+  .paybtn{padding:.4rem .75rem;border-radius:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-weight:600;font-size:.82rem;white-space:nowrap;cursor:pointer;font-family:inherit;}
+  .paybtn:disabled{background:var(--line);cursor:default;}
+  .adm-top{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;}
+  .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  tfoot td{font-weight:700;color:var(--ink);}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand"><a href="/">KidQuest</a></div>
+</header>
+<div id="root"><p class="liten">Laddar…</p></div>
+<footer>
+  <a href="/privacy">Integritetspolicy</a><a href="/villkor">Villkor</a><a href="/support">Support</a>
+</footer>
+</div>
+<script>
+"use strict";
+var API = "/api/v1";
+var DK = "deviceToken";
+function getDevice(){ try { return localStorage.getItem(DK); } catch(e){ return null; } }
+function setDevice(v){ try { localStorage.setItem(DK, v); } catch(e){} }
+function clearDevice(){ try { localStorage.removeItem(DK); } catch(e){} }
+var root = document.getElementById("root");
+
+async function parse(res){
+  if(!res.ok){
+    var msg = "Något gick fel ("+res.status+")";
+    try { var b = await res.json(); if(b && b.message) msg = b.message; else if(b && b.error) msg = b.error; else if(typeof b === "string") msg = b; } catch(e){}
+    var err = new Error(msg); err.status = res.status; throw err;
+  }
+  return res.json();
+}
+function deviceHeaders(){
+  var t = getDevice();
+  var h = {"Content-Type":"application/json"};
+  if(t) h["X-Device-Token"] = t;
+  return h;
+}
+function loginByEmail(email,password){
+  return fetch(API+"/families/login-by-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,password:password})}).then(parse);
+}
+function listAffiliates(){ return fetch(API+"/admin/affiliates",{headers:deviceHeaders()}).then(parse); }
+function createAffiliate(name,email,code){ return fetch(API+"/admin/affiliates",{method:"POST",headers:deviceHeaders(),body:JSON.stringify({name:name,email:email,referralCode:code||null})}).then(parse); }
+function payout(id){ return fetch(API+"/admin/affiliates/"+id+"/payout",{method:"POST",headers:deviceHeaders(),body:JSON.stringify({method:"manual"})}).then(parse); }
+
+function kr(v){ return (v==null?0:v).toLocaleString("sv-SE",{minimumFractionDigits:0,maximumFractionDigits:2})+" kr"; }
+function statusLabel(s){ return s==="INVITED"?"Inbjuden":s==="ACTIVE"?"Aktiv":s==="PAUSED"?"Pausad":s; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+function renderLogin(msg){
+  root.innerHTML =
+    '<div class="adm-login card">'
+    + '<h1 style="font-size:1.4rem;margin:.1rem 0 .3rem">Affiliates — admin</h1>'
+    + '<p class="liten" style="margin:0 0 1.1rem">Logga in med ditt förälderkonto i KidQuest. Bara adminkontot kommer in.</p>'
+    + (msg?'<p class="adm-err" style="margin-bottom:1rem">'+esc(msg)+'</p>':'')
+    + '<form id="f">'
+    + '<label class="adm-field">E-post<input type="email" id="email" required autocomplete="email"></label>'
+    + '<label class="adm-field">Lösenord<input type="password" id="password" required autocomplete="current-password"></label>'
+    + '<p class="adm-err" id="err" hidden></p>'
+    + '<button type="submit" class="btn" id="submit" style="width:100%;text-align:center">Logga in</button>'
+    + '</form></div>';
+  root.querySelector("#f").onsubmit = async function(e){
+    e.preventDefault();
+    var btn=root.querySelector("#submit"), err=root.querySelector("#err");
+    var email=root.querySelector("#email").value.trim(), password=root.querySelector("#password").value;
+    btn.disabled=true; btn.textContent="…"; err.hidden=true;
+    try {
+      var res = await loginByEmail(email,password);
+      var token = (res && res.member && res.member.deviceToken) || res.deviceToken;
+      if(!token) throw new Error("Inget device-token i svaret.");
+      setDevice(token);
+      load();
+    } catch(ex){
+      err.textContent = ex.message || "Kunde inte logga in."; err.hidden=false;
+      btn.disabled=false; btn.textContent="Logga in";
+    }
+  };
+}
+
+function renderTable(rows){
+  var totalPayable = rows.reduce(function(s,r){ return s+(r.payable||0); },0);
+  var html =
+    '<div class="adm-top"><h1 style="font-size:1.5rem;margin:0 0 .2rem">Affiliates — admin</h1>'
+    + '<button class="btn lugn" id="logout" style="padding:.4rem .8rem">Logga ut</button></div>'
+    + '<p style="margin:0 0 1.4rem">Bjud in affiliates och följ värvningar och utbetalningar.</p>'
+    + '<form class="card adm-inv" id="inv">'
+    + '<div style="font-weight:700;color:var(--ink)">Bjud in en affiliate</div>'
+    + '<div class="adm-invrow"><input id="in-name" placeholder="Namn" required><input id="in-email" type="email" placeholder="E-post" required><input id="in-code" placeholder="Kod (valfritt)"></div>'
+    + '<p class="adm-err" id="inv-err" hidden></p><p class="adm-ok" id="inv-ok" hidden></p>'
+    + '<button type="submit" class="btn" id="inv-btn" style="justify-self:start">Bjud in</button>'
+    + '</form>'
+    + '<p class="adm-err" id="tbl-err" hidden></p>';
+  if(!rows.length){
+    html += '<p class="liten">Inga affiliates ännu — bjud in den första ovan.</p>';
+  } else {
+    html += '<div class="tbl"><table style="min-width:640px"><thead><tr>'
+      + '<th>Namn</th><th>Kod</th><th>Status</th><th class="num">Värvade</th><th class="num">Väntande</th><th class="num">Att betala</th><th class="num">Utbetalt</th><th></th>'
+      + '</tr></thead><tbody>';
+    rows.forEach(function(r){
+      html += '<tr>'
+        + '<td>'+esc(r.name)+'<div class="liten" style="margin:0">'+esc(r.email)+'</div></td>'
+        + '<td class="code">'+esc(r.referralCode)+'</td>'
+        + '<td>'+statusLabel(r.status)+'</td>'
+        + '<td class="num">'+r.referralCount+'</td>'
+        + '<td class="num">'+kr(r.pending)+'</td>'
+        + '<td class="num pay">'+kr(r.payable)+'</td>'
+        + '<td class="num">'+kr(r.paidOut)+'</td>'
+        + '<td class="num">'+(r.payable>0?'<button class="paybtn" data-id="'+r.id+'" data-name="'+esc(r.name)+'" data-amt="'+r.payable+'">Markera utbetald</button>':'<span class="liten">—</span>')+'</td>'
+        + '</tr>';
+    });
+    html += '</tbody><tfoot><tr><td colspan="5">Totalt att betala ut</td><td class="num pay">'+kr(totalPayable)+'</td><td colspan="2"></td></tr></tfoot></table></div>';
+  }
+  root.innerHTML = html;
+
+  root.querySelector("#logout").onclick = function(){ clearDevice(); renderLogin(null); };
+  root.querySelector("#inv").onsubmit = async function(e){
+    e.preventDefault();
+    var btn=root.querySelector("#inv-btn"), err=root.querySelector("#inv-err"), ok=root.querySelector("#inv-ok");
+    err.hidden=true; ok.hidden=true; btn.disabled=true; btn.textContent="…";
+    try {
+      var created = await createAffiliate(root.querySelector("#in-name").value.trim(), root.querySelector("#in-email").value.trim(), root.querySelector("#in-code").value.trim());
+      ok.textContent = "Bjöd in "+created.name+" (kod "+created.referralCode+")."; ok.hidden=false;
+      load();
+    } catch(ex){
+      err.textContent = ex.message || "Kunde inte skapa affiliaten."; err.hidden=false;
+      btn.disabled=false; btn.textContent="Bjud in";
+    }
+  };
+  var btns = root.querySelectorAll(".paybtn");
+  for(var i=0;i<btns.length;i++){
+    btns[i].onclick = async function(){
+      var id=this.getAttribute("data-id"), name=this.getAttribute("data-name"), amt=parseFloat(this.getAttribute("data-amt"));
+      if(!window.confirm("Markera "+kr(amt)+" till "+name+" som utbetald?")) return;
+      var b=this, err=root.querySelector("#tbl-err"); err.hidden=true;
+      b.disabled=true; b.textContent="…";
+      try { await payout(id); load(); }
+      catch(ex){ err.textContent = ex.message || "Kunde inte registrera utbetalningen."; err.hidden=false; b.disabled=false; b.textContent="Markera utbetald"; }
+    };
+  }
+}
+
+async function load(){
+  if(!getDevice()){ renderLogin(null); return; }
+  root.innerHTML = '<p class="liten">Laddar…</p>';
+  try {
+    var rows = await listAffiliates();
+    renderTable(rows);
+  } catch(ex){
+    if(ex.status===401 || ex.status===403){
+      clearDevice();
+      renderLogin(ex.status===403 ? "Det kontot är inte affiliate-admin. Logga in med adminkontot." : "Sessionen gick ut. Logga in igen.");
+    } else {
+      root.innerHTML = '<p class="adm-err">'+esc(ex.message||"Kunde inte hämta affiliates.")+'</p>'
+        + '<button class="btn lugn" id="retry">Försök igen</button>';
+      root.querySelector("#retry").onclick = load;
+    }
+  }
+}
+load();
+</script>
+</body>
+</html>
