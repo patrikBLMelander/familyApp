@@ -114,5 +114,9 @@ object ApiClient {
     val adventuresApi: AdventuresApi by lazy {
         retrofit.create(AdventuresApi::class.java)
     }
+
+    val affiliatesApi: AffiliatesApi by lazy {
+        retrofit.create(AffiliatesApi::class.java)
+    }
 }
 

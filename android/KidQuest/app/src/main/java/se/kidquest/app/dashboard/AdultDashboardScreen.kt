@@ -153,6 +153,7 @@ fun AdultDashboardScreen(
     // Barnlåsets kod. Sätts i barnvyns banderoll där behovet uppstår, ändras härifrån.
     var parentPin by remember { mutableStateOf<String?>(null) }
     var showPinDialog by remember { mutableStateOf(false) }
+    var showReferralDialog by remember { mutableStateOf(false) }
     val pinScope = rememberCoroutineScope()
     LaunchedEffect(Unit) { parentPin = TokenStore.parentPin() }
     // The family already named itself at registration. Falling back to "Min familj"
@@ -591,7 +592,12 @@ fun AdultDashboardScreen(
             hasParentPin = parentPin != null,
             onChangePin = { showPinDialog = true },
             onDeleteFamily = { confirmingFamilyDeletion = true },
+            onEnterReferral = { showReferralDialog = true },
         )
+
+        if (showReferralDialog) {
+            ReferralCodeDialog(season = palette, onDismiss = { showReferralDialog = false })
+        }
 
         if (showPinDialog) {
             ParentPinDialog(
@@ -765,6 +771,7 @@ private fun DashboardTopBar(
     /** Menypunkten finns bara när en kod är satt; se kommentaren vid den. */
     hasParentPin: Boolean,
     onChangePin: () -> Unit,
+    onEnterReferral: () -> Unit,
 ) {
     // White on the photograph, the season's ink once the bar is solid.
     val titleColour = lerp(Color.White, palette.ink, collapsed)
@@ -839,6 +846,16 @@ private fun DashboardTopBar(
                         },
                     )
                 }
+                // Vem som helst i familjen kan ha fått en värvningskod av den som
+                // tipsade dem. First-touch på servern, så det är ofarligt att den syns
+                // alltid -- en redan kopplad familj påverkas inte.
+                DropdownMenuItem(
+                    text = { Text("Värvningskod") },
+                    onClick = {
+                        onMenuOpenChange(false)
+                        onEnterReferral()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text("Logga ut") },
                     onClick = {
