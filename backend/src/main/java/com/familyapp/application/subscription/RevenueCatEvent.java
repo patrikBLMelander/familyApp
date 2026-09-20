@@ -41,7 +41,15 @@ public record RevenueCatEvent(
             @JsonProperty("grace_period_expiration_at_ms") Long gracePeriodExpirationAtMs,
             /** Stable across renewals, unlike transaction_id. */
             @JsonProperty("original_transaction_id") String originalTransactionId,
-            @JsonProperty("event_timestamp_ms") Long eventTimestampMs
+            @JsonProperty("event_timestamp_ms") Long eventTimestampMs,
+            /** Price the customer paid, in {@link #currency}. Absent on non-purchase events. */
+            @JsonProperty("price") Double price,
+            String currency,
+            /**
+             * Share of the price the developer keeps after store/platform fees and taxes
+             * (0..1). This is the NET basis affiliate commission is computed on.
+             */
+            @JsonProperty("takehome_percentage") Double takehomePercentage
     ) {
     }
 }

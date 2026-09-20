@@ -36,6 +36,7 @@ class SubscriptionWebhookServiceTest {
     private SubscriptionEventJpaRepository events;
     private FamilySubscriptionJpaRepository subscriptions;
     private FamilyJpaRepository families;
+    private com.familyapp.application.affiliate.AffiliateCommissionService affiliate;
     private SubscriptionWebhookService service;
 
     @BeforeEach
@@ -43,9 +44,10 @@ class SubscriptionWebhookServiceTest {
         events = mock(SubscriptionEventJpaRepository.class);
         subscriptions = mock(FamilySubscriptionJpaRepository.class);
         families = mock(FamilyJpaRepository.class);
+        affiliate = mock(com.familyapp.application.affiliate.AffiliateCommissionService.class);
         when(subscriptions.save(any())).thenAnswer(i -> i.getArgument(0));
         when(families.existsById(FAMILY)).thenReturn(true);
-        service = new SubscriptionWebhookService(events, subscriptions, families, true);
+        service = new SubscriptionWebhookService(events, subscriptions, families, affiliate, true);
     }
 
     private FamilySubscriptionEntity row() {
@@ -65,7 +67,8 @@ class SubscriptionWebhookServiceTest {
         return new RevenueCatEvent.Event(
                 EVENT_ID, type, FAMILY.toString(), FAMILY.toString(), List.of(),
                 "kidquest_monthly", "NORMAL", "PLAY_STORE", "PRODUCTION", List.of("pro"),
-                cancelReason, expiresAtMs, null, "GPA.1234", System.currentTimeMillis()
+                cancelReason, expiresAtMs, null, "GPA.1234", System.currentTimeMillis(),
+                49.0, "SEK", 0.85
         );
     }
 
@@ -216,7 +219,8 @@ class SubscriptionWebhookServiceTest {
         var anonymous = new RevenueCatEvent.Event(
                 EVENT_ID, "INITIAL_PURCHASE", "$RCAnonymousID:abc", "$RCAnonymousID:abc",
                 List.of(), "kidquest_monthly", "NORMAL", "PLAY_STORE", "PRODUCTION",
-                List.of("pro"), null, inDays(30), null, "GPA.1", System.currentTimeMillis()
+                List.of("pro"), null, inDays(30), null, "GPA.1", System.currentTimeMillis(),
+                49.0, "SEK", 0.85
         );
 
         var outcome = service.handle(anonymous, "{}");
@@ -244,7 +248,8 @@ class SubscriptionWebhookServiceTest {
         var idless = new RevenueCatEvent.Event(
                 null, "RENEWAL", FAMILY.toString(), FAMILY.toString(), List.of(),
                 "kidquest_monthly", "NORMAL", "PLAY_STORE", "PRODUCTION", List.of("pro"),
-                null, inDays(30), null, "GPA.1", System.currentTimeMillis()
+                null, inDays(30), null, "GPA.1", System.currentTimeMillis(),
+                49.0, "SEK", 0.85
         );
 
         try {
@@ -258,12 +263,13 @@ class SubscriptionWebhookServiceTest {
 
     @Test
     void a_sandbox_event_is_stored_but_not_applied_when_sandbox_is_off() {
-        service = new SubscriptionWebhookService(events, subscriptions, families, false);
+        service = new SubscriptionWebhookService(events, subscriptions, families, affiliate, false);
         row();
         var sandbox = new RevenueCatEvent.Event(
                 EVENT_ID, "INITIAL_PURCHASE", FAMILY.toString(), FAMILY.toString(), List.of(),
                 "kidquest_monthly", "NORMAL", "PLAY_STORE", "SANDBOX", List.of("pro"),
-                null, inDays(30), null, "GPA.1", System.currentTimeMillis()
+                null, inDays(30), null, "GPA.1", System.currentTimeMillis(),
+                49.0, "SEK", 0.85
         );
 
         var outcome = service.handle(sandbox, "{}");

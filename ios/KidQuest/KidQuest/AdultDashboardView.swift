@@ -40,6 +40,7 @@ struct AdultDashboardView: View {
     /// Barnlåsets kod. Sätts i barnvyns banderoll där behovet uppstår, ändras härifrån.
     @State private var parentPin: String?
     @State private var showPinSheet = false
+    @State private var showReferralCode = false
     @State private var overview: AdultDashboardRepository.Overview?
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -108,6 +109,9 @@ struct AdultDashboardView: View {
                 onChanged: { Task { await reload() } },
                 onDeleted: { Task { await reload() } }
             )
+        }
+        .sheet(isPresented: $showReferralCode) {
+            ReferralCodeSheet()
         }
     }
 
@@ -236,7 +240,8 @@ struct AdultDashboardView: View {
             onDeleteFamily: onDeleteFamily,
             onOpenDeleteFamily: { showDeleteFamily = true },
             hasParentPin: parentPin != nil,
-            onChangePin: { showPinSheet = true }
+            onChangePin: { showPinSheet = true },
+            onEnterReferral: { showReferralCode = true }
         )
     }
 
@@ -502,6 +507,7 @@ private struct DashboardTopBar: View {
     /// Menypunkten finns bara när en kod är satt; se kommentaren vid den.
     var hasParentPin: Bool = false
     var onChangePin: () -> Void = {}
+    var onEnterReferral: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 0) {
@@ -528,6 +534,9 @@ private struct DashboardTopBar: View {
                 if hasParentPin {
                     Button("Barnlåsets kod", action: onChangePin)
                 }
+                // Vem som helst i familjen kan ha fått en värvningskod av den som
+                // tipsade dem. First-touch på servern, så den är ofarlig att visa alltid.
+                Button("Värvningskod", action: onEnterReferral)
                 Button("Logga ut", action: onLogout)
                 if onDeleteFamily != nil {
                     // Both stores require this to be reachable in the app, and Apple

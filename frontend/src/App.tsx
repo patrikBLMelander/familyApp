@@ -20,6 +20,8 @@ import { TermsView } from "./features/legal/TermsView";
 import { DeleteAccountView } from "./features/legal/DeleteAccountView";
 import { ResetPasswordView } from "./features/auth/ResetPasswordView";
 import { ParentChildView } from "./features/dashboard/ParentChildView";
+import { AffiliatePortalView } from "./features/affiliate/AffiliatePortalView";
+import { AffiliateAdminView } from "./features/affiliate/AffiliateAdminView";
 import { AdultChoresView } from "./features/dashboard/AdultChoresView";
 import { FamilyTasksView } from "./features/dashboard/FamilyTasksView";
 import { useIsChild } from "./shared/hooks/useIsChild";
@@ -29,7 +31,7 @@ import { getMemberByDeviceToken } from "./shared/api/familyMembers";
 import { fetchCurrentPet, PetResponse } from "./shared/api/pets";
 import { FamilyResponse } from "./shared/api/family";
 
-type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "wallet" | "childrenwallet" | "privacy" | "terms" | "deleteaccount" | "resetpassword" | "childview" | "familytasks";
+type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers" | "invite" | "childtest" | "login" | "xp" | "childrenxp" | "eggselection" | "pettest" | "pethistory" | "wallet" | "childrenwallet" | "privacy" | "terms" | "deleteaccount" | "resetpassword" | "childview" | "familytasks" | "affiliate" | "affiliateadmin";
 
 // Allowed family IDs for Spotify Charts link
 const SPOTIFY_CHARTS_ALLOWED_FAMILIES = [
@@ -52,6 +54,8 @@ function viewFromPath(): ViewKey | null {
   if (path === "/villkor") return "terms";
   if (path === "/radera-konto") return "deleteaccount";
   if (path === "/aterstall-losenord") return "resetpassword";
+  if (path === "/affiliate/admin") return "affiliateadmin";
+  if (path === "/affiliate") return "affiliate";
   return null;
 }
 
@@ -250,6 +254,12 @@ export function App() {
     }
     if (currentView === "resetpassword") {
       return <ResetPasswordView />;
+    }
+    if (currentView === "affiliate") {
+      return <AffiliatePortalView />;
+    }
+    if (currentView === "affiliateadmin") {
+      return <AffiliateAdminView />;
     }
 
     // Show login/register if not authenticated
