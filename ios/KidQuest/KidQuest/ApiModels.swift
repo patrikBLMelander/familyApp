@@ -284,6 +284,10 @@ struct XpProgressResponseDTO: Decodable {
     let totalTasksCompleted: Int
     let xpForNextLevel: Int
     let xpInCurrentLevel: Int
+    /// Efter max-level (125 XP): stjärnor på djuret (0-5). Optional så äldre svar inte bryter avkodningen.
+    let stars: Int?
+    /// XP kvar till nästa stjärna (och nästa äventyrsbiljett).
+    let xpToNextStar: Int?
 }
 
 /// En avslutad månad. Skrivs av `XpService.monthlyReset` klockan noll den första,

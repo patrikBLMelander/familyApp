@@ -100,6 +100,13 @@ struct ChildPetView: View {
         let progress: CGFloat = CGFloat(min(max(0, xpInLevel), range)) / CGFloat(range)
         let totalXp = xp?.currentXp ?? 0
 
+        // Efter max-level: stjärnor + "nästa stjärna"-progress istället för nivå-progress.
+        let isMaxLevel = level >= xpThresholds.count - 1
+        let stars = xp?.stars ?? 0
+        let xpPerStar = 50
+        let xpToNextStar = xp?.xpToNextStar ?? xpPerStar
+        let starProgress: CGFloat = CGFloat(min(max(0, xpPerStar - xpToNextStar), xpPerStar)) / CGFloat(xpPerStar)
+
         return VStack(spacing: 12) {
             PetVisual(petType: pet.petType, growthStage: pet.growthStage)
                 .frame(maxWidth: .infinity)
@@ -109,41 +116,73 @@ struct ChildPetView: View {
                 .font(.title2.weight(.bold))
                 .foregroundColor(cardTextPrimary)
 
-            HStack(spacing: 8) {
-                Image(systemName: "star.fill")
-                    .foregroundColor(.yellow)
-                    .font(.subheadline)
-                Text("Nivå \(level)")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(cardTextPrimary)
-                Text("·")
-                    .foregroundColor(cardTextSecondary)
-                Text("\(totalXp) XP totalt")
-                    .font(.subheadline)
-                    .foregroundColor(cardTextSecondary)
-            }
-
-            VStack(spacing: 4) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 10)
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.purple)
-                            .frame(width: geo.size.width * progress, height: 10)
+            if isMaxLevel {
+                HStack(spacing: 4) {
+                    ForEach(1...5, id: \.self) { i in
+                        Image(systemName: "star.fill")
+                            .foregroundColor(i <= stars ? .yellow : cardTextSecondary.opacity(0.25))
+                            .font(.title3)
                     }
                 }
-                .frame(height: 10)
+                Text(stars >= 5 ? "Mästare! · \(totalXp) XP totalt" : "Fullvuxen · \(totalXp) XP totalt")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(cardTextPrimary)
 
-                HStack {
-                    Text("\(xpInLevel) / \(range) XP till nästa nivå")
+                VStack(spacing: 4) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 10)
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.yellow)
+                                .frame(width: geo.size.width * starProgress, height: 10)
+                        }
+                    }
+                    .frame(height: 10)
+
+                    Text("\(xpToNextStar) XP till nästa ⭐ – varje stjärna ger en äventyrsbiljett")
                         .font(.caption)
                         .foregroundColor(cardTextSecondary)
-                    Spacer()
-                    Text("\(Int(progress * 100))%")
-                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "star.fill")
+                        .foregroundColor(.yellow)
+                        .font(.subheadline)
+                    Text("Nivå \(level)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(cardTextPrimary)
+                    Text("·")
                         .foregroundColor(cardTextSecondary)
+                    Text("\(totalXp) XP totalt")
+                        .font(.subheadline)
+                        .foregroundColor(cardTextSecondary)
+                }
+
+                VStack(spacing: 4) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 10)
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.purple)
+                                .frame(width: geo.size.width * progress, height: 10)
+                        }
+                    }
+                    .frame(height: 10)
+
+                    HStack {
+                        Text("\(xpInLevel) / \(range) XP till nästa nivå")
+                            .font(.caption)
+                            .foregroundColor(cardTextSecondary)
+                        Spacer()
+                        Text("\(Int(progress * 100))%")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(cardTextSecondary)
+                    }
                 }
             }
         }

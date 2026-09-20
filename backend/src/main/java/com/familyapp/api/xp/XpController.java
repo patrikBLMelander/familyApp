@@ -187,7 +187,9 @@ public class XpController {
                 progress.currentLevel(),
                 progress.totalTasksCompleted(),
                 progress.getXpForNextLevel(),
-                progress.getXpInCurrentLevel()
+                progress.getXpInCurrentLevel(),
+                progress.getStars(),
+                progress.getXpToNextStar()
         );
     }
 
@@ -212,7 +214,9 @@ public class XpController {
             int currentLevel,
             int totalTasksCompleted,
             int xpForNextLevel,
-            int xpInCurrentLevel
+            int xpInCurrentLevel,
+            int stars,
+            int xpToNextStar
     ) {
     }
 

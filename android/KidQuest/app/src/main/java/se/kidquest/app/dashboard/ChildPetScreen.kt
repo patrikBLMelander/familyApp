@@ -182,6 +182,14 @@ private fun PetCard(
     val xpInLevel = xp?.xpInCurrentLevel ?: 0
     val progress = (xpInLevel.toFloat() / range).coerceIn(0f, 1f)
 
+    // Efter max-level: stjärnor + "nästa stjärna"-progress istället för nivå-progress.
+    val isMaxLevel = level >= (xpThresholds.size - 1)
+    val stars = xp?.stars ?: 0
+    val xpPerStar = 50
+    val xpToNextStar = xp?.xpToNextStar ?: xpPerStar
+    val starProgress = ((xpPerStar - xpToNextStar).toFloat() / xpPerStar).coerceIn(0f, 1f)
+    val gold = Color(0xFFFACC15)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -209,63 +217,107 @@ private fun PetCard(
                 color = Color(0xFF1C1917),
             )
 
-            // Level + total XP row
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = Color(0xFFFACC15),
-                    modifier = Modifier.size(18.dp),
-                )
+            if (isMaxLevel) {
+                // Stjärnrad — 1-5 guldstjärnor efter max-level
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    for (i in 1..5) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = if (i <= stars) gold else Color(0xFF57534E).copy(alpha = 0.25f),
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
                 Text(
-                    text = "Nivå $level",
+                    text = if (stars >= 5) "Mästare! · $totalXp XP totalt" else "Fullvuxen · $totalXp XP totalt",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF1C1917),
                 )
-                Text(
-                    text = "·",
-                    color = Color(0xFF57534E),
-                )
-                Text(
-                    text = "$totalXp XP totalt",
-                    fontSize = 15.sp,
-                    color = Color(0xFF57534E),
-                )
-            }
 
-            // Progress bar
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(10.dp),
-                    color = Color(0xFF7C3AED),
-                    trackColor = Color.Black.copy(alpha = 0.1f),
-                    strokeCap = StrokeCap.Round,
-                )
-                Row(
+                // Progress mot nästa stjärna (biljett)
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    LinearProgressIndicator(
+                        progress = { starProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp),
+                        color = gold,
+                        trackColor = Color.Black.copy(alpha = 0.1f),
+                        strokeCap = StrokeCap.Round,
+                    )
                     Text(
-                        text = "$xpInLevel / $range XP till nästa nivå",
+                        text = "$xpToNextStar XP till nästa ⭐ – varje stjärna ger en äventyrsbiljett",
                         fontSize = 12.sp,
                         color = Color(0xFF57534E),
                     )
+                }
+            } else {
+                // Level + total XP row
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = gold,
+                        modifier = Modifier.size(18.dp),
+                    )
                     Text(
-                        text = "${(progress * 100).toInt()}%",
-                        fontSize = 12.sp,
+                        text = "Nivå $level",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF1C1917),
+                    )
+                    Text(
+                        text = "·",
                         color = Color(0xFF57534E),
                     )
+                    Text(
+                        text = "$totalXp XP totalt",
+                        fontSize = 15.sp,
+                        color = Color(0xFF57534E),
+                    )
+                }
+
+                // Progress bar
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp),
+                        color = Color(0xFF7C3AED),
+                        trackColor = Color.Black.copy(alpha = 0.1f),
+                        strokeCap = StrokeCap.Round,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "$xpInLevel / $range XP till nästa nivå",
+                            fontSize = 12.sp,
+                            color = Color(0xFF57534E),
+                        )
+                        Text(
+                            text = "${(progress * 100).toInt()}%",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF57534E),
+                        )
+                    }
                 }
             }
         }

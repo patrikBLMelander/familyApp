@@ -89,15 +89,18 @@ public class XpService {
 
         // Update XP and level
         int oldLevel = progressEntity.getCurrentLevel();
-        int newXp = progressEntity.getCurrentXp() + xpPoints;
+        int oldXp = progressEntity.getCurrentXp();
+        int newXp = oldXp + xpPoints;
         int newLevel = MemberXpProgress.calculateLevel(newXp);
-        
+
         progressEntity.setCurrentXp(newXp);
         progressEntity.setCurrentLevel(newLevel);
         progressEntity.setTotalTasksCompleted(progressEntity.getTotalTasksCompleted() + 1);
         if (newLevel > oldLevel) {
             adventureService.awardTicketsForLevelUp(memberId, year, month, oldLevel, newLevel);
         }
+        // Past max level, every XP_PER_STAR grants a star + a bonus ticket.
+        adventureService.awardTicketsForStarMilestones(memberId, year, month, oldXp, newXp);
         progressEntity.setUpdatedAt(OffsetDateTime.now());
 
         progressRepository.save(progressEntity);
@@ -143,14 +146,17 @@ public class XpService {
 
         // Update XP and level (but NOT task completion count)
         int oldLevel = progressEntity.getCurrentLevel();
-        int newXp = progressEntity.getCurrentXp() + xpPoints;
+        int oldXp = progressEntity.getCurrentXp();
+        int newXp = oldXp + xpPoints;
         int newLevel = MemberXpProgress.calculateLevel(newXp);
-        
+
         progressEntity.setCurrentXp(newXp);
         progressEntity.setCurrentLevel(newLevel);
         if (newLevel > oldLevel) {
             adventureService.awardTicketsForLevelUp(memberId, year, month, oldLevel, newLevel);
         }
+        // Past max level, every XP_PER_STAR grants a star + a bonus ticket.
+        adventureService.awardTicketsForStarMilestones(memberId, year, month, oldXp, newXp);
         // Note: totalTasksCompleted is NOT incremented for bonus XP
         progressEntity.setUpdatedAt(OffsetDateTime.now());
 

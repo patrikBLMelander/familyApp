@@ -145,6 +145,37 @@ public class AdventureService {
         }
     }
 
+    /**
+     * Grant one ticket for each post-max "star" milestone newly crossed. Once the pet
+     * is level 5, every {@link com.familyapp.domain.xp.MemberXpProgress#XP_PER_STAR} XP
+     * is a milestone that yields a star and a ticket -- keeping the daily loop alive for
+     * the rest of the month. Uncapped and idempotent via UNIQUE(member_id, granted_for).
+     */
+    public void awardTicketsForStarMilestones(UUID memberId, int year, int month, int oldXp, int newXp) {
+        int oldMilestones = com.familyapp.domain.xp.MemberXpProgress.milestonesPastMax(oldXp);
+        int newMilestones = com.familyapp.domain.xp.MemberXpProgress.milestonesPastMax(newXp);
+        if (newMilestones <= oldMilestones) {
+            return;
+        }
+        var member = memberRepository.findById(memberId).orElse(null);
+        if (member == null) {
+            return;
+        }
+        String period = "%04d-%02d".formatted(year, month);
+        for (int milestone = oldMilestones + 1; milestone <= newMilestones; milestone++) {
+            String grantedFor = period + ":STAR" + milestone;
+            if (ticketGrantRepository.existsByMemberAndGrantedFor(memberId, grantedFor)) {
+                continue;
+            }
+            var grant = new AdventureTicketGrantEntity();
+            grant.setId(UUID.randomUUID());
+            grant.setMember(member);
+            grant.setGrantedFor(grantedFor);
+            grant.setGrantedAt(OffsetDateTime.now());
+            ticketGrantRepository.save(grant);
+        }
+    }
+
     /** Spend a ticket and send the pet on an adventure. The saved row IS the spend. */
     public AdventureEntity start(UUID memberId, String scene) {
         ensureCommonsUnlocked(memberId);
