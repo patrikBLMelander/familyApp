@@ -4,6 +4,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -42,6 +43,12 @@ data class CreateDailyChoreRequest(
     val xpPoints: Int,
 )
 
+data class UpdateDailyChoreRequest(
+    val title: String,
+    val weekdays: List<String>,
+    val xpPoints: Int,
+)
+
 interface DailyChoreApi {
 
     /**
@@ -75,6 +82,12 @@ interface DailyChoreApi {
     @POST("daily-chores")
     suspend fun createChore(
         @Body body: CreateDailyChoreRequest,
+    ): DailyChoreResponse
+
+    @PATCH("daily-chores/{choreId}")
+    suspend fun updateChore(
+        @Path("choreId") choreId: String,
+        @Body body: UpdateDailyChoreRequest,
     ): DailyChoreResponse
 
     /** Removes the chore itself, not a completion. Existing completions go with it. */

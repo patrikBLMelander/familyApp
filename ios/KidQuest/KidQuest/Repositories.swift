@@ -251,6 +251,11 @@ enum DailyChoreRepositoryIOS {
         try await ApiClient.shared.sendWithoutResponse(path: "daily-chores", method: "POST", body: body)
     }
 
+    static func updateChore(choreId: String, title: String, weekdays: [String], xpPoints: Int) async throws {
+        let body = UpdateDailyChoreRequestDTO(title: title, weekdays: weekdays, xpPoints: xpPoints)
+        try await ApiClient.shared.sendWithoutResponse(path: "daily-chores/\(choreId)", method: "PATCH", body: body)
+    }
+
     static func toggleChoreCompletion(choreId: String, date: String, isCompleted: Bool) async throws {
         if isCompleted {
             try await ApiClient.shared.sendWithoutResponse(

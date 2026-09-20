@@ -4,6 +4,7 @@ import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.CreateDailyChoreRequest
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.network.MarkChoreCompletedRequest
+import se.kidquest.app.network.UpdateDailyChoreRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -41,6 +42,30 @@ object DailyChoreRepository {
         ApiClient.dailyChoreApi.createChore(
             CreateDailyChoreRequest(
                 memberId = memberId,
+                title = title.trim(),
+                weekdays = weekdays.sorted().map { weekdayNames[it - 1] },
+                xpPoints = xpPoints,
+            ),
+        )
+    }
+
+    private val weekdayNames = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+
+    /** "MON".."SUN" back to Java DayOfWeek ints (1..7), for prefilling the edit dialog. */
+    fun weekdayIndex(name: String): Int? {
+        val i = weekdayNames.indexOf(name.uppercase())
+        return if (i >= 0) i + 1 else null
+    }
+
+    suspend fun updateChore(
+        choreId: String,
+        title: String,
+        weekdays: Set<Int>,
+        xpPoints: Int,
+    ) = withContext(Dispatchers.IO) {
+        ApiClient.dailyChoreApi.updateChore(
+            choreId = choreId,
+            body = UpdateDailyChoreRequest(
                 title = title.trim(),
                 weekdays = weekdays.sorted().map { weekdayNames[it - 1] },
                 xpPoints = xpPoints,

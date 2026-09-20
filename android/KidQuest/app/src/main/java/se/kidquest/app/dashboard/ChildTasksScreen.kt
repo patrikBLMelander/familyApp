@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +75,7 @@ private fun childCurrentWeekDays(): List<LocalDate> {
     return (0..6).map { monday.plusDays(it.toLong()) }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ChildTasksScreen(
     childName: String,
@@ -95,6 +99,10 @@ fun ChildTasksScreen(
     // without a stray tap wiping one that was fine.
     var chorePendingDelete by remember { mutableStateOf<DailyChoreWithCompletionResponse?>(null) }
     var showAddSingleDialog by remember { mutableStateOf(false) }
+    // Långtryck på en syssla öppnar en meny (Redigera/Ta bort). Den som redigeras
+    // förifyller redigeringsdialogen.
+    var menuForChore by remember { mutableStateOf<DailyChoreWithCompletionResponse?>(null) }
+    var choreToEdit by remember { mutableStateOf<DailyChoreWithCompletionResponse?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(childId, refreshKey) {
@@ -222,32 +230,37 @@ fun ChildTasksScreen(
                             }
                         } else {
                             items(tasks, key = { it.chore.id }) { task ->
+                              Box {
                                 ChildSurfaceCard {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable {
-                                                scope.launch {
-                                                    val choreId = task.chore.id
-                                                    val wasCompleted = task.completed
-                                                    tasks = tasks.map {
-                                                        if (it.chore.id == choreId) it.copy(completed = !wasCompleted) else it
-                                                    }
-                                                    try {
-                                                        DailyChoreRepository.toggleChoreCompletion(
-                                                            choreId = choreId,
-                                                            isCurrentlyCompleted = wasCompleted,
-                                                        )
-                                                    } catch (e: Exception) {
+                                            .combinedClickable(
+                                                onClick = {
+                                                    scope.launch {
+                                                        val choreId = task.chore.id
+                                                        val wasCompleted = task.completed
                                                         tasks = tasks.map {
-                                                            if (it.chore.id == choreId) it.copy(completed = wasCompleted) else it
+                                                            if (it.chore.id == choreId) it.copy(completed = !wasCompleted) else it
                                                         }
-                                                        if (wasCompleted) {
-                                                            toggleError = "Kan inte avmarkera – all mat har redan matats till husdjuret."
+                                                        try {
+                                                            DailyChoreRepository.toggleChoreCompletion(
+                                                                choreId = choreId,
+                                                                isCurrentlyCompleted = wasCompleted,
+                                                            )
+                                                        } catch (e: Exception) {
+                                                            tasks = tasks.map {
+                                                                if (it.chore.id == choreId) it.copy(completed = wasCompleted) else it
+                                                            }
+                                                            if (wasCompleted) {
+                                                                toggleError = "Kan inte avmarkera – all mat har redan matats till husdjuret."
+                                                            }
                                                         }
                                                     }
-                                                }
-                                            }
+                                                },
+                                                // Långtryck = förälderns meny (Redigera/Ta bort). Barn får ingen.
+                                                onLongClick = if (!isChildSession) ({ menuForChore = task }) else null,
+                                            )
                                             .padding(4.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -291,20 +304,28 @@ fun ChildTasksScreen(
                                                 )
                                             }
                                         }
-                                        IconButton(
-                                            enabled = !isChildSession,
-                                            onClick = { chorePendingDelete = task },
-                                            modifier = Modifier.size(36.dp),
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = "Ta bort ${task.chore.title}",
-                                                tint = palette.inkFaint,
-                                                modifier = Modifier.size(20.dp),
-                                            )
-                                        }
                                     }
                                 }
+                                DropdownMenu(
+                                    expanded = menuForChore?.chore?.id == task.chore.id,
+                                    onDismissRequest = { menuForChore = null },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Redigera") },
+                                        onClick = {
+                                            choreToEdit = task
+                                            menuForChore = null
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Ta bort", color = palette.danger) },
+                                        onClick = {
+                                            chorePendingDelete = task
+                                            menuForChore = null
+                                        },
+                                    )
+                                }
+                              }
                             }
                         }
                     }
@@ -404,6 +425,19 @@ fun ChildTasksScreen(
             onDismiss = { showAddChoreDialog = false },
             onSuccess = {
                 showAddChoreDialog = false
+                refreshKey++
+            },
+        )
+    }
+
+    choreToEdit?.let { editing ->
+        AddRecurringTaskDialog(
+            childName = childName,
+            childId = childId,
+            existing = editing.chore,
+            onDismiss = { choreToEdit = null },
+            onSuccess = {
+                choreToEdit = null
                 refreshKey++
             },
         )
