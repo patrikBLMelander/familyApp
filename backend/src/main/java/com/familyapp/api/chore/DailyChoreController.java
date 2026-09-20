@@ -70,6 +70,20 @@ public class DailyChoreController {
         return toResponse(chore);
     }
 
+    @PatchMapping("/{choreId}")
+    public DailyChoreResponse updateChore(
+            @PathVariable("choreId") UUID choreId,
+            @RequestBody UpdateDailyChoreRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        entitlementGuard.requireEntitled(deviceToken);
+        UUID requesterId = requireParent(deviceToken);
+        DailyChore chore = choreService.updateChore(
+                requesterId, choreId, request.title(), request.weekdays(), request.xpPoints()
+        );
+        return toResponse(chore);
+    }
+
     @DeleteMapping("/{choreId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteChore(
@@ -108,6 +122,12 @@ public class DailyChoreController {
 
     public record CreateDailyChoreRequest(
             UUID memberId,
+            String title,
+            List<String> weekdays,
+            int xpPoints
+    ) {}
+
+    public record UpdateDailyChoreRequest(
             String title,
             List<String> weekdays,
             int xpPoints

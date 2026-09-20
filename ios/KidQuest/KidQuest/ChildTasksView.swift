@@ -34,6 +34,7 @@ struct ChildTasksView: View {
     @State private var notice: String?
     @State private var chosenTab: Tab?
     @State private var pendingDelete: ChoreRef?
+    @State private var editChore: DailyChoreResponseDTO?
     @State private var showAddSheet = false
 
     /// The family's list shows the same two tabs, so the type is shared with it.
@@ -96,6 +97,17 @@ struct ChildTasksView: View {
                 childName: childName,
                 childId: childId,
                 onCreated: { Task { await load() } }
+            )
+        }
+        .sheet(item: $editChore) { chore in
+            ChoreEditorSheet(
+                childId: childId,
+                existing: chore,
+                onDismiss: { editChore = nil },
+                onSuccess: {
+                    editChore = nil
+                    Task { await load() }
+                }
             )
         }
         .confirmationDialog(
@@ -171,6 +183,12 @@ struct ChildTasksView: View {
                             } label: {
                                 Label("Ta bort", systemImage: "trash")
                             }
+                            Button {
+                                editChore = item.chore
+                            } label: {
+                                Label("Ändra", systemImage: "pencil")
+                            }
+                            .tint(.blue)
                         }
                     }
                 }

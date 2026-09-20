@@ -136,7 +136,7 @@ struct ChildDashboardView: View {
             )
         }
         .sheet(isPresented: $showAddChore) {
-            AddChoreSheet(childId: childId, onDismiss: { showAddChore = false }, onSuccess: {
+            ChoreEditorSheet(childId: childId, onDismiss: { showAddChore = false }, onSuccess: {
                 showAddChore = false
                 Task { await load(showLoadingSpinner: false) }
             })
@@ -439,101 +439,4 @@ enum ChildFixtures {
 }
 #endif
 
-// MARK: - Add Chore Sheet
-
-private struct AddChoreSheet: View {
-    let childId: String
-    var onDismiss: () -> Void
-    var onSuccess: () -> Void
-
-    @State private var title: String = ""
-    @State private var selectedWeekdays: Set<String> = []
-    @State private var xpPoints: Int = 1
-    @State private var isLoading: Bool = false
-    @State private var error: String?
-
-    private let allWeekdays: [(String, String)] = [
-        ("MON", "M"), ("TUE", "T"), ("WED", "O"), ("THU", "T"), ("FRI", "F"), ("SAT", "L"), ("SUN", "S")
-    ]
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Titel") {
-                    TextField("Titel", text: $title)
-                }
-                Section("Veckodagar") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                        ForEach(allWeekdays, id: \.0) { day, label in
-                            Button(action: {
-                                if selectedWeekdays.contains(day) {
-                                    selectedWeekdays.remove(day)
-                                } else {
-                                    selectedWeekdays.insert(day)
-                                }
-                            }) {
-                                Text(label)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 6)
-                                    .background(selectedWeekdays.contains(day) ? Color.accentColor : Color(.systemGray5))
-                                    .foregroundColor(selectedWeekdays.contains(day) ? .white : .primary)
-                                    .cornerRadius(6)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                Section("XP (mat)") {
-                    Picker("XP", selection: $xpPoints) {
-                        Text("x1").tag(1)
-                        Text("x2").tag(2)
-                        Text("x3").tag(3)
-                    }
-                    .pickerStyle(.segmented)
-                }
-                if let error {
-                    Section {
-                        Text(error).foregroundColor(.red)
-                    }
-                }
-            }
-            .navigationTitle("Ny återkommande syssla")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") { onDismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isLoading ? "Sparar…" : "Spara") {
-                        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
-                            error = "Titel krävs"; return
-                        }
-                        guard !selectedWeekdays.isEmpty else {
-                            error = "Välj minst en veckodag"; return
-                        }
-                        isLoading = true
-                        error = nil
-                        Task {
-                            do {
-                                let ordered = allWeekdays.map(\.0).filter { selectedWeekdays.contains($0) }
-                                try await DailyChoreRepositoryIOS.createChore(
-                                    memberId: childId,
-                                    title: title.trimmingCharacters(in: .whitespaces),
-                                    weekdays: ordered,
-                                    xpPoints: xpPoints
-                                )
-                                onSuccess()
-                            } catch {
-                                self.error = error.localizedDescription
-                            }
-                            isLoading = false
-                        }
-                    }
-                    .disabled(isLoading)
-                }
-            }
-        }
-    }
-}
 

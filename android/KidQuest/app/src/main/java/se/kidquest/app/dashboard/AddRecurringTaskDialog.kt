@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.DailyChoreResponse
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -34,14 +35,19 @@ fun AddRecurringTaskDialog(
     childId: String,
     onDismiss: () -> Unit,
     onSuccess: () -> Unit,
+    /** Icke-null öppnar dialogen i redigeringsläge: fälten förifylls och Spara uppdaterar. */
+    existing: DailyChoreResponse? = null,
 ) {
+    val editing = existing != null
     val scope = rememberCoroutineScope()
-    var title by remember { mutableStateOf("") }
-    var xpMultiplier by remember { mutableStateOf(1) }
+    var title by remember { mutableStateOf(existing?.title ?: "") }
+    var xpMultiplier by remember { mutableStateOf(existing?.xpPoints?.coerceIn(1, 3) ?: 1) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     // Java DayOfWeek: 1 = Monday ... 7 = Sunday
-    var selectedWeekdays by remember { mutableStateOf(setOf<Int>()) }
+    var selectedWeekdays by remember {
+        mutableStateOf(existing?.weekdays?.mapNotNull { DailyChoreRepository.weekdayIndex(it) }?.toSet() ?: setOf())
+    }
 
     fun toggleWeekday(day: Int) {
         selectedWeekdays = if (selectedWeekdays.contains(day)) {
@@ -53,7 +59,7 @@ fun AddRecurringTaskDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Återkommande uppgift – $childName") },
+        title = { Text(if (editing) "Redigera uppgift – $childName" else "Återkommande uppgift – $childName") },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -108,22 +114,40 @@ fun AddRecurringTaskDialog(
                     error = null
                     scope.launch {
                         try {
-                            DailyChoreRepository.createChore(
-                                memberId = childId,
-                                title = title,
-                                weekdays = selectedWeekdays,
-                                xpPoints = xpMultiplier,
-                            )
+                            if (editing) {
+                                DailyChoreRepository.updateChore(
+                                    choreId = existing!!.id,
+                                    title = title,
+                                    weekdays = selectedWeekdays,
+                                    xpPoints = xpMultiplier,
+                                )
+                            } else {
+                                DailyChoreRepository.createChore(
+                                    memberId = childId,
+                                    title = title,
+                                    weekdays = selectedWeekdays,
+                                    xpPoints = xpMultiplier,
+                                )
+                            }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte skapa uppgifterna")
+                            error = ApiErrors.message(
+                                e,
+                                if (editing) "Kunde inte spara ändringarna" else "Kunde inte skapa uppgifterna",
+                            )
                         } finally {
                             loading = false
                         }
                     }
                 },
             ) {
-                Text(if (loading) "Sparar…" else "Skapa uppgifter")
+                Text(
+                    when {
+                        loading -> "Sparar…"
+                        editing -> "Spara ändringar"
+                        else -> "Skapa uppgifter"
+                    },
+                )
             }
         },
         dismissButton = {

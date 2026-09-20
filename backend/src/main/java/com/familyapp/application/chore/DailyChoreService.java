@@ -113,6 +113,20 @@ public class DailyChoreService {
         choreRepository.delete(chore);
     }
 
+    /** Edit an existing chore's title, weekdays and XP. The child it belongs to is not changed. */
+    public DailyChore updateChore(
+            UUID requesterId, UUID choreId, String title, List<String> weekdays, int xpPoints) {
+        var chore = choreRepository.findById(choreId)
+                .orElseThrow(() -> new IllegalArgumentException("Chore not found"));
+
+        validateSameFamilyByIds(requesterId, chore.getFamily().getId());
+        chore.setTitle(title);
+        chore.setWeekdays(String.join(",", weekdays));
+        chore.setXpPoints(xpPoints);
+        chore.setUpdatedAt(OffsetDateTime.now());
+        return toDomain(choreRepository.save(chore));
+    }
+
     public DailyChoreCompletion markCompleted(UUID requesterId, UUID choreId, LocalDate date) {
         var chore = choreRepository.findById(choreId)
                 .orElseThrow(() -> new IllegalArgumentException("Chore not found"));
