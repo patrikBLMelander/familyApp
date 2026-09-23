@@ -94,6 +94,29 @@ public class SubscriptionService {
     }
 
     /**
+     * Grants a referred family its extra free month(s). Idempotency is the caller's
+     * job -- attribution happens exactly once per family (UNIQUE family_id), so this is
+     * only ever called once. Provisions the base trial first if the family has not read
+     * its subscription yet, so the bonus lands on top of the standard trial. A comped
+     * family is left alone (a comp already outranks the trial), and an already-expired
+     * trial is extended from now so a late redeem still yields a usable month.
+     */
+    public void grantReferralTrialExtension(UUID familyId) {
+        var entity = repository.findById(familyId).orElseGet(() -> createTrial(familyId));
+        if (entity.isComped()) {
+            return;
+        }
+        var now = OffsetDateTime.now();
+        var base = entity.getTrialEndsAt();
+        var from = (base != null && base.isAfter(now)) ? base : now;
+        entity.setTrialEndsAt(from.plusMonths(FamilySubscription.REFERRAL_BONUS_MONTHS));
+        entity.setUpdatedAt(now);
+        repository.save(entity);
+        log.info("Extended trial by {} month(s) for referred family {}",
+                FamilySubscription.REFERRAL_BONUS_MONTHS, familyId);
+    }
+
+    /**
      * A paid period always wins over the trial, so a family that subscribes early is
      * not downgraded to TRIAL for the remainder of it.
      */

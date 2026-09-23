@@ -32,6 +32,7 @@ class AffiliateServiceTest {
     private AffiliateCommissionJpaRepository commissions;
     private com.familyapp.infrastructure.affiliate.AffiliatePayoutJpaRepository payouts;
     private PasswordEncoder encoder;
+    private com.familyapp.application.subscription.SubscriptionService subscriptionService;
     private AffiliateService service;
 
     @BeforeEach
@@ -46,8 +47,9 @@ class AffiliateServiceTest {
                 .thenAnswer(i -> ("hash:" + i.getArgument(0)).equals(i.getArgument(1)));
         when(affiliates.save(any())).thenAnswer(i -> i.getArgument(0));
         var subscriptions = mock(com.familyapp.infrastructure.subscription.FamilySubscriptionJpaRepository.class);
+        subscriptionService = mock(com.familyapp.application.subscription.SubscriptionService.class);
         service = new AffiliateService(
-                affiliates, referrals, commissions, payouts, subscriptions, encoder,
+                affiliates, referrals, commissions, payouts, subscriptions, subscriptionService, encoder,
                 "patrik@cubeia.com", "https://www.kidquest.se/?ref=", new BigDecimal("20.00"), 12);
     }
 
@@ -135,6 +137,8 @@ class AffiliateServiceTest {
         verify(referrals).save(captor.capture());
         assertThat(captor.getValue().getAffiliateId()).isEqualTo(row.getId());
         assertThat(captor.getValue().getFamilyId()).isEqualTo(FAMILY);
+        // Koden ger familjen en extra gratismånad.
+        verify(subscriptionService).grantReferralTrialExtension(FAMILY);
     }
 
     @Test
@@ -142,6 +146,8 @@ class AffiliateServiceTest {
         when(referrals.existsByFamilyId(FAMILY)).thenReturn(true);
         service.redeem(FAMILY, "ANNA2026");
         verify(referrals, never()).save(any());
+        // Ingen dubbel gratismånad om koden redan lösts in.
+        verify(subscriptionService, never()).grantReferralTrialExtension(any());
     }
 
     @Test

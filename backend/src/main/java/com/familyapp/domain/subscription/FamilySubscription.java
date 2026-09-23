@@ -25,5 +25,8 @@ public record FamilySubscription(
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {
-    public static final int TRIAL_MONTHS = 3;
+    /** Gratismånader för en ny familj utan värvningskod. */
+    public static final int TRIAL_MONTHS = 1;
+    /** Extra gratismånad(er) när en värvningskod löses in (1 + 1 = 2 månader totalt). */
+    public static final int REFERRAL_BONUS_MONTHS = 1;
 }

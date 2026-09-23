@@ -1,5 +1,6 @@
 package com.familyapp.application.affiliate;
 
+import com.familyapp.application.subscription.SubscriptionService;
 import com.familyapp.domain.affiliate.AffiliateStatus;
 import com.familyapp.domain.affiliate.CommissionStatus;
 import com.familyapp.domain.affiliate.ReferralSource;
@@ -58,6 +59,7 @@ public class AffiliateService {
     private final AffiliateCommissionJpaRepository commissionRepository;
     private final AffiliatePayoutJpaRepository payoutRepository;
     private final FamilySubscriptionJpaRepository subscriptionRepository;
+    private final SubscriptionService subscriptionService;
     private final PasswordEncoder passwordEncoder;
     private final Set<String> adminEmails;
     private final String linkBase;
@@ -70,6 +72,7 @@ public class AffiliateService {
             AffiliateCommissionJpaRepository commissionRepository,
             AffiliatePayoutJpaRepository payoutRepository,
             FamilySubscriptionJpaRepository subscriptionRepository,
+            SubscriptionService subscriptionService,
             PasswordEncoder passwordEncoder,
             @Value("${kidquest.affiliate.admin-emails:}") String adminEmailsCsv,
             @Value("${kidquest.affiliate.link-base:https://www.kidquest.se/?ref=}") String linkBase,
@@ -81,6 +84,7 @@ public class AffiliateService {
         this.commissionRepository = commissionRepository;
         this.payoutRepository = payoutRepository;
         this.subscriptionRepository = subscriptionRepository;
+        this.subscriptionService = subscriptionService;
         this.passwordEncoder = passwordEncoder;
         this.adminEmails = Arrays.stream(adminEmailsCsv.split(","))
                 .map(s -> s.trim().toLowerCase(Locale.ROOT))
@@ -190,6 +194,9 @@ public class AffiliateService {
         referral.setSource(ReferralSource.CODE.name());
         referral.setAttributedAt(OffsetDateTime.now());
         referralRepository.save(referral);
+        // Värvningskoden ger familjen en extra gratismånad (1 + 1 = 2 totalt). Körs bara
+        // vid första attribueringen tack vare existsByFamilyId-vakten ovan.
+        subscriptionService.grantReferralTrialExtension(familyId);
         log.info("Family {} attributed to affiliate {} via code", familyId, affiliate.getId());
     }
 

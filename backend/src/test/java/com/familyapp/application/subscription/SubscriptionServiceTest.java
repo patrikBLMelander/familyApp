@@ -50,14 +50,47 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    void provisions_a_three_month_trial_for_a_family_with_no_row() {
+    void provisions_a_one_month_trial_for_a_family_with_no_row() {
         when(repository.findById(FAMILY)).thenReturn(Optional.empty());
 
         var result = service.getOrCreate(FAMILY);
 
         assertThat(result.status()).isEqualTo(SubscriptionStatus.TRIAL);
-        assertThat(result.trialEndsAt()).isAfter(OffsetDateTime.now().plusDays(89));
+        // 1 månad ~ 28-31 dagar: minst 27, mindre än 40 (skulle fångat en oavsiktlig ökning).
+        assertThat(result.trialEndsAt()).isAfter(OffsetDateTime.now().plusDays(27));
+        assertThat(result.trialEndsAt()).isBefore(OffsetDateTime.now().plusDays(40));
         assertThat(service.isEntitled(FAMILY)).isTrue();
+    }
+
+    @Test
+    void a_referral_code_extends_the_trial_by_a_month() {
+        var now = OffsetDateTime.now();
+        var e = new FamilySubscriptionEntity();
+        e.setFamilyId(FAMILY);
+        e.setStatus(SubscriptionStatus.TRIAL.name());
+        e.setTrialStartedAt(now);
+        e.setTrialEndsAt(now.plusMonths(1));
+        given(e);
+
+        service.grantReferralTrialExtension(FAMILY);
+
+        // 1 + 1 = 2 månader: nu bortom 55 dagar men under 70.
+        assertThat(e.getTrialEndsAt()).isAfter(now.plusDays(55));
+        assertThat(e.getTrialEndsAt()).isBefore(now.plusDays(70));
+    }
+
+    @Test
+    void a_referral_code_does_not_extend_a_comped_family() {
+        var e = new FamilySubscriptionEntity();
+        e.setFamilyId(FAMILY);
+        e.setComped(true);
+        e.setTrialEndsAt(OffsetDateTime.now().plusMonths(1));
+        var before = e.getTrialEndsAt();
+        given(e);
+
+        service.grantReferralTrialExtension(FAMILY);
+
+        assertThat(e.getTrialEndsAt()).isEqualTo(before);
     }
 
     @Test
