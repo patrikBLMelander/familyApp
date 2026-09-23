@@ -15,7 +15,14 @@ public record MemberXpProgress(
         OffsetDateTime updatedAt
 ) {
     public static final int MAX_LEVEL = 5;
-    
+
+    /** Total XP at which the pet reaches max level (level 5). */
+    public static final int MAX_LEVEL_XP = 125;
+    /** XP required per post-max "star" -- each star also grants one adventure ticket. */
+    public static final int XP_PER_STAR = 50;
+    /** How many stars the pet shows at most (the engine keeps granting tickets past this). */
+    public static final int MAX_STARS = 5;
+
     // XP thresholds for each level
     // Level 1 → 2: 10 XP (0-9 XP = Level 1)
     // Level 2 → 3: 25 XP (10-34 XP = Level 2, total 35)
@@ -62,6 +69,41 @@ public record MemberXpProgress(
         }
         int xpForCurrentLevel = XP_THRESHOLDS[currentLevel - 1];
         return currentXp - xpForCurrentLevel;
+    }
+
+    /**
+     * Number of {@link #XP_PER_STAR}-sized milestones crossed past max level.
+     * Uncapped -- this is what drives the bonus adventure tickets so the most
+     * active children never run dry, even after the fifth star.
+     */
+    public static int milestonesPastMax(int xp) {
+        if (xp < MAX_LEVEL_XP) {
+            return 0;
+        }
+        return (xp - MAX_LEVEL_XP) / XP_PER_STAR;
+    }
+
+    /** Stars shown on the pet (0-{@link #MAX_STARS}), earned after reaching max level. */
+    public static int calculateStars(int xp) {
+        return Math.min(MAX_STARS, milestonesPastMax(xp));
+    }
+
+    /** Stars shown on this month's pet (0-{@link #MAX_STARS}). */
+    public int getStars() {
+        return calculateStars(currentXp);
+    }
+
+    /**
+     * XP left until the next star / bonus ticket. 0 until max level is reached;
+     * after that it counts down within each {@link #XP_PER_STAR} band, and keeps
+     * counting even past the fifth star (tickets continue, the star display caps).
+     */
+    public int getXpToNextStar() {
+        if (currentXp < MAX_LEVEL_XP) {
+            return 0;
+        }
+        int into = (currentXp - MAX_LEVEL_XP) % XP_PER_STAR;
+        return XP_PER_STAR - into;
     }
 }
 

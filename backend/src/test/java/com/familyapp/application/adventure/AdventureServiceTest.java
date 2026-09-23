@@ -184,6 +184,37 @@ class AdventureServiceTest {
     }
 
     @Test
+    void starMilestonesGrantOneTicketPerFiftyXpPastMax() {
+        when(grants.existsByMemberAndGrantedFor(eq(MEMBER), any())).thenReturn(false);
+
+        // 120 -> 230 XP crosses max (125) and milestones at 175 and 225 -> two tickets.
+        service.awardTicketsForStarMilestones(MEMBER, 2026, 9, 120, 230);
+
+        var captor = ArgumentCaptor.forClass(AdventureTicketGrantEntity.class);
+        verify(grants, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(AdventureTicketGrantEntity::getGrantedFor)
+                .containsExactly("2026-09:STAR1", "2026-09:STAR2");
+    }
+
+    @Test
+    void starTicketsContinuePastTheFifthStar() {
+        when(grants.existsByMemberAndGrantedFor(eq(MEMBER), any())).thenReturn(false);
+
+        // 5 stars is at 375 XP (milestone 5); 375 -> 425 is milestone 6 -> still a ticket.
+        service.awardTicketsForStarMilestones(MEMBER, 2026, 9, 375, 425);
+
+        var captor = ArgumentCaptor.forClass(AdventureTicketGrantEntity.class);
+        verify(grants, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getGrantedFor()).isEqualTo("2026-09:STAR6");
+    }
+
+    @Test
+    void noStarTicketBelowMaxLevel() {
+        service.awardTicketsForStarMilestones(MEMBER, 2026, 9, 10, 124);
+        verify(grants, never()).save(any());
+    }
+
+    @Test
     void ticketBalanceIsGrantsMinusAdventures() {
         when(grants.countByMemberId(MEMBER)).thenReturn(4L);
         when(adventures.countByMemberId(MEMBER)).thenReturn(1L);

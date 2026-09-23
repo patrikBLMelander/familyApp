@@ -16,6 +16,9 @@ data class XpProgressResponse(
     val totalTasksCompleted: Int,
     val xpForNextLevel: Int,
     val xpInCurrentLevel: Int,
+    // Efter max-level (125 XP): stjärnor på djuret (0-5) och XP kvar till nästa stjärna.
+    val stars: Int = 0,
+    val xpToNextStar: Int = 0,
 )
 
 /**

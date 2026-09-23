@@ -33,6 +33,9 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     /// på 17 av 25 xp såg exakt samma skärm som ett barn på 1 av 25.
     var xpInLevel: Int = 0
     var xpForNext: Int = 0
+    // Efter max-level: stjärnor (0-5) och XP kvar till nästa stjärna/biljett.
+    var stars: Int = 0
+    var xpToNextStar: Int = 0
     let foodCount: Int
     let balance: Int?
     let tasks: [DailyChoreWithCompletionResponseDTO]
@@ -412,7 +415,7 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                 // Mätaren finns hela tiden och inte bara när något händer: ett barn som
                 // öppnar appen på morgonen ska se hur nära nästa stadie djuret är utan
                 // att först mata det.
-                XpMeter(xpInLevel: shownXpInLevel, span: xpSpan, level: shownLevel)
+                XpMeter(xpInLevel: shownXpInLevel, span: xpSpan, level: shownLevel, stars: stars, xpToNextStar: xpToNextStar)
                 if allDone {
                     Text("Allt klart idag!")
                         .font(.title2.weight(.bold))

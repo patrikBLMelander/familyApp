@@ -150,6 +150,8 @@ struct ChildDashboardView: View {
             level: max(1, min(5, s.xp?.currentLevel ?? 1)),
             xpInLevel: s.xp?.xpInCurrentLevel ?? 0,
             xpForNext: s.xp?.xpForNextLevel ?? 0,
+            stars: s.xp?.stars ?? 0,
+            xpToNextStar: s.xp?.xpToNextStar ?? 0,
             foodCount: s.collectedFood?.totalCount ?? 0,
             balance: s.wallet?.balance,
             tasks: s.todaysTasks,
@@ -394,7 +396,7 @@ enum ChildFixtures {
         // returnerar tröskel minus currentXp. Fixturen hade 70, alltså tröskeln, vilket
         // gav mätaren spannet 77 i stället för 35. Felet syntes inte förrän något
         // faktiskt läste fältet.
-        xpForNextLevel: 28, xpInCurrentLevel: 7
+        xpForNextLevel: 28, xpInCurrentLevel: 7, stars: 0, xpToNextStar: 0
     )
 
     /// Tre XP från tröskeln mellan nivå 3 och 4. Trösklarna är {0, 10, 35, 70, 125}, så
@@ -402,7 +404,7 @@ enum ChildFixtures {
     static let xpNearLevelUp = XpProgressResponseDTO(
         id: "x1", memberId: "child-1", year: 2026, month: 9,
         currentXp: 67, currentLevel: 3, totalTasksCompleted: 41,
-        xpForNextLevel: 3, xpInCurrentLevel: 32
+        xpForNextLevel: 3, xpInCurrentLevel: 32, stars: 0, xpToNextStar: 0
     )
 
     static let history = [
