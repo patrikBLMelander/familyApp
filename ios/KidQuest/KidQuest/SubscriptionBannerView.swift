@@ -2,9 +2,10 @@ import SwiftUI
 
 /// Hur nära provperiodens slut innan dashboarden nämner den.
 ///
-/// Same 30 days as Android's `TRIAL_NAG_DAYS`. Shared number, so a family that opens
-/// the app on two phones is told the same thing on both.
-private let trialNagDays = 30
+/// Same 14 days as Android's `TRIAL_NAG_DAYS`. Shared number, so a family that opens
+/// the app on two phones is told the same thing on both. Sänkt från 30 när trialen
+/// blev 1 månad -- 30 dagars nag hade synts nästan hela provperioden.
+private let trialNagDays = 14
 
 /// Säger något om betalningen bara när det finns något värt att säga.
 ///

@@ -821,8 +821,8 @@ private fun DashboardTopBar(
                     onClick = { onSetDarkMode(!(darkMode ?: systemDark)) },
                 )
                 HorizontalDivider()
-                // The banner only appears in the last 30 days of the trial, so without
-                // this a parent who decides in week two has no way to pay. It is also
+                // The banner only appears in the last 14 days of the trial, so without
+                // this a parent who decides earlier has no way to pay. It is also
                 // the only route to the paywall for anyone testing a purchase.
                 if (showSubscription) {
                     DropdownMenuItem(
@@ -2192,7 +2192,7 @@ private fun AdultDashboardPreview() {
 }
 
 /** How close to the end of the trial before the dashboard mentions it. */
-private const val TRIAL_NAG_DAYS = 30L
+private const val TRIAL_NAG_DAYS = 14L
 
 /**
  * Says something about billing only when there is something worth saying.
