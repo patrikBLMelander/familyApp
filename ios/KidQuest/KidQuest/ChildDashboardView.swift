@@ -150,6 +150,8 @@ struct ChildDashboardView: View {
             level: max(1, min(5, s.xp?.currentLevel ?? 1)),
             xpInLevel: s.xp?.xpInCurrentLevel ?? 0,
             xpForNext: s.xp?.xpForNextLevel ?? 0,
+            stars: s.xp?.stars ?? 0,
+            xpToNextStar: s.xp?.xpToNextStar ?? 0,
             foodCount: s.collectedFood?.totalCount ?? 0,
             balance: s.wallet?.balance,
             tasks: s.todaysTasks,

@@ -255,6 +255,7 @@ fun ChildDashboardScreen(
     // Nivån som firas, fångad när höjningen sker. Att läsa xp?.currentLevel + 1 medan
     // fanfaren står kvar hade visat fel siffra så fort omladdningen kommit in.
     var celebrateLevel by remember { mutableStateOf(0) }
+    var celebrateStar by remember { mutableStateOf(0) }
 
     // Förälderns kod för att lämna barnläget. Null tills den lästs, och null igen om
     // ingen är satt -- båda betyder "ingen spärr", vilket är rätt: en telefon utan kod
@@ -477,6 +478,9 @@ fun ChildDashboardScreen(
             // högsta nivån, där det inte finns någon höjning att spela.
             val needed = xpBefore?.xpForNextLevel ?: 0
             val crossing = if (needed in 1..amount) needed - 1 else null
+            // Efter max-level: vilket bär som tar barnet över nästa stjärntröskel.
+            val neededStar = xpBefore?.xpToNextStar ?: 0
+            val starCrossing = if (neededStar in 1..amount) neededStar - 1 else null
             val emoji = PetFoodUtils.getPetFoodEmoji(pet?.petType)
 
             coroutineScope.launch {
@@ -499,6 +503,8 @@ fun ChildDashboardScreen(
                                 it.copy(growthStage = (it.growthStage + 1).coerceAtMost(5))
                             }
                         },
+                        starCrossingBerry = starCrossing,
+                        onStarUp = { celebrateStar = (xp?.stars ?: 0).coerceIn(1, 5) },
                     )
                     isFeeding = false
                     return@launch
@@ -537,6 +543,8 @@ fun ChildDashboardScreen(
                         // att djuret växer och inte som att en bild ersattes.
                         pet = pet?.let { it.copy(growthStage = (it.growthStage + 1).coerceAtMost(5)) }
                     },
+                    starCrossingBerry = starCrossing,
+                    onStarUp = { celebrateStar = (xp?.stars ?: 0).coerceIn(1, 5) },
                 )
 
                 val result = call.await()
@@ -576,6 +584,8 @@ fun ChildDashboardScreen(
             // är det som korsar tröskeln. Utan avdraget skulle fyra snabba tryck strax
             // under gränsen fira fyra gånger.
             val crosses = (xp0.xpForNextLevel - feedAnim.inFlight) == 1
+            // Efter max-level: samma avdrag för det som är i luften, mot stjärntröskeln.
+            val crossesStar = (xp0.xpToNextStar - feedAnim.inFlight) == 1
             val emoji = PetFoodUtils.getPetFoodEmoji(petNow?.petType)
             val levelAtTap = xp0.currentLevel
 
@@ -602,6 +612,8 @@ fun ChildDashboardScreen(
                         xp = xp?.let { it.copy(currentLevel = celebrateLevel) }
                         pet = pet?.let { it.copy(growthStage = (it.growthStage + 1).coerceAtMost(5)) }
                     },
+                    crossesStar = crossesStar,
+                    onStarUp = { celebrateStar = (xp?.stars ?: 0).coerceIn(1, 5) },
                 )
 
                 val result = call?.await() ?: return@launch
@@ -953,6 +965,8 @@ fun ChildDashboardScreen(
                                     span = xpSpanFor(xp0.xpInCurrentLevel, xp0.xpForNextLevel),
                                     level = xp0.currentLevel,
                                     modifier = Modifier.width(172.dp),
+                                    stars = xp0.stars,
+                                    xpToNextStar = xp0.xpToNextStar,
                                 )
                             }
                             if (allDone) {
@@ -986,13 +1000,23 @@ fun ChildDashboardScreen(
                                 .windowInsetsPadding(WindowInsets.statusBars)
                                 .padding(top = 54.dp, start = 14.dp, end = 14.dp),
                         ) {
-                            LevelUpBanner(
-                                level = celebrateLevel,
-                                petName = pet?.name?.takeIf { it.isNotBlank() }
-                                    ?: PetNameUtils.getPetNameSwedish(pet?.petType),
-                                progress = feedAnim.levelUp,
-                                season = season,
-                            )
+                            val celebratedPetName = pet?.name?.takeIf { it.isNotBlank() }
+                                ?: PetNameUtils.getPetNameSwedish(pet?.petType)
+                            if (feedAnim.starCelebration) {
+                                StarBanner(
+                                    stars = celebrateStar,
+                                    petName = celebratedPetName,
+                                    progress = feedAnim.levelUp,
+                                    season = season,
+                                )
+                            } else {
+                                LevelUpBanner(
+                                    level = celebrateLevel,
+                                    petName = celebratedPetName,
+                                    progress = feedAnim.levelUp,
+                                    season = season,
+                                )
+                            }
                         }
                     }
                     } // bandet

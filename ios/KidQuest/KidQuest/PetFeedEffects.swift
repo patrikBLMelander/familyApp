@@ -38,14 +38,30 @@ struct XpMeter: View {
     let span: Int
     let level: Int
     var width: CGFloat = 172
+    // Efter max-level: stjärnor (0-5) och XP kvar till nästa stjärna/biljett.
+    var stars: Int = 0
+    var xpToNextStar: Int = 0
 
+    private let xpPerStar = 50
     private var maxed: Bool { span <= 0 }
+    private var starProgress: Double {
+        min(1, max(0, Double(xpPerStar - xpToNextStar) / Double(xpPerStar)))
+    }
     private var filled: Double {
-        maxed ? 1 : min(1, max(0, Double(xpInLevel) / Double(span)))
+        maxed ? starProgress : min(1, max(0, Double(xpInLevel) / Double(span)))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
+            if maxed {
+                HStack(spacing: 2) {
+                    ForEach(1...5, id: \.self) { i in
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(i <= stars ? Color.yellow : Color.white.opacity(0.4))
+                    }
+                }
+            }
             ZStack(alignment: .leading) {
                 // Mörkt spår och inte vitt. Bandet är en årstidsmålning, och ett vitt
                 // spår försvann rakt in i vattenfallet -- man såg den fyllda delen men
@@ -56,10 +72,12 @@ struct XpMeter: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            // Ljusare än accenten: mot ett mörkt spår behöver fyllningen
-                            // lysa, inte matcha knappen.
-                            colors: [Color(red: 0.85, green: 0.47, blue: 0.25),
-                                     Color(red: 0.96, green: 0.69, blue: 0.39)],
+                            // Guld efter max (stjärnläge), annars den ljusa accenten.
+                            colors: maxed
+                                ? [Color(red: 0.92, green: 0.70, blue: 0.03),
+                                   Color(red: 0.99, green: 0.88, blue: 0.28)]
+                                : [Color(red: 0.85, green: 0.47, blue: 0.25),
+                                   Color(red: 0.96, green: 0.69, blue: 0.39)],
                             startPoint: .leading, endPoint: .trailing
                         )
                     )
@@ -76,7 +94,10 @@ struct XpMeter: View {
     }
 
     private var label: String {
-        if maxed { return "Största stadiet!" }
+        if maxed {
+            return stars >= 5 ? "Mästare! · \(xpToNextStar) xp till nästa ⭐"
+                              : "\(xpToNextStar) xp till nästa ⭐"
+        }
         // Full mätare betyder att tröskeln just passerats. Nivån är då redan uppräknad,
         // och "35 / 35 xp till nivå 5" hade varit fel i båda leden.
         if xpInLevel >= span { return "Nivå \(level) nådd!" }

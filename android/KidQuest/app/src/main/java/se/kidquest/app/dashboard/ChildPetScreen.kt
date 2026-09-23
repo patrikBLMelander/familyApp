@@ -182,8 +182,8 @@ private fun PetCard(
     val xpInLevel = xp?.xpInCurrentLevel ?: 0
     val progress = (xpInLevel.toFloat() / range).coerceIn(0f, 1f)
 
-    // Efter max-level: stjärnor + "nästa stjärna"-progress istället för nivå-progress.
-    val isMaxLevel = level >= (xpThresholds.size - 1)
+    // Efter max-level (nivå 5): stjärnor + "nästa stjärna"-progress istället för nivå-progress.
+    val isMaxLevel = level >= 5
     val stars = xp?.stars ?: 0
     val xpPerStar = 50
     val xpToNextStar = xp?.xpToNextStar ?: xpPerStar

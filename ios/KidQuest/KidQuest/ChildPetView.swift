@@ -100,8 +100,8 @@ struct ChildPetView: View {
         let progress: CGFloat = CGFloat(min(max(0, xpInLevel), range)) / CGFloat(range)
         let totalXp = xp?.currentXp ?? 0
 
-        // Efter max-level: stjärnor + "nästa stjärna"-progress istället för nivå-progress.
-        let isMaxLevel = level >= xpThresholds.count - 1
+        // Efter max-level (nivå 5): stjärnor + "nästa stjärna"-progress istället för nivå-progress.
+        let isMaxLevel = level >= 5
         let stars = xp?.stars ?? 0
         let xpPerStar = 50
         let xpToNextStar = xp?.xpToNextStar ?? xpPerStar

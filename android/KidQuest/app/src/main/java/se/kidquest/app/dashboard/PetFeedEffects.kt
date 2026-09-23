@@ -11,8 +11,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.border
@@ -94,6 +97,9 @@ fun XpMeter(
     span: Int,
     level: Int,
     modifier: Modifier = Modifier,
+    // Efter max-level: stjärnor (0-5) och XP kvar till nästa stjärna/biljett.
+    stars: Int = 0,
+    xpToNextStar: Int = 0,
 ) {
     val labelShadow = Shadow(
         color = Color.Black.copy(alpha = 0.55f),
@@ -101,15 +107,35 @@ fun XpMeter(
         blurRadius = 8f,
     )
     val maxed = span <= 0
-    val target = if (maxed) 1f else (xpInLevel.toFloat() / span).coerceIn(0f, 1f)
+    val xpPerStar = 50
+    // Vid max-level fylls mätaren mot nästa stjärna i stället för att stå full.
+    val starProgress = ((xpPerStar - xpToNextStar).toFloat() / xpPerStar).coerceIn(0f, 1f)
+    val target = when {
+        maxed -> starProgress
+        else -> (xpInLevel.toFloat() / span).coerceIn(0f, 1f)
+    }
     // Samma fjäder som mätaren i förälderns vy, så de två inte rör sig olika.
     val filled by animateFloatAsState(
         targetValue = target,
         animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
         label = "xpFill",
     )
+    val gold = Color(0xFFFACC15)
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        if (maxed) {
+            // Stjärnrad — 1-5 guldstjärnor efter max-level
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                for (i in 1..5) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = if (i <= stars) gold else Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -128,17 +154,19 @@ fun XpMeter(
                     .fillMaxSize()
                     .clip(RoundedCornerShape(50))
                     .background(
-                        // Ljusare än accenten. Mot ett mörkt spår behöver fyllningen
-                        // lysa, inte matcha knappen.
-                        Brush.horizontalGradient(
-                            listOf(Color(0xFFD9793F), Color(0xFFF5B063)),
-                        )
+                        // Guld efter max (stjärnläge), annars den ljusa accenten.
+                        if (maxed) {
+                            Brush.horizontalGradient(listOf(Color(0xFFEAB308), Color(0xFFFDE047)))
+                        } else {
+                            Brush.horizontalGradient(listOf(Color(0xFFD9793F), Color(0xFFF5B063)))
+                        }
                     ),
             )
         }
         Text(
             text = when {
-                maxed -> "Största stadiet!"
+                maxed && stars >= 5 -> "Mästare! · $xpToNextStar xp till nästa ⭐"
+                maxed -> "$xpToNextStar xp till nästa ⭐"
                 // Full mätare betyder att tröskeln just passerats. Nivån är då redan
                 // uppräknad, och "35 / 35 xp till nivå 5" hade varit fel i båda leden.
                 xpInLevel >= span -> "Nivå $level nådd!"
@@ -295,6 +323,51 @@ fun LevelUpBanner(level: Int, petName: String, progress: Float, season: SeasonPa
     }
 }
 
+/**
+ * Banderollen vid en ny stjärna (efter max-level). Samma rörelse och timing som
+ * LevelUpBanner, men guld och med stjärntext -- djuret växer inte längre, det samlar
+ * stjärnor, och varje stjärna gav dessutom en äventyrsbiljett.
+ */
+@Composable
+fun StarBanner(stars: Int, petName: String, progress: Float, season: SeasonPalette) {
+    if (progress <= 0f) return
+    val slide = when {
+        progress < 0.10f -> EaseOutBack.transform(progress / 0.10f)
+        else -> 1f
+    }
+    val alpha = when {
+        progress < 0.09f -> progress / 0.09f
+        progress > 0.86f -> 1f - (progress - 0.86f) / 0.14f
+        else -> 1f
+    }.coerceIn(0f, 1f)
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFEAB308),
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(y = Dp(-16f + 16f * slide))
+            .alpha(alpha),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp, horizontal = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = if (stars >= 5) "Mästare! ⭐" else "Ny stjärna! ⭐",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF3B2F00),
+            )
+            Text(
+                text = if (stars >= 5) "$petName fick sin femte stjärna" else "$petName fick stjärna $stars av 5 · +1 biljett",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFF3B2F00).copy(alpha = 0.9f),
+            )
+        }
+    }
+}
+
 /** En partikel i konfettin. Sparas en gång så banan inte ritas om vid varje bildruta. */
 private data class Confetto(
     val angle: Float,
@@ -378,9 +451,17 @@ private const val LEVEL_UP_DELAY_MS = 240L
  * totalen räknas upp.
  */
 fun XpProgressResponse.plusOneXp(): XpProgressResponse {
-    // Noll spann är högsta nivån: det finns inget att fylla mot.
+    // Noll spann är högsta nivån: nivå-mätaren har inget att fylla mot, men efter max
+    // driver XP:n i stället stjärnorna -- xpToNextStar räknar ner, och när den når noll
+    // tas en ny stjärna och räknaren slår runt till XP_PER_STAR (50).
     if (xpSpanFor(xpInCurrentLevel, xpForNextLevel) == 0) {
-        return copy(currentXp = currentXp + 1)
+        val perStar = 50
+        val takesStar = xpToNextStar in 1..1
+        return copy(
+            currentXp = currentXp + 1,
+            stars = if (takesStar) (stars + 1).coerceAtMost(5) else stars,
+            xpToNextStar = if (xpToNextStar <= 1) perStar else xpToNextStar - 1,
+        )
     }
     // Redan full. Att fortsätta öka xpInCurrentLevel här hade ökat spannet med, eftersom
     // spannet ÄR summan av de två -- mätaren visade "37 / 37" i stället för att stå kvar
@@ -416,6 +497,10 @@ class FeedAnimation {
     var levelUp by mutableStateOf(0f)
         private set
 
+    /** Sant medan det pågående firandet är en stjärna (efter max-level), inte en nivå. */
+    var starCelebration by mutableStateOf(false)
+        private set
+
     /** Djurets skala. Puls vid varje tugga, ett större lyft vid höjningen. */
     var petPulse by mutableStateOf(1f)
         private set
@@ -434,6 +519,8 @@ class FeedAnimation {
         onBerryLifted: () -> Unit,
         onBerryLanded: () -> Unit,
         onLevelUp: () -> Unit,
+        starCrossingBerry: Int? = null,
+        onStarUp: () -> Unit = {},
     ) = coroutineScope {
         repeat(amount) { i ->
             launch {
@@ -444,6 +531,8 @@ class FeedAnimation {
                     onLifted = onBerryLifted,
                     onLanded = onBerryLanded,
                     onLevelUp = onLevelUp,
+                    crossesStar = i == starCrossingBerry,
+                    onStarUp = onStarUp,
                 )
             }
         }
@@ -463,6 +552,8 @@ class FeedAnimation {
         onLifted: () -> Unit,
         onLanded: () -> Unit,
         onLevelUp: () -> Unit,
+        crossesStar: Boolean = false,
+        onStarUp: () -> Unit = {},
     ) {
         val berry = FlyingBerry(nextId++, emoji)
         berries = berries + berry
@@ -476,7 +567,11 @@ class FeedAnimation {
         if (crosses) {
             delay(LEVEL_UP_DELAY_MS)
             onLevelUp()
-            celebrate()
+            celebrate(isStar = false)
+        } else if (crossesStar) {
+            delay(LEVEL_UP_DELAY_MS)
+            onStarUp()
+            celebrate(isStar = true)
         }
     }
 
@@ -494,7 +589,8 @@ class FeedAnimation {
      * Höjningen. Djuret dyker, växer förbi sin nya storlek och sätter sig -- samma
      * timing som blänket, så konstbytet under blänket läser som tillväxt.
      */
-    private suspend fun celebrate() = coroutineScope {
+    private suspend fun celebrate(isStar: Boolean = false) = coroutineScope {
+        starCelebration = isStar
         // levelUp gates the feed strip (disabled while a celebration plays). It MUST return
         // to 0, or feeding stays disabled until the screen is rebuilt. Each animation resets
         // its state in a finally, so if this coroutine is cancelled mid-way -- a recomposition,
@@ -524,6 +620,7 @@ class FeedAnimation {
     fun reset() {
         berries = emptyList()
         levelUp = 0f
+        starCelebration = false
         petPulse = 1f
     }
 }
