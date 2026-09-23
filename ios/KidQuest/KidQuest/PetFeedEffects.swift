@@ -192,6 +192,9 @@ struct LevelUpOverlay: View {
     /// Bandets mått. Behövs för att placera banderollen absolut.
     let bandSize: CGSize
     let palette: SeasonPalette
+    /// Efter max-level firar vi en stjärna i stället för en nivå: guld banner + stjärntext.
+    var isStar: Bool = false
+    var stars: Int = 0
 
     @State private var flash: Double = 0
     @State private var bannerIn = false
@@ -241,18 +244,21 @@ struct LevelUpOverlay: View {
             }
 
             VStack(spacing: 1) {
-                Text("Nivå \(level)!")
+                Text(isStar ? (stars >= 5 ? "Mästare! ⭐" : "Ny stjärna! ⭐") : "Nivå \(level)!")
                     .font(.system(size: 17, weight: .bold))
-                Text("\(petName) växte")
+                Text(isStar
+                     ? (stars >= 5 ? "\(petName) fick sin femte stjärna" : "\(petName) fick stjärna \(stars) av 5 · +1 biljett")
+                     : "\(petName) växte")
                     .font(.system(size: 12, weight: .medium))
                     .opacity(0.92)
             }
-            .foregroundStyle(palette.onAccent)
+            .foregroundStyle(isStar ? Color(red: 0.23, green: 0.18, blue: 0.0) : palette.onAccent)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
             .padding(.horizontal, 14)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(palette.accent)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isStar ? Color(red: 0.92, green: 0.70, blue: 0.03) : palette.accent)
             )
             .shadow(color: .black.opacity(0.34), radius: 12, y: 6)
             .padding(.horizontal, 14)
@@ -347,12 +353,19 @@ final class FeedAnimation {
 
     var berries: [FlyingBerry] = []
     var celebrating = false
+    /// Sant medan det pågående firandet är en stjärna (efter max-level), inte en nivå.
+    var starCelebration = false
     var petPulse: CGFloat = 1
 
     var food: Int?
     var xpInLevel: Int?
     var level: Int?
     var stage: Int?
+    /// Overshadow för stjärnorna under matningen (efter max-level), som xpInLevel för nivåer.
+    var stars: Int?
+    var xpToNextStar: Int?
+    /// XP per stjärna / bonusbiljett efter max-level.
+    static let xpPerStar = 50
 
     private var nextId = 0
     private(set) var running = false
@@ -373,7 +386,10 @@ final class FeedAnimation {
         startXpInLevel: Int,
         startLevel: Int,
         startStage: Int,
-        crossingBerry: Int?
+        crossingBerry: Int?,
+        startStars: Int = 0,
+        startXpToNextStar: Int = 0,
+        starCrossingBerry: Int? = nil
     ) async {
         guard amount > 0, !running else { return }
         running = true
@@ -381,6 +397,8 @@ final class FeedAnimation {
         xpInLevel = startXpInLevel
         level = startLevel
         stage = startStage
+        stars = startStars
+        xpToNextStar = startXpToNextStar
 
         await withTaskGroup(of: Void.self) { group in
             for i in 0..<amount {
@@ -391,7 +409,8 @@ final class FeedAnimation {
                         crosses: i == crossingBerry,
                         span: span,
                         startLevel: startLevel,
-                        startStage: startStage
+                        startStage: startStage,
+                        crossesStar: i == starCrossingBerry
                     )
                 }
             }
@@ -413,7 +432,9 @@ final class FeedAnimation {
         hostFood: Int,
         hostXpInLevel: Int,
         hostLevel: Int,
-        hostStage: Int
+        hostStage: Int,
+        hostStars: Int = 0,
+        hostXpToNextStar: Int = 0
     ) async {
         guard !celebrating, (food ?? hostFood) > 0 else { return }
         if food == nil {
@@ -421,17 +442,22 @@ final class FeedAnimation {
             xpInLevel = hostXpInLevel
             level = hostLevel
             stage = hostStage
+            stars = hostStars
+            xpToNextStar = hostXpToNextStar
         }
         // xpInLevel räknar bara det som LANDAT, så maten i luften måste dras av för att
         // veta om just det här stycket är det som korsar tröskeln. Utan avdraget skulle
         // fyra snabba tryck strax under gränsen fira fyra gånger.
         let crosses = span > 0 && ((xpInLevel ?? hostXpInLevel) + inFlight + 1) >= span
+        // Efter max-level (span<=0) räknar xpToNextStar i stället ner mot nästa stjärna.
+        let crossesStar = span <= 0 && ((xpToNextStar ?? hostXpToNextStar) - inFlight) == 1
         await one(
             emoji: emoji,
             crosses: crosses,
             span: span,
             startLevel: level ?? hostLevel,
-            startStage: stage ?? hostStage
+            startStage: stage ?? hostStage,
+            crossesStar: crossesStar
         )
         if inFlight == 0 && !celebrating && !running { reset() }
     }
@@ -444,7 +470,8 @@ final class FeedAnimation {
         crosses: Bool,
         span: Int,
         startLevel: Int,
-        startStage: Int
+        startStage: Int,
+        crossesStar: Bool = false
     ) async {
         inFlight += 1
         let berry = FlyingBerry(
@@ -465,6 +492,16 @@ final class FeedAnimation {
         // "37 / 37" i stället för "35 / 35".
         if span > 0 {
             xpInLevel = min(span, (xpInLevel ?? 0) + 1)
+        } else {
+            // Max-level: XP driver stjärnorna. xpToNextStar räknar ner; vid noll tas en
+            // ny stjärna och räknaren slår runt till xpPerStar (50).
+            let cur = xpToNextStar ?? Self.xpPerStar
+            if cur <= 1 {
+                xpToNextStar = Self.xpPerStar
+                stars = min(5, (stars ?? 0) + 1)
+            } else {
+                xpToNextStar = cur - 1
+            }
         }
         chew()
         inFlight -= 1
@@ -479,6 +516,14 @@ final class FeedAnimation {
             grow()
             try? await Task.sleep(for: .seconds(Self.levelUpLength))
             celebrating = false
+        } else if crossesStar {
+            try? await Task.sleep(for: .seconds(0.24))
+            starCelebration = true
+            celebrating = true
+            grow()
+            try? await Task.sleep(for: .seconds(Self.levelUpLength))
+            celebrating = false
+            starCelebration = false
         }
     }
 
@@ -505,12 +550,15 @@ final class FeedAnimation {
     func reset() {
         berries = []
         celebrating = false
+        starCelebration = false
         petPulse = 1
         inFlight = 0
         food = nil
         xpInLevel = nil
         level = nil
         stage = nil
+        stars = nil
+        xpToNextStar = nil
         running = false
     }
 }

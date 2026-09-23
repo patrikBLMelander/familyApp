@@ -93,6 +93,8 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     private var shownFood: Int { anim.food ?? foodCount }
     private var shownXpInLevel: Int { anim.xpInLevel ?? xpInLevel }
     private var shownLevel: Int { anim.level ?? level }
+    private var shownStars: Int { anim.stars ?? stars }
+    private var shownXpToNextStar: Int { anim.xpToNextStar ?? xpToNextStar }
     private var xpSpan: Int { xpSpanFor(xpInCurrentLevel: xpInLevel, xpForNextLevel: xpForNext) }
 
     private var doneCount: Int { tasks.filter(\.completed).count }
@@ -361,7 +363,9 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                         petName: petDisplayName(pet),
                         petCenter: petCenter,
                         bandSize: geo.size,
-                        palette: palette
+                        palette: palette,
+                        isStar: anim.starCelebration,
+                        stars: shownStars
                     )
                 }
             }
@@ -415,7 +419,7 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                 // Mätaren finns hela tiden och inte bara när något händer: ett barn som
                 // öppnar appen på morgonen ska se hur nära nästa stadie djuret är utan
                 // att först mata det.
-                XpMeter(xpInLevel: shownXpInLevel, span: xpSpan, level: shownLevel, stars: stars, xpToNextStar: xpToNextStar)
+                XpMeter(xpInLevel: shownXpInLevel, span: xpSpan, level: shownLevel, stars: shownStars, xpToNextStar: shownXpToNextStar)
                 if allDone {
                     Text("Allt klart idag!")
                         .font(.title2.weight(.bold))
@@ -656,7 +660,9 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                 hostFood: shownFood,
                 hostXpInLevel: xpInLevel,
                 hostLevel: level,
-                hostStage: pet.growthStage
+                hostStage: pet.growthStage,
+                hostStars: stars,
+                hostXpToNextStar: xpToNextStar
             )
         }
     }
@@ -667,6 +673,8 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
         // xpForNext är hur många XP som FATTAS, så det är det (xpForNext - 1):te bäret
         // som korsar tröskeln. Noll betyder högsta nivån, där ingen höjning finns.
         let crossing = (1...max(1, amount)).contains(xpForNext) ? xpForNext - 1 : nil
+        // Efter max-level: vilket bär som tar barnet över nästa stjärntröskel.
+        let starCrossing = (xpSpan <= 0 && (1...max(1, amount)).contains(xpToNextStar)) ? xpToNextStar - 1 : nil
         onFeed(amount)
         Task { @MainActor in
             await anim.run(
@@ -676,7 +684,10 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                 startXpInLevel: xpInLevel,
                 startLevel: level,
                 startStage: pet.growthStage,
-                crossingBerry: crossing
+                crossingBerry: crossing,
+                startStars: stars,
+                startXpToNextStar: xpToNextStar,
+                starCrossingBerry: starCrossing
             )
         }
     }
