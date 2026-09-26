@@ -4,6 +4,7 @@ import { fetchCurrentXpProgress, XpProgressResponse } from "../../shared/api/xp"
 import { getDailyChoresForDate, markDailyChoreCompleted, unmarkDailyChoreCompleted, DailyChoreWithCompletionResponse } from "../../shared/api/dailyChores";
 import { getMemberByDeviceToken } from "../../shared/api/familyMembers";
 import { PetVisualization } from "../pet/PetVisualization";
+import { followsIntoNextMonthLabel } from "../pet/monthGrace";
 import { getIntegratedPetImagePath, getPetBackgroundImagePath, checkIntegratedImageExists, checkStandaloneImageExists, getSeasonalBackgroundPath, getPetNameSwedish, getPetNameSwedishLowercase } from "../pet/petImageUtils";
 import { getPetFoodEmoji, getPetFoodName, getRandomPetMessage } from "../pet/petFoodUtils";
 import { getPetGradient, isDarkPetTheme } from "../pet/petTheme";
@@ -439,6 +440,20 @@ export function ChildDashboard({ onNavigate, childName, onLogout, familyId }: Ch
             <p style={{ margin: 0, fontSize: "1rem", color: isDark ? "rgba(255,255,255,0.85)" : "#4a5568" }}>
               Ta hand om din {getPetNameSwedishLowercase(pet.petType)}!
             </p>
+            {pet.followsIntoNextMonth && (
+              <span style={{
+                display: "inline-block",
+                marginTop: "6px",
+                padding: "2px 10px",
+                borderRadius: "999px",
+                background: "#fff8e1",
+                color: "#7a5b00",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+              }}>
+                {followsIntoNextMonthLabel(pet.month)}
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             {onNavigate && (

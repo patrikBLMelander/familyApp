@@ -20,6 +20,18 @@ data class PetResponse(
     val updatedAt: String,
     val equippedFrame: String? = null, // loot_item-id på ramen på månadens scen, om någon
     val equippedSceneItem: String? = null, // loot_item-id på scendekorationen, om någon
+    /** Barnets första djur, kläckt sent i månaden: följer med hela nästa månad. */
+    val followsIntoNextMonth: Boolean = false,
+)
+
+/**
+ * Vad äggväljaren berättar om månaden. daysLeftInMonth är 0 sista dagen; nextMonth 1-12;
+ * firstPetGrace sant när ett ägg valt nu blir ett första djur som följer med nästa månad.
+ */
+data class MonthInfo(
+    val daysLeftInMonth: Int,
+    val nextMonth: Int,
+    val firstPetGrace: Boolean,
 )
 
 data class SelectEggRequest(
@@ -99,6 +111,14 @@ interface PetsApi {
     /** Samma, när en förälder tittar i barnets vy. */
     @GET("pets/members/{memberId}/eggs")
     suspend fun getEggsForMember(@Path("memberId") memberId: String): List<EggOption>
+
+    /** Dagar kvar av månaden och om ett första ägg valt nu följer med nästa månad. */
+    @GET("pets/month-info")
+    suspend fun getMonthInfo(): MonthInfo
+
+    /** Samma, när en förälder väljer ägg i barnets vy. */
+    @GET("pets/members/{memberId}/month-info")
+    suspend fun getMonthInfoForMember(@Path("memberId") memberId: String): MonthInfo
 
     /** Sätt en ram på månadens scen, eller rensa med null. */
     @POST("pets/current/frame")

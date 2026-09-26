@@ -119,6 +119,14 @@ public class PetController {
         return petService.getEggOptions(requireMember(deviceToken));
     }
 
+    /** Days left in the month and whether a first egg picked now would follow into next month. */
+    @GetMapping("/month-info")
+    public PetService.MonthInfo getMonthInfo(
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        return petService.monthInfo(requireMember(deviceToken));
+    }
+
     /** Put a frame on this month's scene, or clear it by sending a null frameId. */
     @PostMapping("/current/frame")
     public PetResponse equipFrame(
@@ -147,6 +155,16 @@ public class PetController {
     ) {
         requireParentOf(deviceToken, memberId);
         return petService.getEggOptions(memberId);
+    }
+
+    /** Member-scoped month info, for a parent picking an egg in a child's view. */
+    @GetMapping("/members/{memberId}/month-info")
+    public PetService.MonthInfo getMonthInfoForMember(
+            @PathVariable("memberId") UUID memberId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        requireParentOf(deviceToken, memberId);
+        return petService.monthInfo(memberId);
     }
 
     @PostMapping("/members/{memberId}/frame")
@@ -457,7 +475,8 @@ public class PetController {
                 pet.createdAt(),
                 pet.updatedAt(),
                 pet.equippedFrame(),
-                pet.equippedSceneItem()
+                pet.equippedSceneItem(),
+                petService.followsIntoNextMonth(pet)
         );
     }
 
@@ -488,7 +507,8 @@ public class PetController {
             OffsetDateTime createdAt,
             OffsetDateTime updatedAt,
             String equippedFrame,
-            String equippedSceneItem
+            String equippedSceneItem,
+            boolean followsIntoNextMonth
     ) {
     }
 

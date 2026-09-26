@@ -12,6 +12,12 @@ import com.familyapp.infrastructure.pet.PetHistoryJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.familyapp.domain.pet.ChildPet;
+import com.familyapp.infrastructure.pet.PetHistoryEntity;
+
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -103,5 +109,43 @@ class PetServiceGateTest {
         var koala = options.stream().filter(o -> o.eggType().equals("silver_egg")).findFirst().orElseThrow();
         assertThat(koala.rarity()).isEqualTo("RARE");
         assertThat(koala.unlocked()).isFalse();
+    }
+
+    // ---- first-pet grace: a late first pet follows into next month
+
+    @Test
+    void graceWindowIsTheLastTenDaysOfTheMonth() {
+        assertThat(ChildPet.inFirstPetGraceWindow(LocalDate.of(2026, 9, 20))).isFalse();
+        assertThat(ChildPet.inFirstPetGraceWindow(LocalDate.of(2026, 9, 21))).isTrue();
+        assertThat(ChildPet.inFirstPetGraceWindow(LocalDate.of(2026, 9, 30))).isTrue();
+        assertThat(ChildPet.inFirstPetGraceWindow(LocalDate.of(2026, 2, 18))).isFalse();
+        assertThat(ChildPet.inFirstPetGraceWindow(LocalDate.of(2026, 2, 19))).isTrue();
+    }
+
+    @Test
+    void lateFirstPetFollowsIntoNextMonth() {
+        assertThat(service.followsIntoNextMonth(MEMBER, 2026, 9, hatched(2026, 9, 28))).isTrue();
+    }
+
+    @Test
+    void earlyFirstPetDoesNotFollow() {
+        assertThat(service.followsIntoNextMonth(MEMBER, 2026, 9, hatched(2026, 9, 10))).isFalse();
+    }
+
+    @Test
+    void lateSecondPetDoesNotFollow() {
+        when(history.findByMemberIdOrderByYearDescMonthDesc(MEMBER)).thenReturn(List.of(new PetHistoryEntity()));
+
+        assertThat(service.followsIntoNextMonth(MEMBER, 2026, 9, hatched(2026, 9, 28))).isFalse();
+    }
+
+    @Test
+    void alreadyCarriedPetDoesNotFollowAgain() {
+        // Hatched late in September, now sitting in October: the grace is spent.
+        assertThat(service.followsIntoNextMonth(MEMBER, 2026, 10, hatched(2026, 9, 28))).isFalse();
+    }
+
+    private static OffsetDateTime hatched(int year, int month, int day) {
+        return LocalDate.of(year, month, day).atTime(12, 0).atZone(ZoneId.systemDefault()).toOffsetDateTime();
     }
 }
