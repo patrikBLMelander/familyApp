@@ -257,9 +257,9 @@ enum ScreenHarness {
             let target: MemberSettingsTarget
             switch name {
             case "membersettings-child":
-                target = MemberSettingsTarget(id: "1", name: "Signe", role: "CHILD", isCurrentUser: false)
+                target = MemberSettingsTarget(id: "1", name: "Ella", role: "CHILD", isCurrentUser: false)
             case "membersettings-self":
-                target = MemberSettingsTarget(id: "2", name: "Patrik", role: "PARENT", isCurrentUser: true)
+                target = MemberSettingsTarget(id: "2", name: "Jonas", role: "PARENT", isCurrentUser: true)
             default:
                 target = MemberSettingsTarget(id: "3", name: "Anna", role: "PARENT", isCurrentUser: false)
             }

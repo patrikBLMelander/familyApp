@@ -58,7 +58,7 @@ struct RecurringAllowanceView: View {
     @State private var dayOfMonth = 1
     @State private var levels = Array(repeating: "", count: 5)
 
-    private static let weekdayNames = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
+    private static var weekdayNames: [String] { KQWeekdays.short }
 
     /// Stays semantic: an amount is green because it is money, not because it is spring.
     private var money: Color {
@@ -67,7 +67,7 @@ struct RecurringAllowanceView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SeasonHeaderBar(title: "Utbetalningar till \(childName)", onBack: onBack)
+            SeasonHeaderBar(title: String(localized: "Utbetalningar till \(childName)"), onBack: onBack)
 
             if isLoading {
                 ProgressView()
@@ -85,8 +85,7 @@ struct RecurringAllowanceView: View {
             Button("Stäng av", role: .destructive) { Task { await disable() } }
         } message: {
             Text(
-                "Inga fler automatiska utbetalningar till \(childName). Pengar som redan "
-                + "betalats ut ligger kvar i plånboken, och du kan slå på det igen när du vill."
+                String(localized: "Inga fler automatiska utbetalningar till \(childName). Pengar som redan betalats ut ligger kvar i plånboken, och du kan slå på det igen när du vill.")
             )
         }
     }
@@ -129,15 +128,15 @@ struct RecurringAllowanceView: View {
         OptionCard(
             selected: kind == .weekly,
             icon: "calendar",
-            title: "Veckopeng",
-            subtitle: "Samma belopp varje vecka",
+            title: String(localized: "Veckopeng"),
+            subtitle: String(localized: "Samma belopp varje vecka"),
             onSelect: { select(.weekly) }
         ) {
-            FieldLabel("Belopp")
-            AmountField(label: "Varje vecka", text: amountBinding, money: money)
+            FieldLabel(String(localized: "Belopp"))
+            AmountField(label: String(localized: "Varje vecka"), text: amountBinding, money: money)
 
             Spacer().frame(height: 14)
-            FieldLabel("Vilken dag?")
+            FieldLabel(String(localized: "Vilken dag?"))
             HStack(spacing: 6) {
                 ForEach(Array(Self.weekdayNames.enumerated()), id: \.offset) { index, label in
                     let day = index + 1
@@ -157,15 +156,15 @@ struct RecurringAllowanceView: View {
         OptionCard(
             selected: kind == .monthly,
             icon: "calendar.badge.clock",
-            title: "Månadspeng",
-            subtitle: "Samma belopp varje månad",
+            title: String(localized: "Månadspeng"),
+            subtitle: String(localized: "Samma belopp varje månad"),
             onSelect: { select(.monthly) }
         ) {
-            FieldLabel("Belopp")
-            AmountField(label: "Varje månad", text: amountBinding, money: money)
+            FieldLabel(String(localized: "Belopp"))
+            AmountField(label: String(localized: "Varje månad"), text: amountBinding, money: money)
 
             Spacer().frame(height: 14)
-            FieldLabel("Vilken dag i månaden?")
+            FieldLabel(String(localized: "Vilken dag i månaden?"))
             DayOfMonthField(day: dayOfMonth) { picked in
                 dayOfMonth = picked
                 error = nil
@@ -184,17 +183,17 @@ struct RecurringAllowanceView: View {
         OptionCard(
             selected: kind == .level,
             icon: "chart.bar.fill",
-            title: "Månadspeng utifrån avklarade uppgifter",
-            subtitle: "Beloppet beror på vilken nivå \(childName) når",
+            title: String(localized: "Månadspeng utifrån avklarade uppgifter"),
+            subtitle: String(localized: "Beloppet beror på vilken nivå \(childName) når"),
             onSelect: { select(.level) }
         ) {
-            FieldLabel("Belopp per nivå")
+            FieldLabel(String(localized: "Belopp per nivå"))
             VStack(spacing: 8) {
                 ForEach(0..<5, id: \.self) { index in
                     let level = index + 1
                     let here = currentLevel == level
                     AmountField(
-                        label: here ? "Nivå \(level) · här nu" : "Nivå \(level)",
+                        label: here ? String(localized: "Nivå \(level) · här nu") : String(localized: "Nivå \(level)"),
                         text: levelBinding(index),
                         money: money,
                         highlighted: here
@@ -207,8 +206,7 @@ struct RecurringAllowanceView: View {
             // the 1st, because that is the day the level for the month just ended is
             // final and the day it resets.
             Text(
-                "\(childName) får beloppet för den nivå hen nått den 1:a. "
-                + "Nivån nollställs varje månad, precis som djuret."
+                String(localized: "\(childName) får beloppet för den nivå hen nått den 1:a. Nivån nollställs varje månad, precis som djuret.")
             )
             .font(.caption)
             .foregroundStyle(palette.inkFaint)
@@ -232,16 +230,16 @@ struct RecurringAllowanceView: View {
         if let saved, saved.active, saved.kind == kind.rawValue,
            let due = AllowanceDates.parseIsoDate(saved.nextDueOn),
            due <= Calendar.current.startOfDay(for: today) {
-            return "Nästa utbetalning: idag."
+            return String(localized: "Nästa utbetalning: idag.")
         }
         switch kind {
         case .weekly:
             let date = AllowanceDates.nextWeekday(weekday, after: today)
-            return "Nästa utbetalning: \(AllowanceDates.format(date, "EEEE d MMMM"))."
+            return String(localized: "Nästa utbetalning: \(AllowanceDates.format(date, "EEEEdMMMM")).")
         case .monthly, .level:
             let day = kind == .level ? 1 : dayOfMonth
             let date = AllowanceDates.nextDayOfMonth(day, after: today)
-            return "Nästa utbetalning: \(AllowanceDates.format(date, "d MMMM"))."
+            return String(localized: "Nästa utbetalning: \(AllowanceDates.format(date, "dMMMM")).")
         }
     }
 
@@ -249,7 +247,7 @@ struct RecurringAllowanceView: View {
         Button {
             Task { await save() }
         } label: {
-            Text(isSaving ? "Sparar…" : "Spara")
+            Text(isSaving ? String(localized: "Sparar…") : String(localized: "Spara"))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(palette.onAccent)
                 .frame(maxWidth: .infinity)
@@ -327,7 +325,7 @@ struct RecurringAllowanceView: View {
             // for it would hold up everything the parent came here to change.
             currentLevel = await RecurringAllowanceRepository.currentLevel(memberId: childId)
         } catch {
-            loadError = ApiErrors.message(error, fallback: "Kunde inte hämta inställningen")
+            loadError = ApiErrors.message(error, fallback: String(localized: "Kunde inte hämta inställningen"))
             isLoading = false
         }
     }
@@ -359,7 +357,7 @@ struct RecurringAllowanceView: View {
             onSaved()
             onBack()
         } catch {
-            self.error = ApiErrors.message(error, fallback: "Kunde inte spara")
+            self.error = ApiErrors.message(error, fallback: String(localized: "Kunde inte spara"))
             isSaving = false
         }
     }
@@ -373,7 +371,7 @@ struct RecurringAllowanceView: View {
             onSaved()
             onBack()
         } catch {
-            self.error = ApiErrors.message(error, fallback: "Kunde inte stänga av")
+            self.error = ApiErrors.message(error, fallback: String(localized: "Kunde inte stänga av"))
             isSaving = false
         }
     }
@@ -414,9 +412,9 @@ struct RecurringAllowanceView: View {
         switch kind {
         case .level:
             let blank = levels.firstIndex { Int($0) == nil } ?? 0
-            return "Fyll i ett belopp för nivå \(blank + 1)"
+            return String(localized: "Fyll i ett belopp för nivå \(blank + 1)")
         case .weekly, .monthly:
-            return amount.isEmpty ? "Fyll i ett belopp" : "Beloppet måste vara större än 0"
+            return amount.isEmpty ? String(localized: "Fyll i ett belopp") : String(localized: "Beloppet måste vara större än 0")
         }
     }
 }
@@ -566,28 +564,16 @@ private struct AmountField: View {
                 .foregroundStyle(highlighted ? palette.accent : palette.inkSoft)
                 .lineLimit(1)
 
-            TextField("", text: $text)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(money)
-                .tint(money)
-                .frame(maxWidth: .infinity)
-                .overlay(alignment: .trailing) {
-                    // A ghosted zero rather than a placeholder string: the field starts
-                    // empty on purpose, and "0" as real text would be an amount the
-                    // parent never typed.
-                    if text.isEmpty {
-                        Text("0")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(money.opacity(0.35))
-                            .allowsHitTesting(false)
-                    }
-                }
-
-            Text("kr")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(money)
+            // "$50" and "£50" put the symbol first; "50 kr" and "50 €" after. The field
+            // hugs its digits when the symbol leads, so the two read as one amount.
+            if Money.symbolLeads {
+                Spacer(minLength: 0)
+                symbol
+                field.fixedSize(horizontal: true, vertical: false)
+            } else {
+                field.frame(maxWidth: .infinity)
+                symbol
+            }
         }
         .padding(.horizontal, 14)
         .frame(height: 46)
@@ -605,6 +591,32 @@ private struct AmountField: View {
                 )
         )
         .accessibilityLabel(label)
+    }
+
+    private var symbol: some View {
+        Text(verbatim: Money.symbol)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(money)
+    }
+
+    private var field: some View {
+        TextField("", text: $text)
+            .keyboardType(.numberPad)
+            .multilineTextAlignment(.trailing)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(money)
+            .tint(money)
+            .overlay(alignment: .trailing) {
+                // A ghosted zero rather than a placeholder string: the field starts
+                // empty on purpose, and "0" as real text would be an amount the
+                // parent never typed.
+                if text.isEmpty {
+                    Text("0")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(money.opacity(0.35))
+                        .allowsHitTesting(false)
+                }
+            }
     }
 }
 
@@ -708,7 +720,7 @@ extension RecurringAllowanceView {
             nextDueOn: nil
         )
         return RecurringAllowanceView(
-            childName: "Signe",
+            childName: "Ella",
             childId: "child-1",
             // Level 3 of 5: the highlighted row lands in the middle of the table, where
             // it is visibly a marker rather than the first or last row's own styling.

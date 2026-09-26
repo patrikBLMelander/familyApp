@@ -1,5 +1,10 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.L10n
+import se.kidquest.app.i18n.Dates
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -97,8 +102,6 @@ private val danger: Color @Composable get() = LocalSeasonPalette.current.danger
 /** Day of the month is capped at 28 so the date exists in February too -- the server agrees. */
 private const val MAX_DAY_OF_MONTH = 28
 
-private val swedish = Locale("sv", "SE")
-private val weekdayNames = listOf("Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön")
 
 private enum class Kind(val api: String) { WEEKLY("WEEKLY"), MONTHLY("MONTHLY"), LEVEL("LEVEL") }
 
@@ -157,7 +160,7 @@ fun RecurringAllowanceScreen(
                 ).map { it?.toString() ?: "" }
             }
         } catch (e: Exception) {
-            loadError = ApiErrors.message(e, "Kunde inte hämta inställningen")
+            loadError = ApiErrors.message(e, tr(R.string.allowance_load_failed))
         } finally {
             loading = false
         }
@@ -186,7 +189,7 @@ fun RecurringAllowanceScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(text = loadError!!, color = ink)
-                Button(onClick = { refreshKey++ }) { Text("Försök igen") }
+                Button(onClick = { refreshKey++ }) { Text(tr(R.string.common_retry)) }
             }
 
             else -> Column(
@@ -202,12 +205,12 @@ fun RecurringAllowanceScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Tillbaka",
+                            contentDescription = tr(R.string.common_back),
                             tint = ink,
                         )
                     }
                     Text(
-                        text = "Utbetalningar till $childName",
+                        text = tr(R.string.allowance_title, childName),
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
                         color = ink,
@@ -221,20 +224,20 @@ fun RecurringAllowanceScreen(
                     OptionCard(
                         selected = kind == Kind.WEEKLY,
                         icon = Icons.Filled.CalendarMonth,
-                        title = "Veckopeng",
-                        subtitle = "Samma belopp varje vecka",
+                        title = tr(R.string.allowance_weekly),
+                        subtitle = tr(R.string.allowance_weekly_sub),
                         onSelect = { kind = Kind.WEEKLY; error = null },
                     ) {
-                        FieldLabel("Belopp")
+                        FieldLabel(tr(R.string.allowance_amount))
                         AmountField(
-                            label = "Varje vecka",
+                            label = tr(R.string.allowance_every_week),
                             value = amount,
                             onValueChange = { amount = it; error = null },
                         )
                         Spacer(modifier = Modifier.height(14.dp))
-                        FieldLabel("Vilken dag?")
+                        FieldLabel(tr(R.string.allowance_which_day))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            weekdayNames.forEachIndexed { index, label ->
+                            (1..7).map { Dates.weekdayShort(it) }.forEachIndexed { index, label ->
                                 val day = index + 1
                                 DayChip(
                                     label = label,
@@ -250,18 +253,18 @@ fun RecurringAllowanceScreen(
                     OptionCard(
                         selected = kind == Kind.MONTHLY,
                         icon = Icons.Filled.EventRepeat,
-                        title = "Månadspeng",
-                        subtitle = "Samma belopp varje månad",
+                        title = tr(R.string.allowance_monthly),
+                        subtitle = tr(R.string.allowance_monthly_sub),
                         onSelect = { kind = Kind.MONTHLY; error = null },
                     ) {
-                        FieldLabel("Belopp")
+                        FieldLabel(tr(R.string.allowance_amount))
                         AmountField(
-                            label = "Varje månad",
+                            label = tr(R.string.allowance_every_month),
                             value = amount,
                             onValueChange = { amount = it; error = null },
                         )
                         Spacer(modifier = Modifier.height(14.dp))
-                        FieldLabel("Vilken dag i månaden?")
+                        FieldLabel(tr(R.string.allowance_which_day_of_month))
                         DayOfMonthField(
                             day = dayOfMonth,
                             onDayChange = { dayOfMonth = it; error = null },
@@ -269,7 +272,7 @@ fun RecurringAllowanceScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         NextPaymentNote(kind, weekday, dayOfMonth, saved)
                         Text(
-                            text = "Går att välja 1–$MAX_DAY_OF_MONTH, så dagen finns varje månad.",
+                            text = tr(R.string.allowance_day_range, MAX_DAY_OF_MONTH),
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
                             color = inkFaint,
@@ -279,17 +282,17 @@ fun RecurringAllowanceScreen(
                     OptionCard(
                         selected = kind == Kind.LEVEL,
                         icon = Icons.Filled.BarChart,
-                        title = "Månadspeng utifrån avklarade uppgifter",
-                        subtitle = "Beloppet beror på vilken nivå $childName når",
+                        title = tr(R.string.allowance_level),
+                        subtitle = tr(R.string.allowance_level_sub, childName),
                         onSelect = { kind = Kind.LEVEL; error = null },
                     ) {
-                        FieldLabel("Belopp per nivå")
+                        FieldLabel(tr(R.string.allowance_per_level))
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             levels.forEachIndexed { index, value ->
                                 val level = index + 1
                                 val here = currentLevel == level
                                 AmountField(
-                                    label = if (here) "Nivå $level · här nu" else "Nivå $level",
+                                    label = if (here) tr(R.string.allowance_level_here, level) else tr(R.string.allowance_level_n, level),
                                     value = value,
                                     highlighted = here,
                                     onValueChange = { typed ->
@@ -301,8 +304,7 @@ fun RecurringAllowanceScreen(
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "$childName får beloppet för den nivå hen nått den 1:a. " +
-                                "Nivån nollställs varje månad, precis som djuret.",
+                            text = tr(R.string.allowance_level_explain, childName),
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
                             color = inkFaint,
@@ -341,7 +343,7 @@ fun RecurringAllowanceScreen(
                                         }
                                         onBack()
                                     } catch (e: Exception) {
-                                        error = ApiErrors.message(e, "Kunde inte spara")
+                                        error = ApiErrors.message(e, tr(R.string.allowance_save_failed))
                                     } finally {
                                         saving = false
                                     }
@@ -350,7 +352,7 @@ fun RecurringAllowanceScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (saving) "Sparar…" else "Spara",
+                            text = if (saving) tr(R.string.common_saving) else tr(R.string.common_save),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = onDeepBlue,
@@ -359,7 +361,7 @@ fun RecurringAllowanceScreen(
 
                     if (saved?.active == true) {
                         Text(
-                            text = "Stäng av automatisk utbetalning",
+                            text = tr(R.string.allowance_turn_off),
                             fontSize = 12.5.sp,
                             color = deepBlue,
                             textAlign = TextAlign.Center,
@@ -377,12 +379,10 @@ fun RecurringAllowanceScreen(
     if (confirmDisable) {
         AlertDialog(
             onDismissRequest = { confirmDisable = false },
-            title = { Text("Stäng av?", fontWeight = FontWeight.Bold) },
+            title = { Text(tr(R.string.allowance_turn_off_q), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Inga fler automatiska utbetalningar till $childName. " +
-                        "Pengar som redan betalats ut ligger kvar i plånboken, och du " +
-                        "kan slå på det igen när du vill.",
+                    tr(R.string.allowance_turn_off_body, childName),
                 )
             },
             confirmButton = {
@@ -400,16 +400,16 @@ fun RecurringAllowanceScreen(
                                 onBack()
                             } catch (e: Exception) {
                                 confirmDisable = false
-                                error = ApiErrors.message(e, "Kunde inte stänga av")
+                                error = ApiErrors.message(e, tr(R.string.allowance_turn_off_failed))
                             } finally {
                                 saving = false
                             }
                         }
                     },
-                ) { Text("Stäng av") }
+                ) { Text(tr(R.string.allowance_turn_off_button)) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDisable = false }) { Text("Avbryt") }
+                TextButton(onClick = { confirmDisable = false }) { Text(tr(R.string.common_cancel)) }
             },
         )
     }
@@ -458,10 +458,10 @@ private fun missingFieldMessage(kind: Kind, amount: String, levels: List<String>
     when (kind) {
         Kind.LEVEL -> {
             val blank = levels.indexOfFirst { it.toIntOrNull() == null }
-            "Fyll i ett belopp för nivå ${blank + 1}"
+            tr(R.string.allowance_fill_level, blank + 1)
         }
 
-        else -> if (amount.isBlank()) "Fyll i ett belopp" else "Beloppet måste vara större än 0"
+        else -> if (amount.isBlank()) tr(R.string.allowance_fill_amount) else tr(R.string.allowance_amount_positive)
     }
 
 // MARK: - Pieces
@@ -626,7 +626,7 @@ private fun AmountField(
             },
         )
         Text(
-            text = " kr",
+            text = " " + Money.symbol(),
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
             color = money,
@@ -676,14 +676,14 @@ private fun DayOfMonthField(day: Int, onDayChange: (Int) -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "Den ${ordinal(day)}",
+                text = tr(R.string.allowance_on_day, ordinal(day)),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = ink,
             )
             Icon(
                 imageVector = Icons.Filled.ExpandMore,
-                contentDescription = "Välj dag",
+                contentDescription = tr(R.string.allowance_pick_day),
                 tint = inkFaint,
                 modifier = Modifier.size(18.dp),
             )
@@ -691,7 +691,7 @@ private fun DayOfMonthField(day: Int, onDayChange: (Int) -> Unit) {
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             (1..MAX_DAY_OF_MONTH).forEach { candidate ->
                 DropdownMenuItem(
-                    text = { Text("Den ${ordinal(candidate)}") },
+                    text = { Text(tr(R.string.allowance_on_day, ordinal(candidate))) },
                     onClick = { onDayChange(candidate); open = false },
                 )
             }
@@ -717,15 +717,15 @@ private fun NextPaymentNote(
         ?.takeIf { !it.isAfter(today) }
 
     val text = when {
-        pending != null -> "Nästa utbetalning: idag."
+        pending != null -> tr(R.string.allowance_next_today)
         kind == Kind.WEEKLY -> {
             val date = nextWeekday(weekday, today)
-            "Nästa utbetalning: ${date.format(DateTimeFormatter.ofPattern("EEEE d MMMM", swedish))}."
+            tr(R.string.allowance_next_on, date.format(DateTimeFormatter.ofPattern(tr(R.string.date_pattern_weekday_day_month), L10n.locale())))
         }
 
         else -> {
             val date = nextDayOfMonth(dayOfMonth, today)
-            "Nästa utbetalning: ${date.format(DateTimeFormatter.ofPattern("d MMMM", swedish))}."
+            tr(R.string.allowance_next_on, date.format(DateTimeFormatter.ofPattern(tr(R.string.date_pattern_day_month), L10n.locale())))
         }
     }
     Text(text = text, fontSize = 12.sp, lineHeight = 17.sp, color = inkFaint)
@@ -748,8 +748,4 @@ private fun nextDayOfMonth(day: Int, today: LocalDate): LocalDate {
     return if (candidate.isAfter(today)) candidate else candidate.plusMonths(1)
 }
 
-/** Swedish ordinals: 1:a, 2:a, 3:e … 11:e, 12:e … 21:a, 22:a, 23:e. */
-private fun ordinal(day: Int): String {
-    val suffix = if (day % 10 in 1..2 && day != 11 && day != 12) ":a" else ":e"
-    return "$day$suffix"
-}
+private fun ordinal(day: Int): String = Dates.dayOrdinal(day)

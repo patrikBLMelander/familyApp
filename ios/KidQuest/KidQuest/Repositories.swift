@@ -43,6 +43,7 @@ enum FamilyRepository {
             role: member.role,
             familyId: member.familyId
         )
+        AppLanguage.adoptFromServer(member.language)
         return member
     }
 
@@ -477,7 +478,7 @@ enum AdultDashboardRepository {
         var totalToday: Int { children.reduce(0) { $0 + $1.todaysTotal } }
     }
 
-    static let defaultFamilyName = "Min familj"
+    static let defaultFamilyName = String(localized: "Min familj")
 
     static func fetchOverview() async throws -> Overview {
         let members = try await FamilyRepository.fetchAllMembers()
@@ -565,17 +566,18 @@ enum AdultDashboardRepository {
     /// slut, och en siffra här skulle läsas som ett löfte.
     private static func describeAllowance(_ schedule: RecurringAllowanceResponseDTO) -> String {
         let day = schedule.dayOfMonth ?? 1
-        let ordinal = (1...2).contains(day % 10) && day != 11 && day != 12 ? "\(day):a" : "\(day):e"
+        let ordinal = kqOrdinal(day)
+        let amount = Money.format(schedule.amount ?? 0)
         switch schedule.kind {
         case "WEEKLY":
-            let weekdays = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"]
+            let weekdays = KQWeekdays.full
             let index = (schedule.weekday ?? 7) - 1
-            let weekday = weekdays.indices.contains(index) ? weekdays[index] : "söndag"
-            return "\(schedule.amount ?? 0) kr varje \(weekday)"
+            let weekday = weekdays.indices.contains(index) ? weekdays[index] : weekdays[6]
+            return String(localized: "\(amount) varje \(weekday)")
         case "MONTHLY":
-            return "\(schedule.amount ?? 0) kr den \(ordinal)"
+            return String(localized: "\(amount) den \(ordinal)")
         default:
-            return "Efter nivå den \(ordinal)"
+            return String(localized: "Efter nivå den \(ordinal)")
         }
     }
 }
@@ -613,6 +615,11 @@ enum AdventureRepository {
     static func eggs(memberId: String?) async throws -> [EggCollectionItemDTO] {
         let path = memberId.map { "pets/members/\($0)/eggs" } ?? "pets/eggs"
         return try await ApiClient.shared.send([EggCollectionItemDTO].self, path: path, method: "GET")
+    }
+
+    static func monthInfo(memberId: String?) async throws -> MonthInfoDTO {
+        let path = memberId.map { "pets/members/\($0)/month-info" } ?? "pets/month-info"
+        return try await ApiClient.shared.send(MonthInfoDTO.self, path: path, method: "GET")
     }
 
     static func setFrame(memberId: String?, frameId: String?) async throws -> PetResponseDTO {

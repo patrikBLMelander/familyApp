@@ -44,7 +44,7 @@ class EntitlementGuardTest {
     private void memberIn(UUID familyId) {
         when(members.getMemberByDeviceToken(TOKEN)).thenReturn(new FamilyMember(
                 MEMBER, "n", TOKEN, null, FamilyMember.Role.PARENT, familyId,
-                false, OffsetDateTime.now(), OffsetDateTime.now()
+                false, OffsetDateTime.now(), OffsetDateTime.now(), null
         ));
     }
 

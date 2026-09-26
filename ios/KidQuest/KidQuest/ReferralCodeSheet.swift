@@ -68,9 +68,9 @@ struct ReferralCodeSheet: View {
             )
             done = true
         } catch ApiError.httpError(let status, _) where status == 400 {
-            errorMessage = "Koden känns inte igen. Dubbelkolla stavningen."
+            errorMessage = String(localized: "Koden känns inte igen. Dubbelkolla stavningen.")
         } catch {
-            errorMessage = "Kunde inte registrera koden. Försök igen."
+            errorMessage = String(localized: "Kunde inte registrera koden. Försök igen.")
         }
         submitting = false
     }

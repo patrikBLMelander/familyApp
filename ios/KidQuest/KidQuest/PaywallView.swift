@@ -50,7 +50,7 @@ struct PaywallView: View {
 
     /// Vad som sägs när priset inte går att läsa. Ordagrant Androids formulering för
     /// samma läge: butiken svarade inte, så det finns inget pris att visa.
-    private static let unavailable = "Prenumerationen är inte tillgänglig just nu. Försök igen senare."
+    private static let unavailable = String(localized: "Prenumerationen är inte tillgänglig just nu. Försök igen senare.")
 
     private var canBuy: Bool {
         formattedMonthlyPrice != nil && onPurchase != nil && !isWorking
@@ -114,17 +114,13 @@ struct PaywallView: View {
                 Spacer().frame(height: 14)
 
                 paragraph(
-                    "Jag är en pappa som byggde KidQuest till mina egna barn. Det började "
-                    + "som ett sätt att slippa tjata om tandborstning varje morgon. Nu används "
-                    + "appen hemma hos er också, och det betyder mycket för mig."
+                    String(localized: "Jag är en pappa som byggde KidQuest till mina egna barn. Det började som ett sätt att slippa tjata om tandborstning varje morgon. Nu används appen hemma hos er också, och det betyder mycket för mig.")
                 )
 
                 Spacer().frame(height: 12)
 
                 paragraph(
-                    "Jag utvecklar appen själv, på kvällar och helger. Servern och allt runt "
-                    + "omkring kostar pengar varje månad, och 29 kronor per familj är vad som gör "
-                    + "att jag kan fortsätta."
+                    String(localized: "Jag utvecklar appen själv, på kvällar och helger. Servern och allt runt omkring kostar pengar varje månad, och 29 kronor per familj är vad som gör att jag kan fortsätta.")
                 )
 
                 Spacer().frame(height: 12)
@@ -194,8 +190,7 @@ struct PaywallView: View {
             // wrong and grounds for rejection -- so the store's name is the one word of
             // this copy that changes between the two apps.
             Text(
-                "Förnyas automatiskt tills du avslutar. Du avslutar när du vill i "
-                + "App Store och behåller tiden du redan betalat för."
+                String(localized: "Förnyas automatiskt tills du avslutar. Du avslutar när du vill i App Store och behåller tiden du redan betalat för.")
             )
             .font(.system(size: 11.5))
             .lineSpacing(4)
@@ -244,7 +239,7 @@ struct PaywallView: View {
             // must be able to get back what they already paid for. It is shown even
             // before there is a store to restore from -- tapping it then explains why
             // nothing happened rather than doing nothing at all.
-            footerButton("Återställ köp") {
+            footerButton(String(localized: "Återställ köp")) {
                 guard let onRestore else {
                     message = Self.unavailable
                     return
@@ -253,9 +248,9 @@ struct PaywallView: View {
                 onRestore()
             }
             dot
-            footerButton("Villkor") { open(LegalLinks.terms) }
+            footerButton(String(localized: "Villkor")) { open(LegalLinks.terms) }
             dot
-            footerButton("Integritetspolicy") { open(LegalLinks.privacy) }
+            footerButton(String(localized: "Integritetspolicy")) { open(LegalLinks.privacy) }
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -348,10 +343,10 @@ struct PaywallView: View {
     }
 
     private static let reassurances = [
-        "Obegränsat antal barn och sysslor",
-        "Ett nytt djur att ta hand om varje månad",
-        "Plånbok med sparmål",
-        "Hela familjen, på alla telefoner",
+        String(localized: "Obegränsat antal barn och sysslor"),
+        String(localized: "Ett nytt djur att ta hand om varje månad"),
+        String(localized: "Plånbok med sparmål"),
+        String(localized: "Hela familjen, på alla telefoner"),
     ]
 }
 

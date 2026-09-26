@@ -1,5 +1,8 @@
 package se.kidquest.app
 
+import se.kidquest.app.i18n.AppLanguage
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -93,13 +96,14 @@ fun ChildInviteLoginScreen(
                 // parent into their own children's view -- the stored session had the
                 // right role all along, so relaunching corrected it, which is what made
                 // this look like a display glitch rather than routing.
+                AppLanguage.syncFrom(member)
                 if (member.role.equals("CHILD", ignoreCase = true)) {
                     onLoginAsChild(member.id, member.name)
                 } else {
                     onLoginAsAdult()
                 }
             } catch (e: Exception) {
-                status = ApiErrors.message(e, "Kunde inte koppla enheten. Kontrollera koden.")
+                status = ApiErrors.message(e, tr(R.string.link_failed))
             } finally {
                 loading = false
             }
@@ -129,7 +133,7 @@ fun ChildInviteLoginScreen(
         // child taps through from one of them, and the app should not change colour
         // under them on the way.
         SeasonHeaderBar(
-            title = "Koppla din enhet",
+            title = tr(R.string.link_title),
             onBack = onBack,
         )
 
@@ -142,7 +146,7 @@ fun ChildInviteLoginScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "Be någon i familjen visa koden eller QR-koden – eller skanna den här nedan.",
+                text = tr(R.string.link_body),
                 fontSize = 14.sp,
                 lineHeight = 19.sp,
                 color = palette.inkSoft,
@@ -155,7 +159,7 @@ fun ChildInviteLoginScreen(
                 onClick = {
                     scanLauncher.launch(
                         ScanOptions().apply {
-                            setPrompt("Skanna inbjudningskoden")
+                            setPrompt(tr(R.string.link_scan_prompt))
                             setDesiredBarcodeFormats(ScanOptions.QR_CODE)
                         }
                     )
@@ -172,15 +176,15 @@ fun ChildInviteLoginScreen(
             ) {
                 Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(22.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Skanna QR-kod", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr(R.string.link_scan_qr), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
 
             // A rule through the words, so typing reads as the alternative to scanning
             // rather than as the next step after it.
-            OrDivider(text = "eller skriv in koden")
+            OrDivider(text = tr(R.string.link_or_type))
 
             EntryTextField(
-                label = "Inbjudningskod",
+                label = tr(R.string.link_invite_code),
                 value = inviteCode,
                 onValueChange = { inviteCode = it.trim(); status = null },
             )
@@ -188,7 +192,7 @@ fun ChildInviteLoginScreen(
             OutlinedButton(
                 onClick = {
                     if (inviteCode.isBlank()) {
-                        status = "Ange en kod"
+                        status = tr(R.string.link_enter_code)
                         return@OutlinedButton
                     }
                     performLink(inviteCode)
@@ -204,7 +208,7 @@ fun ChildInviteLoginScreen(
                 Icon(Icons.Default.Smartphone, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (loading) "Kopplar…" else "Koppla denna enhet",
+                    text = if (loading) tr(R.string.link_linking) else tr(R.string.link_this_device),
                     fontSize = 15.5.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -239,7 +243,7 @@ fun ChildInviteLoginScreen(
                 onClick = onBack,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = "Tillbaka", fontSize = 14.sp, color = palette.accent)
+                Text(text = tr(R.string.common_back), fontSize = 14.sp, color = palette.accent)
             }
         }
     }

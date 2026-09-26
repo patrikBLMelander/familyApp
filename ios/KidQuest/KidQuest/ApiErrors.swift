@@ -15,36 +15,35 @@ enum ApiErrors {
     /// en användare faktiskt kan råka ut för, formulerade så att nästa steg blir tydligt.
     private static let translations: [String: String] = [
         "No account found with this email":
-            "Det finns inget konto med den e-postadressen. Har du skapat ett konto än?",
+            String(localized: "Det finns inget konto med den e-postadressen. Har du skapat ett konto än?"),
         "Invalid password":
-            "Fel lösenord. Försök igen.",
+            String(localized: "Fel lösenord. Försök igen."),
         "Email is required":
-            "Fyll i din e-postadress.",
+            String(localized: "Fyll i din e-postadress."),
         "Password is required":
-            "Fyll i ditt lösenord.",
+            String(localized: "Fyll i ditt lösenord."),
         "Password not set for this account. Please set a password first.":
-            "Kontot har inget lösenord än. Sätt ett lösenord i webbappen först.",
+            String(localized: "Kontot har inget lösenord än. Sätt ett lösenord i webbappen först."),
         "Email login is only available for parent or assistant users":
-            "Bara föräldrar loggar in med e-post. Barn använder QR-koden eller en kod.",
+            String(localized: "Bara föräldrar loggar in med e-post. Barn använder QR-koden eller en kod."),
         "Password must be at least 6 characters long":
-            "Lösenordet måste vara minst 6 tecken.",
+            String(localized: "Lösenordet måste vara minst 6 tecken."),
         "Invalid device token":
-            "Inloggningen gäller inte längre. Be en förälder visa en ny kod.",
+            String(localized: "Inloggningen gäller inte längre. Be en förälder visa en ny kod."),
         "Family member not found for device token":
-            "Inloggningen gäller inte längre. Be en förälder visa en ny kod.",
+            String(localized: "Inloggningen gäller inte längre. Be en förälder visa en ny kod."),
         "Invalid invite token":
-            "Koden stämmer inte. Be en förälder visa en ny kod.",
+            String(localized: "Koden stämmer inte. Be en förälder visa en ny kod."),
         "Invite token has expired":
-            "Koden har gått ut. Be en förälder visa en ny kod.",
+            String(localized: "Koden har gått ut. Be en förälder visa en ny kod."),
         "Device token already in use":
-            "Den här telefonen är redan kopplad till någon annan i familjen.",
+            String(localized: "Den här telefonen är redan kopplad till någon annan i familjen."),
         "Pet already selected for this month":
-            "Ett djur är redan valt den här månaden.",
+            String(localized: "Ett djur är redan valt den här månaden."),
         "No unfed food available":
-            "Det finns ingen mat att ge just nu.",
+            String(localized: "Det finns ingen mat att ge just nu."),
         "Subscription required for this action":
-            "Provperioden har gått ut. Barnens sysslor och djur fungerar som vanligt, "
-            + "men för att lägga till eller ändra behöver familjen en prenumeration.",
+            String(localized: "Provperioden har gått ut. Barnens sysslor och djur fungerar som vanligt, men för att lägga till eller ändra behöver familjen en prenumeration."),
     ]
 
     /// - Parameter fallback: visas när felet inte bär på något användbart, så att varje
@@ -52,7 +51,7 @@ enum ApiErrors {
     static func message(_ error: Error, fallback: String) -> String {
         // Ingen uppkoppling alls är värt att säga rakt ut istället för att skylla på inmatningen.
         if error is URLError {
-            return "Kunde inte nå servern. Kontrollera din uppkoppling."
+            return String(localized: "Kunde inte nå servern. Kontrollera din uppkoppling.")
         }
 
         if let apiError = error as? ApiError, case let .httpError(status, data) = apiError {
@@ -63,16 +62,16 @@ enum ApiErrors {
             // vilket en naken statuskod inte gör.
             switch status {
             case 401, 403:
-                return "Du har inte behörighet till det här."
+                return String(localized: "Du har inte behörighet till det här.")
             // Servern nekade på grund av utebliven betalning, inte behörighet. Bannern
             // på dashboarden är redan uppe och leder till betalväggen, så det här
             // behöver bara förklara, inte navigera.
             case 402:
-                return "Provperioden har gått ut. Förnya för att lägga till eller ändra."
+                return String(localized: "Provperioden har gått ut. Förnya för att lägga till eller ändra.")
             case 404:
                 return fallback
             case 500...599:
-                return "Något gick fel hos servern. Försök igen om en stund."
+                return String(localized: "Något gick fel hos servern. Försök igen om en stund.")
             default:
                 return fallback
             }

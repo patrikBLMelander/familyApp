@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutBack
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -165,12 +167,12 @@ fun XpMeter(
         }
         Text(
             text = when {
-                maxed && stars >= 5 -> "Mästare! · $xpToNextStar xp till nästa ⭐"
-                maxed -> "$xpToNextStar xp till nästa ⭐"
+                maxed && stars >= 5 -> tr(R.string.xp_master_next_star, xpToNextStar)
+                maxed -> tr(R.string.xp_next_star, xpToNextStar)
                 // Full mätare betyder att tröskeln just passerats. Nivån är då redan
                 // uppräknad, och "35 / 35 xp till nivå 5" hade varit fel i båda leden.
-                xpInLevel >= span -> "Nivå $level nådd!"
-                else -> "$xpInLevel / $span xp till nivå ${level + 1}"
+                xpInLevel >= span -> tr(R.string.xp_level_reached, level)
+                else -> tr(R.string.xp_to_level, xpInLevel, span, level + 1)
             },
             style = MaterialTheme.typography.labelSmall.copy(shadow = labelShadow),
             fontWeight = FontWeight.Bold,
@@ -309,13 +311,13 @@ fun LevelUpBanner(level: Int, petName: String, progress: Float, season: SeasonPa
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Nivå $level!",
+                text = tr(R.string.levelup_level, level),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = season.onAccent,
             )
             Text(
-                text = "$petName växte",
+                text = tr(R.string.levelup_grew, petName),
                 style = MaterialTheme.typography.labelMedium,
                 color = season.onAccent.copy(alpha = 0.92f),
             )
@@ -354,13 +356,13 @@ fun StarBanner(stars: Int, petName: String, progress: Float, season: SeasonPalet
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = if (stars >= 5) "Mästare! ⭐" else "Ny stjärna! ⭐",
+                text = if (stars >= 5) tr(R.string.star_master) else tr(R.string.star_new),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF3B2F00),
             )
             Text(
-                text = if (stars >= 5) "$petName fick sin femte stjärna" else "$petName fick stjärna $stars av 5 · +1 biljett",
+                text = if (stars >= 5) tr(R.string.star_fifth, petName) else tr(R.string.star_n_of_5, petName, stars),
                 style = MaterialTheme.typography.labelMedium,
                 color = Color(0xFF3B2F00).copy(alpha = 0.9f),
             )
@@ -675,7 +677,7 @@ fun FoodStrip(
         ) {
             if (foodCount == 0) {
                 Text(
-                    text = "Tomt — bocka av en syssla",
+                    text = tr(R.string.food_empty),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = season.inkFaint,
@@ -718,7 +720,7 @@ fun FoodStrip(
                 ),
             ) {
                 Text(
-                    text = if (foodCount > 1) "Mata alla" else "Mata $petName",
+                    text = if (foodCount > 1) tr(R.string.feed_all) else tr(R.string.feed_pet, petName),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                 )
@@ -797,7 +799,7 @@ fun ChooseEggStrip(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            text = "Inget djur än",
+            text = tr(R.string.no_pet_yet),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = season.inkSoft,
@@ -813,7 +815,7 @@ fun ChooseEggStrip(
             ),
         ) {
             Text(
-                text = "Välj ägg",
+                text = tr(R.string.pick_egg),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
             )

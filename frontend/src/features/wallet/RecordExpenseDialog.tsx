@@ -7,6 +7,8 @@ import {
   SavingsGoalResponse,
   SavingsGoalAllocationRequest,
 } from "../../shared/api/wallet";
+import { formatMoney, currencySymbol } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type RecordExpenseDialogProps = {
   currentBalance: number;
@@ -19,6 +21,7 @@ export function RecordExpenseDialog({
   onClose,
   onSuccess,
 }: RecordExpenseDialogProps) {
+  const currency = useFamilyCurrency();
   const [amount, setAmount] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -89,7 +92,7 @@ export function RecordExpenseDialog({
     }
 
     if (amountNum > currentBalance) {
-      setError(`Du har inte tillräckligt med pengar. Du har ${currentBalance} kr.`);
+      setError(`Du har inte tillräckligt med pengar. Du har ${formatMoney(currentBalance, currency)}.`);
       return;
     }
 
@@ -200,7 +203,7 @@ export function RecordExpenseDialog({
                 htmlFor="amount"
                 style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}
               >
-                Belopp (kr) *
+                Belopp ({currencySymbol(currency)}) *
               </label>
               <input
                 id="amount"
@@ -340,7 +343,7 @@ export function RecordExpenseDialog({
                         />
                       )}
                       <span style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>
-                        (max {maxAmount} kr)
+                        (max {formatMoney(maxAmount, currency)})
                       </span>
                     </div>
                   );
@@ -357,11 +360,11 @@ export function RecordExpenseDialog({
                   >
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span>Totalt sparat:</span>
-                      <span style={{ fontWeight: 600 }}>{totalAllocated} kr</span>
+                      <span style={{ fontWeight: 600 }}>{formatMoney(totalAllocated, currency)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
                       <span>Kvar att betala:</span>
-                      <span style={{ fontWeight: 600 }}>{remaining} kr</span>
+                      <span style={{ fontWeight: 600 }}>{formatMoney(remaining, currency)}</span>
                     </div>
                   </div>
                 )}

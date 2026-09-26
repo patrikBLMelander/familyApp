@@ -41,6 +41,7 @@ struct AdultDashboardView: View {
     @State private var parentPin: String?
     @State private var showPinSheet = false
     @State private var showReferralCode = false
+    @State private var showLanguageSheet = false
     @State private var overview: AdultDashboardRepository.Overview?
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -112,6 +113,11 @@ struct AdultDashboardView: View {
         }
         .sheet(isPresented: $showReferralCode) {
             ReferralCodeSheet()
+        }
+        .sheet(isPresented: $showLanguageSheet) {
+            LanguageCurrencySheet(
+                canChangeCurrency: TokenStoreIOS.shared.getSession()?.role?.uppercased() == "PARENT"
+            )
         }
     }
 
@@ -241,7 +247,8 @@ struct AdultDashboardView: View {
             onOpenDeleteFamily: { showDeleteFamily = true },
             hasParentPin: parentPin != nil,
             onChangePin: { showPinSheet = true },
-            onEnterReferral: { showReferralCode = true }
+            onEnterReferral: { showReferralCode = true },
+            onOpenLanguage: { showLanguageSheet = true }
         )
     }
 
@@ -365,7 +372,7 @@ struct AdultDashboardView: View {
             overview = try await AdultDashboardRepository.fetchOverview()
             errorMessage = nil
         } catch {
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda familjemedlemmar.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ladda familjemedlemmar."))
         }
     }
 
@@ -375,7 +382,7 @@ struct AdultDashboardView: View {
         do {
             overview = try await AdultDashboardRepository.fetchOverview()
         } catch {
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda familjemedlemmar.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ladda familjemedlemmar."))
         }
         isLoading = false
     }
@@ -508,6 +515,7 @@ private struct DashboardTopBar: View {
     var hasParentPin: Bool = false
     var onChangePin: () -> Void = {}
     var onEnterReferral: () -> Void = {}
+    var onOpenLanguage: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 0) {
@@ -537,6 +545,7 @@ private struct DashboardTopBar: View {
                 // Vem som helst i familjen kan ha fått en värvningskod av den som
                 // tipsade dem. First-touch på servern, så den är ofarlig att visa alltid.
                 Button("Värvningskod", action: onEnterReferral)
+                Button("Språk och valuta", action: onOpenLanguage)
                 Button("Logga ut", action: onLogout)
                 if onDeleteFamily != nil {
                     // Both stores require this to be reachable in the app, and Apple
@@ -604,11 +613,11 @@ private struct ChildCard: View {
     }
 
     private var subtitle: String {
-        if child.loadFailed { return "Kunde inte läsa dagens sysslor" }
+        if child.loadFailed { return String(localized: "Kunde inte läsa dagens sysslor") }
         guard let petType = child.petType, PetImagesIOS.petType(forEgg: petType) != nil else {
-            return "Inget djur valt ännu"
+            return String(localized: "Inget djur valt ännu")
         }
-        return "\(PetNameUtilsIOS.getPetNameSwedish(petType)) · nivå \(child.growthStage)"
+        return String(localized: "\(PetNameUtilsIOS.getPetName(petType)) · nivå \(child.growthStage)")
     }
 
     var body: some View {
@@ -670,14 +679,14 @@ private struct ChildCard: View {
                 if !child.loadFailed {
                     Spacer().frame(height: 6)
                     if allDoneToday {
-                        chip(icon: "checkmark", text: "Allt klart idag", tone: .done)
+                        chip(icon: "checkmark", text: String(localized: "Allt klart idag"), tone: .done)
                     } else if child.todaysTotal == 0 {
                         Text("Inga sysslor planerade idag")
                             .font(.caption)
                             .foregroundStyle(palette.inkSoft)
                     } else {
                         let left = child.todaysTotal - child.todaysDone
-                        chip(icon: "circle", text: "\(left) kvar idag", tone: .outstanding)
+                        chip(icon: "circle", text: String(localized: "\(left) kvar idag"), tone: .outstanding)
                     }
                 }
 
@@ -772,7 +781,7 @@ private struct ChildCard: View {
             HStack(spacing: 9) {
                 Image(systemName: "checklist")
                     .font(.system(size: 17, weight: .semibold))
-                Text("\(possessiveSwedish(child.name)) sysslor")
+                Text("\(kqPossessive(child.name)) sysslor")
                     .font(.body.weight(.semibold))
             }
             .frame(maxWidth: .infinity)
@@ -791,13 +800,13 @@ private struct ChildCard: View {
             secondaryButton(
                 icon: "pawprint.fill",
                 iconTint: species.accent,
-                title: "Djur",
+                title: String(localized: "Djur"),
                 action: onPet
             )
             secondaryButton(
                 icon: "wallet.bifold.fill",
                 iconTint: palette.inkFaint,
-                title: "Plånbok",
+                title: String(localized: "Plånbok"),
                 action: onWallet
             )
         }
@@ -899,7 +908,7 @@ private struct ChildPetPortrait: View {
                 alignment: .bottom
             )
             .frame(width: petSize, height: petSize)
-            .accessibilityLabel("\(possessiveSwedish(childName)) djur")
+            .accessibilityLabel("\(kqPossessive(childName)) djur")
         } else {
             Circle()
                 .fill(accent.opacity(0.10))
@@ -943,8 +952,8 @@ private struct AdultRow: View {
     }
 
     private var roleLine: String {
-        let role = adult.role == "ASSISTANT" ? "Vuxen" : "Förälder"
-        return adult.hasPairedDevice ? role : "\(role) · ingen telefon kopplad"
+        let role = adult.role == "ASSISTANT" ? String(localized: "Vuxen") : String(localized: "Förälder")
+        return adult.hasPairedDevice ? role : String(localized: "\(role) · ingen telefon kopplad")
     }
 
     var body: some View {
@@ -1015,18 +1024,6 @@ private struct AdultRow: View {
     }
 }
 
-// MARK: - Swedish helpers
-
-/// Swedish possessive.
-///
-/// A name already ending in s, x or z takes no extra s, so a plain `"\(name)s"`
-/// produced "Nilss sysslor" for a perfectly ordinary Swedish name.
-/// Delad med kodrutan, som säger vems vy man lämnar.
-func possessiveSwedish(_ name: String) -> String {
-    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let last = trimmed.lowercased().last else { return trimmed }
-    return ["s", "x", "z"].contains(String(last)) ? trimmed : "\(trimmed)s"
-}
 
 // MARK: - Fixture
 
@@ -1052,7 +1049,7 @@ extension AdultDashboardView {
             onDeleteFamily: {},
             onChildView: { _, _ in },
             preloaded: AdultDashboardRepository.Overview(
-                familyName: "Melander",
+                familyName: "Berg",
                 children: [],
                 adults: []
             )
@@ -1069,22 +1066,23 @@ extension AdultDashboardView {
             onDeleteFamily: {},
             onChildView: { _, _ in },
             preloaded: AdultDashboardRepository.Overview(
-                familyName: "Melander",
+                familyName: "Berg",
                 children: [
                     AdultDashboardRepository.Child(
                         id: "child-1",
-                        name: "Signe",
+                        name: "Ella",
                         hasPairedDevice: true,
                         todaysDone: 3,
                         todaysTotal: 5,
                         petType: pets ? "dragon" : nil,
                         growthStage: 3,
-                        allowanceNote: "50 kr varje fredag",
+                        // Same builder as a real schedule, so the fixture follows language and currency.
+                        allowanceNote: String(localized: "\(Money.format(50)) varje \(KQWeekdays.full[4])"),
                         loadFailed: false
                     ),
                     AdultDashboardRepository.Child(
                         id: "child-2",
-                        name: "Walter",
+                        name: "Leo",
                         hasPairedDevice: false,
                         todaysDone: 4,
                         todaysTotal: 4,
@@ -1097,14 +1095,14 @@ extension AdultDashboardView {
                 adults: [
                     AdultDashboardRepository.Adult(
                         id: "adult-1",
-                        name: "Patrik",
+                        name: "Jonas",
                         role: "PARENT",
                         hasPairedDevice: true,
                         isCurrentUser: true
                     ),
                     AdultDashboardRepository.Adult(
                         id: "adult-2",
-                        name: "Jessica",
+                        name: "Anna",
                         role: "PARENT",
                         hasPairedDevice: false,
                         isCurrentUser: false

@@ -6,6 +6,8 @@ import {
   SavingsGoalResponse,
 } from "../../shared/api/wallet";
 import { RecordExpenseDialog } from "./RecordExpenseDialog";
+import { formatMoney } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type WalletOverviewProps = {
   onShowDetails?: () => void;
@@ -13,6 +15,7 @@ type WalletOverviewProps = {
 };
 
 export function WalletOverview({ onShowDetails, onNavigate }: WalletOverviewProps) {
+  const currency = useFamilyCurrency();
   const [balance, setBalance] = useState<WalletBalanceResponse | null>(null);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoalResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +127,7 @@ export function WalletOverview({ onShowDetails, onNavigate }: WalletOverviewProp
           Saldo
         </p>
         <p style={{ margin: 0, fontSize: "2rem", fontWeight: 700, color: "#2d5a2d" }}>
-          {balance?.balance || 0} kr
+          {formatMoney(balance?.balance || 0, currency)}
         </p>
       </div>
 
@@ -161,7 +164,7 @@ export function WalletOverview({ onShowDetails, onNavigate }: WalletOverviewProp
                   {goal.emoji ? `${goal.emoji} ` : ""}
                   {goal.name}
                 </span>
-                <span>{goal.currentAmount} / {goal.targetAmount} kr</span>
+                <span>{goal.currentAmount} / {formatMoney(goal.targetAmount, currency)}</span>
               </div>
               {/* Progress bar */}
               <div style={{
@@ -186,7 +189,7 @@ export function WalletOverview({ onShowDetails, onNavigate }: WalletOverviewProp
                 color: "#6b6b6b",
                 textAlign: "right",
               }}>
-                {goal.remainingAmount} kr kvar
+                {formatMoney(goal.remainingAmount, currency)} kvar
               </p>
             </div>
           ))}

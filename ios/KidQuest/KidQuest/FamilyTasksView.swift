@@ -42,7 +42,7 @@ struct FamilyTasksView: View {
     var body: some View {
         VStack(spacing: 0) {
             SeasonHeaderBar(
-                title: "Familjens uppgifter",
+                title: String(localized: "Familjens uppgifter"),
                 subtitle: subtitle,
                 onBack: onBack
             )
@@ -86,14 +86,11 @@ struct FamilyTasksView: View {
     /// and the bar already has the line free. Per-child counts stay on the sections.
     private var subtitle: String {
         guard let family, family.totalToday > 0 else { return todayLabel }
-        return "\(todayLabel) · \(family.doneToday)/\(family.totalToday) gjorda"
+        return String(localized: "\(todayLabel) · \(family.doneToday)/\(family.totalToday) gjorda")
     }
 
     private var todayLabel: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateFormat = "EEEE d/M"
-        return formatter.string(from: Date())
+        return kqFormatDate(Date(), template: "EEEEdM")
     }
 
     // MARK: - Today
@@ -105,7 +102,7 @@ struct FamilyTasksView: View {
     private func todayList(_ family: FamilyTasksRepository.Family) -> some View {
         List {
             if family.children.isEmpty {
-                emptyCard("Inga barn i familjen än.")
+                emptyCard(String(localized: "Inga barn i familjen än."))
                     .plainChoreRow()
             } else {
                 ForEach(family.children) { child in
@@ -125,10 +122,10 @@ struct FamilyTasksView: View {
     @ViewBuilder
     private func childRows(_ child: FamilyTasksRepository.ChildChores) -> some View {
         if child.loadFailed {
-            emptyCard("Kunde inte läsa \(child.name)s sysslor.")
+            emptyCard(String(localized: "Kunde inte läsa \(kqPossessive(child.name)) sysslor."))
                 .plainChoreRow()
         } else if child.today.isEmpty {
-            emptyCard("Inga sysslor idag.")
+            emptyCard(String(localized: "Inga sysslor idag."))
                 .plainChoreRow()
         } else {
             ForEach(child.today, id: \.chore.id) { item in
@@ -180,10 +177,10 @@ struct FamilyTasksView: View {
     }
 
     private func countLabel(_ child: FamilyTasksRepository.ChildChores) -> String {
-        if child.loadFailed { return "Kunde inte läsas" }
-        if child.total == 0 { return "Inga sysslor idag" }
-        if child.allDone { return "Allt klart (\(child.total))" }
-        return "\(child.done) / \(child.total) gjorda"
+        if child.loadFailed { return String(localized: "Kunde inte läsas") }
+        if child.total == 0 { return String(localized: "Inga sysslor idag") }
+        if child.allDone { return String(localized: "Allt klart (\(child.total))") }
+        return String(localized: "\(child.done) / \(child.total) gjorda")
     }
 
     // MARK: - Week
@@ -278,7 +275,7 @@ struct FamilyTasksView: View {
         do {
             family = try await FamilyTasksRepository.fetchFamilyChores()
         } catch {
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda uppgifter.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ladda uppgifter."))
         }
         isLoading = false
     }
@@ -304,8 +301,8 @@ struct FamilyTasksView: View {
                 // The one refusal the backend makes here that is not a fault: the XP
                 // this chore earned has already been fed to the pet, so it cannot be
                 // taken back. Worth saying plainly rather than as an HTTP failure.
-                ? "Kan inte avmarkera – all mat har redan matats till husdjuret."
-                : ApiErrors.message(error, fallback: "Kunde inte markera sysslan.")
+                ? String(localized: "Kan inte avmarkera – all mat har redan matats till husdjuret.")
+                : ApiErrors.message(error, fallback: String(localized: "Kunde inte markera sysslan."))
         }
     }
 
@@ -399,7 +396,7 @@ private struct FamilyWeekDayCard: View {
     private func countLabel(total: Int, done: Int) -> String {
         if total == 0 { return "–" }
         if isToday { return "\(done)/\(total)" }
-        return total == 1 ? "1 syssla" : "\(total) sysslor"
+        return total == 1 ? String(localized: "1 syssla") : String(localized: "\(total) sysslor")
     }
 
     var body: some View {
@@ -524,28 +521,28 @@ extension FamilyTasksView {
             preloaded: FamilyTasksRepository.Family(children: [
                 child(
                     id: "child-1",
-                    name: "Signe",
+                    name: "Ella",
                     completed: ["c1", "c3"],
                     chores: [
-                        (id: "c1", title: "Borsta håret", weekdays: everyDay, xp: 1),
-                        (id: "c2", title: "Klippa naglar", weekdays: ["SUN"], xp: 1),
-                        (id: "c3", title: "Städa lekrum", weekdays: everyDay, xp: 1),
-                        (id: "c4", title: "Borsta tänderna morgon och kväll", weekdays: everyDay, xp: 2),
-                        (id: "c5", title: "Häng upp ytterkläder", weekdays: everyDay, xp: 1),
-                        (id: "c6", title: "Städa sovrum", weekdays: ["MON", "WED", "FRI"], xp: 1),
+                        (id: "c1", title: String(localized: "Borsta håret"), weekdays: everyDay, xp: 1),
+                        (id: "c2", title: String(localized: "Klippa naglar"), weekdays: ["SUN"], xp: 1),
+                        (id: "c3", title: String(localized: "Städa lekrum"), weekdays: everyDay, xp: 1),
+                        (id: "c4", title: String(localized: "Borsta tänderna morgon och kväll"), weekdays: everyDay, xp: 2),
+                        (id: "c5", title: String(localized: "Häng upp ytterkläder"), weekdays: everyDay, xp: 1),
+                        (id: "c6", title: String(localized: "Städa sovrum"), weekdays: ["MON", "WED", "FRI"], xp: 1),
                     ]
                 ),
                 child(
                     id: "child-2",
-                    name: "Walter",
-                    // Every one of Walter's ticked, so the "Allt klart" badge and the
+                    name: "Leo",
+                    // Every one of Leo's ticked, so the "Allt klart" badge and the
                     // struck-through row are both in the picture.
                     completed: ["w1", "w2", "w3", "w4"],
                     chores: [
-                        (id: "w1", title: "Inga leksaker på övervåningen", weekdays: everyDay, xp: 1),
-                        (id: "w2", title: "Städa sovrum", weekdays: everyDay, xp: 1),
-                        (id: "w3", title: "Borsta tänderna morgon/kväll", weekdays: everyDay, xp: 1),
-                        (id: "w4", title: "Städa lekrummet", weekdays: ["SAT", "SUN"], xp: 2),
+                        (id: "w1", title: String(localized: "Inga leksaker på övervåningen"), weekdays: everyDay, xp: 1),
+                        (id: "w2", title: String(localized: "Städa sovrum"), weekdays: everyDay, xp: 1),
+                        (id: "w3", title: String(localized: "Borsta tänderna morgon/kväll"), weekdays: everyDay, xp: 1),
+                        (id: "w4", title: String(localized: "Städa lekrummet"), weekdays: ["SAT", "SUN"], xp: 2),
                     ]
                 ),
                 // No chores at all: the third state the header has to hold.

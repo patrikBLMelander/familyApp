@@ -1,5 +1,6 @@
 package com.familyapp.api.chore;
 
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.application.subscription.EntitlementGuard;
 import com.familyapp.application.chore.DailyChoreService;
 import com.familyapp.application.familymember.FamilyMemberService;
@@ -176,7 +177,7 @@ public class DailyChoreController {
     private UUID requireParent(String deviceToken) {
         var requester = memberService.getMemberByDeviceToken(deviceToken);
         if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
-            throw new IllegalArgumentException("Endast en förälder kan lägga till och ta bort sysslor");
+            throw new LocalizedException("chore.parentOnly");
         }
         return requester.id();
     }

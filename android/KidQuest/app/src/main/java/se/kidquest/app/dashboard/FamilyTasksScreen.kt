@@ -1,5 +1,9 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.trp
+import se.kidquest.app.i18n.Dates
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -69,7 +73,6 @@ private data class MemberWithChores(
 )
 
 private val WEEKDAY_ABBREVS = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
-private val WEEKDAY_LABELS_SV = listOf("Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön")
 
 private fun LocalDate.toWeekdayAbbrev(): String = WEEKDAY_ABBREVS[dayOfWeek.value - 1]
 
@@ -105,14 +108,14 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 }.map { it.await() }
             }
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte ladda uppgifter")
+            error = ApiErrors.message(e, tr(R.string.tasks_load_failed))
         } finally {
             loading = false
         }
     }
 
     val today = LocalDate.now()
-    val dayLabelFull = today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale("sv"))
+    val dayLabelFull = Dates.weekdayFull(today.dayOfWeek.value)
     val dateLabel = "$dayLabelFull ${today.dayOfMonth}/${today.monthValue}"
 
     Box(
@@ -124,7 +127,7 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
             // ── Header ──────────────────────────────────────────────────────
             SeasonHeaderBar(
-                title = "Familjens uppgifter",
+                title = tr(R.string.family_tasks_title),
                 subtitle = dateLabel,
                 onBack = onBack,
             )
@@ -137,13 +140,13 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TabButton(
-                    label = "📝 Idag",
+                    label = tr(R.string.tasks_tab_today),
                     selected = activeTab == "today",
                     modifier = Modifier.weight(1f),
                     onClick = { activeTab = "today" },
                 )
                 TabButton(
-                    label = "📅 Vecka",
+                    label = tr(R.string.tasks_tab_week),
                     selected = activeTab == "week",
                     modifier = Modifier.weight(1f),
                     onClick = { activeTab = "week" },
@@ -178,7 +181,7 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             item {
                                 SurfaceCard {
                                     Text(
-                                        "Inga familjemedlemmar hittades.",
+                                        tr(R.string.family_no_members),
                                         fontSize = 14.sp,
                                         color = palette.inkSoft,
                                         modifier = Modifier.padding(4.dp),
@@ -302,9 +305,9 @@ private fun TodayMemberCard(
             ) {
                 Text(
                     text = when {
-                        total == 0 -> "Inga uppgifter idag"
-                        allDone -> "✓ Allt klart ($total)"
-                        else -> "$done / $total gjorda"
+                        total == 0 -> tr(R.string.tasks_none_today)
+                        allDone -> tr(R.string.tasks_all_done, total)
+                        else -> tr(R.string.tasks_done_of, done, total)
                     },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -316,7 +319,7 @@ private fun TodayMemberCard(
         if (row.chores.isEmpty()) {
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                "Inga uppgifter idag",
+                tr(R.string.tasks_none_today),
                 fontSize = 13.sp,
                 color = palette.inkFaint,
             )
@@ -389,7 +392,7 @@ private fun WeekDayCard(
     val isToday = day == today
     val dayIndex = day.dayOfWeek.value - 1 // 0=Mon…6=Sun
     val abbrev = WEEKDAY_ABBREVS[dayIndex]
-    val dayLabelSv = WEEKDAY_LABELS_SV[dayIndex]
+    val dayLabelSv = Dates.weekdayShort(dayIndex + 1)
     val dateStr = "${day.dayOfMonth}/${day.monthValue}"
 
     // For each member, pick chores scheduled on this weekday
@@ -441,7 +444,7 @@ private fun WeekDayCard(
                                 .padding(horizontal = 7.dp, vertical = 2.dp),
                         ) {
                             Text(
-                                "idag",
+                                tr(R.string.tasks_today_badge),
                                 fontSize = 11.sp,
                                 color = palette.onAccent,
                                 fontWeight = FontWeight.SemiBold,
@@ -453,7 +456,7 @@ private fun WeekDayCard(
                     text = when {
                         totalChores == 0 -> "–"
                         isToday -> "$doneChores/$totalChores"
-                        else -> "$totalChores sysslor"
+                        else -> trp(R.plurals.tasks_count, totalChores)
                     },
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
@@ -464,7 +467,7 @@ private fun WeekDayCard(
             // Chore list
             if (membersThisDay.isEmpty()) {
                 Text(
-                    "Inga sysslor",
+                    tr(R.string.tasks_no_chores),
                     fontSize = 13.sp,
                     color = palette.inkFaint,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),

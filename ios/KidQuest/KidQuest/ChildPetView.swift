@@ -54,7 +54,7 @@ struct ChildPetView: View {
             if let pet {
                 GiveFoodSheet(
                     childName: childName,
-                    petName: pet.name ?? PetNameUtilsIOS.getPetNameSwedish(pet.petType),
+                    petName: pet.name ?? PetNameUtilsIOS.getPetName(pet.petType),
                     childId: childId,
                     onDismiss: { showGiveFood = false },
                     onSuccess: {
@@ -88,7 +88,7 @@ struct ChildPetView: View {
     }
 
     private func petCard(pet: PetResponseDTO, xp: XpProgressResponseDTO?) -> some View {
-        let petName = pet.name ?? PetNameUtilsIOS.getPetNameSwedish(pet.petType)
+        let petName = pet.name ?? PetNameUtilsIOS.getPetName(pet.petType)
 
         let xpThresholds = [0, 10, 35, 70, 125]
         let level = xp?.currentLevel ?? pet.growthStage
@@ -124,7 +124,7 @@ struct ChildPetView: View {
                             .font(.title3)
                     }
                 }
-                Text(stars >= 5 ? "Mästare! · \(totalXp) XP totalt" : "Fullvuxen · \(totalXp) XP totalt")
+                Text(stars >= 5 ? String(localized: "Mästare! · \(totalXp) XP totalt") : String(localized: "Fullvuxen · \(totalXp) XP totalt"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(cardTextPrimary)
 
@@ -234,7 +234,7 @@ struct ChildPetView: View {
         } catch ApiError.httpError(404, _) {
             pet = nil
         } catch {
-            self.error = "Kunde inte hämta djuret. Försök igen."
+            self.error = String(localized: "Kunde inte hämta djuret. Försök igen.")
             isLoading = false
             return
         }
@@ -341,7 +341,7 @@ private struct GiveFoodSheet: View {
                     .font(.headline)
                     .multilineTextAlignment(.center)
 
-                Text("Välj hur mycket bonusmat du vill ge \(childName)s djur (max 100 XP).")
+                Text("Välj hur mycket bonusmat du vill ge \(kqPossessive(childName)) djur (max 100 XP).")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -417,9 +417,9 @@ private struct GiveFoodSheet: View {
             onSuccess()
         } catch ApiError.httpError(let code, let data) {
             let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            errorMessage = "Fel \(code): \(body)"
+            errorMessage = String(localized: "Fel \(code): \(body)")
         } catch {
-            errorMessage = "Något gick fel. Försök igen."
+            errorMessage = String(localized: "Något gick fel. Försök igen.")
         }
         isLoading = false
     }

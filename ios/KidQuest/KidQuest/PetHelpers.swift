@@ -3,40 +3,40 @@ import UIKit
 
 enum PetNameUtilsIOS {
     private static let names: [String: String] = [
-        "dragon": "Drake",
-        "cat": "Katt",
-        "dog": "Hund",
-        "bird": "Fågel",
-        "rabbit": "Kanin",
-        "bear": "Björn",
-        "snake": "Orm",
-        "panda": "Panda",
-        "slot": "Sengångare",
-        "hydra": "Hydra",
-        "unicorn": "Enhörning",
-        "kapybara": "Kapybara",
-        "shark": "Haj",
-        "lion": "Lejon",
-        "koala": "Koala",
-        "meerkat": "Surikat",
-        "penguin": "Pingvin",
-        "spider": "Spindel",
-        "kangaroo": "Känguru",
-        "scorpion": "Skorpion",
-        "octopus": "Bläckfisk",
-        "snowleopard": "Snöleopard",
-        "tiger": "Tiger",
-        "polarbear": "Isbjörn",
-        "giraffe": "Giraff",
-        "elephant": "Elefant",
-        "crocodile": "Krokodil",
-        "panther": "Panter",
-        "wolf": "Varg",
+        "dragon": String(localized: "Drake"),
+        "cat": String(localized: "Katt"),
+        "dog": String(localized: "Hund"),
+        "bird": String(localized: "Fågel"),
+        "rabbit": String(localized: "Kanin"),
+        "bear": String(localized: "Björn"),
+        "snake": String(localized: "Orm"),
+        "panda": String(localized: "Panda"),
+        "slot": String(localized: "Sengångare"),
+        "hydra": String(localized: "Hydra"),
+        "unicorn": String(localized: "Enhörning"),
+        "kapybara": String(localized: "Kapybara"),
+        "shark": String(localized: "Haj"),
+        "lion": String(localized: "Lejon"),
+        "koala": String(localized: "Koala"),
+        "meerkat": String(localized: "Surikat"),
+        "penguin": String(localized: "Pingvin"),
+        "spider": String(localized: "Spindel"),
+        "kangaroo": String(localized: "Känguru"),
+        "scorpion": String(localized: "Skorpion"),
+        "octopus": String(localized: "Bläckfisk"),
+        "snowleopard": String(localized: "Snöleopard"),
+        "tiger": String(localized: "Tiger"),
+        "polarbear": String(localized: "Isbjörn"),
+        "giraffe": String(localized: "Giraff"),
+        "elephant": String(localized: "Elefant"),
+        "crocodile": String(localized: "Krokodil"),
+        "panther": String(localized: "Panter"),
+        "wolf": String(localized: "Varg"),
     ]
 
-    static func getPetNameSwedish(_ petType: String?) -> String {
-        guard let key = petType?.lowercased() else { return "Djur" }
-        return names[key] ?? petType ?? "Djur"
+    static func getPetName(_ petType: String?) -> String {
+        guard let key = petType?.lowercased() else { return String(localized: "Djur") }
+        return names[key] ?? petType ?? String(localized: "Djur")
     }
 }
 
@@ -74,35 +74,35 @@ enum PetFoodUtilsIOS {
     ]
 
     private static let foodNames: [String: String] = [
-        "dragon": "eldbär",
-        "cat": "fisk",
-        "dog": "ben",
-        "bird": "frön",
-        "rabbit": "morötter",
-        "bear": "honung",
-        "snake": "ägg",
-        "panda": "bambu",
-        "slot": "löv",
-        "hydra": "vattendroppar",
-        "unicorn": "stjärnfrukter",
-        "kapybara": "gräs",
-        "shark": "fiskar",
-        "lion": "kött",
-        "koala": "löv",
-        "meerkat": "insekter",
-        "penguin": "fisk",
-        "spider": "flugor",
-        "kangaroo": "gräs",
-        "scorpion": "syrsor",
-        "octopus": "räkor",
-        "snowleopard": "kött",
-        "tiger": "kött",
-        "polarbear": "fisk",
-        "giraffe": "blad",
-        "elephant": "jordnötter",
-        "crocodile": "kött",
-        "panther": "kött",
-        "wolf": "kött",
+        "dragon": String(localized: "eldbär"),
+        "cat": String(localized: "fisk"),
+        "dog": String(localized: "ben"),
+        "bird": String(localized: "frön"),
+        "rabbit": String(localized: "morötter"),
+        "bear": String(localized: "honung"),
+        "snake": String(localized: "ägg"),
+        "panda": String(localized: "bambu"),
+        "slot": String(localized: "löv"),
+        "hydra": String(localized: "vattendroppar"),
+        "unicorn": String(localized: "stjärnfrukter"),
+        "kapybara": String(localized: "gräs"),
+        "shark": String(localized: "fiskar"),
+        "lion": String(localized: "kött"),
+        "koala": String(localized: "löv"),
+        "meerkat": String(localized: "insekter"),
+        "penguin": String(localized: "fisk"),
+        "spider": String(localized: "flugor"),
+        "kangaroo": String(localized: "gräs"),
+        "scorpion": String(localized: "syrsor"),
+        "octopus": String(localized: "räkor"),
+        "snowleopard": String(localized: "kött"),
+        "tiger": String(localized: "kött"),
+        "polarbear": String(localized: "fisk"),
+        "giraffe": String(localized: "blad"),
+        "elephant": String(localized: "jordnötter"),
+        "crocodile": String(localized: "kött"),
+        "panther": String(localized: "kött"),
+        "wolf": String(localized: "kött"),
     ]
 
     static func emoji(for petType: String?) -> String {
@@ -110,7 +110,7 @@ enum PetFoodUtilsIOS {
     }
 
     static func name(for petType: String?) -> String {
-        foodNames[petType?.lowercased() ?? ""] ?? "mat"
+        foodNames[petType?.lowercased() ?? ""] ?? String(localized: "mat")
     }
 }
 
@@ -366,44 +366,52 @@ enum EggNames {
 
     static func hint(for eggType: String) -> String {
         switch eggType.lowercased() {
-        case "blue_egg": return "Jag älskar att flyga högt bland molnen."
-        case "green_egg": return "Jag spinner nöjt när jag får ligga i solen."
-        case "red_egg": return "Jag hämtar gärna bollen om du kastar den."
-        case "yellow_egg": return "Jag kvittrar gärna när dagen börjar."
-        case "purple_egg": return "Jag hoppar fram och gnager gärna på morötter."
-        case "orange_egg": return "Jag tar gärna en lång vintersömn med magen full."
-        case "brown_egg": return "Jag gillar att slingra mig på varma stenar."
-        case "black_egg": return "Jag tycker om att smyga runt i skuggan."
-        case "gray_egg": return "Jag rör mig långsamt men kramas gärna länge."
-        case "teal_egg": return "Jag trivs där det finns mycket vatten och mystik."
-        case "pink_egg": return "Jag gillar glitter, regnbågar och magi."
-        case "cyan_egg": return "Jag älskar att plaska runt med kompisar."
-        case "golden_egg": return "Jag ryter så att alla hör att jag vaknat."
-        case "white_egg": return "Jag simmar snabbast av alla där det är djupt."
-        case "silver_egg": return "Jag sover gärna högt uppe bland eukalyptuslöven."
-        case "sand_egg": return "Jag står på bakbenen och spanar efter faror."
-        case "ice_egg": return "Jag vaggar fram på isen och dyker gärna efter fisk."
-        case "amber_egg": return "Jag spinner nät och fångar flugor på morgonen."
-        case "clay_egg": return "Jag hoppar långt och bär min unge i fickan."
-        case "ember_egg": return "Jag har en stark svans och gömmer mig gärna bland stenar."
-        case "indigo_egg": return "Jag har åtta armar och gömmer mig gärna bland koraller."
-        case "frost_egg": return "Jag smyger tyst över snöiga berg och gömmer mig i dimman."
-        case "tiger_egg": return "Jag har ränder och smyger tyst genom den höga gräsdjungeln."
-        case "snow_egg": return "Jag är vit som snö och trivs bäst där det är riktigt kallt."
-        case "savanna_egg": return "Jag är lång i halsen och når löven högst upp i träden."
-        case "ivory_egg": return "Jag har en lång snabel och glömmer aldrig en vän."
-        case "swamp_egg": return "Jag ligger stilla i vattnet och visar bara ögonen."
-        case "onyx_egg": return "Jag smyger i mörkret på helt tysta tassar."
-        case "moon_egg": return "Jag ylar mot månen och springer i flock."
-        default: return "Jag längtar efter att få träffa dig."
+        case "blue_egg": return String(localized: "Jag älskar att flyga högt bland molnen.")
+        case "green_egg": return String(localized: "Jag spinner nöjt när jag får ligga i solen.")
+        case "red_egg": return String(localized: "Jag hämtar gärna bollen om du kastar den.")
+        case "yellow_egg": return String(localized: "Jag kvittrar gärna när dagen börjar.")
+        case "purple_egg": return String(localized: "Jag hoppar fram och gnager gärna på morötter.")
+        case "orange_egg": return String(localized: "Jag tar gärna en lång vintersömn med magen full.")
+        case "brown_egg": return String(localized: "Jag gillar att slingra mig på varma stenar.")
+        case "black_egg": return String(localized: "Jag tycker om att smyga runt i skuggan.")
+        case "gray_egg": return String(localized: "Jag rör mig långsamt men kramas gärna länge.")
+        case "teal_egg": return String(localized: "Jag trivs där det finns mycket vatten och mystik.")
+        case "pink_egg": return String(localized: "Jag gillar glitter, regnbågar och magi.")
+        case "cyan_egg": return String(localized: "Jag älskar att plaska runt med kompisar.")
+        case "golden_egg": return String(localized: "Jag ryter så att alla hör att jag vaknat.")
+        case "white_egg": return String(localized: "Jag simmar snabbast av alla där det är djupt.")
+        case "silver_egg": return String(localized: "Jag sover gärna högt uppe bland eukalyptuslöven.")
+        case "sand_egg": return String(localized: "Jag står på bakbenen och spanar efter faror.")
+        case "ice_egg": return String(localized: "Jag vaggar fram på isen och dyker gärna efter fisk.")
+        case "amber_egg": return String(localized: "Jag spinner nät och fångar flugor på morgonen.")
+        case "clay_egg": return String(localized: "Jag hoppar långt och bär min unge i fickan.")
+        case "ember_egg": return String(localized: "Jag har en stark svans och gömmer mig gärna bland stenar.")
+        case "indigo_egg": return String(localized: "Jag har åtta armar och gömmer mig gärna bland koraller.")
+        case "frost_egg": return String(localized: "Jag smyger tyst över snöiga berg och gömmer mig i dimman.")
+        case "tiger_egg": return String(localized: "Jag har ränder och smyger tyst genom den höga gräsdjungeln.")
+        case "snow_egg": return String(localized: "Jag är vit som snö och trivs bäst där det är riktigt kallt.")
+        case "savanna_egg": return String(localized: "Jag är lång i halsen och når löven högst upp i träden.")
+        case "ivory_egg": return String(localized: "Jag har en lång snabel och glömmer aldrig en vän.")
+        case "swamp_egg": return String(localized: "Jag ligger stilla i vattnet och visar bara ögonen.")
+        case "onyx_egg": return String(localized: "Jag smyger i mörkret på helt tysta tassar.")
+        case "moon_egg": return String(localized: "Jag ylar mot månen och springer i flock.")
+        default: return String(localized: "Jag längtar efter att få träffa dig.")
         }
     }
 }
 
-/// Månadens namn, för raden under ett samlat djur i äggväljaren.
-func kqMonthName(_ month: Int) -> String {
-    let n = ["januari", "februari", "mars", "april", "maj", "juni",
-             "juli", "augusti", "september", "oktober", "november", "december"]
-    guard month >= 1, month <= 12 else { return "" }
-    return n[month - 1]
+/// Äggväljarens rad om att månaden snart tar slut, eller nil när det är mer än
+/// `FIRST_PET_GRACE_DAYS` (10) dagar kvar. Samma gräns som servern använder.
+func kqMonthEndMessage(_ info: MonthInfoDTO) -> String? {
+    guard info.daysLeftInMonth <= 10 else { return nil }
+    let ends: String
+    switch info.daysLeftInMonth {
+    case 0: ends = String(localized: "Månaden tar slut idag")
+    case 1: ends = String(localized: "Månaden tar slut om 1 dag")
+    default: ends = String(localized: "Månaden tar slut om \(info.daysLeftInMonth) dagar")
+    }
+    let month = kqMonthName(info.nextMonth)
+    return info.firstPetGrace
+        ? String(localized: "\(ends) – men ditt första ägg följer med dig hela \(month)! 🥚")
+        : String(localized: "\(ends) – ett nytt ägg väntar 1 \(month).")
 }

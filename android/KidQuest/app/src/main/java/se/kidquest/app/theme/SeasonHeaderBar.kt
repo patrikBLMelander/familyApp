@@ -1,5 +1,7 @@
 package se.kidquest.app.theme
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,7 +61,7 @@ fun SeasonHeaderBar(
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Tillbaka",
+                    contentDescription = tr(R.string.common_back),
                     tint = Color.White,
                 )
             }

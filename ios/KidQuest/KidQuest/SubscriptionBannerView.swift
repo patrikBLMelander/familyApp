@@ -92,31 +92,30 @@ struct SubscriptionBannerView: View {
         switch status.status {
         case "EXPIRED":
             return Message(
-                headline: "Provperioden har gått ut",
-                detail: "Förnya för att lägga till sysslor och familjemedlemmar igen. "
-                    + "Barnens sysslor och djur fungerar som vanligt.",
+                headline: String(localized: "Provperioden har gått ut"),
+                detail: String(localized: "Förnya för att lägga till sysslor och familjemedlemmar igen. Barnens sysslor och djur fungerar som vanligt."),
                 urgent: true
             )
         case "GRACE":
             return Message(
-                headline: "Betalningen gick inte igenom",
+                headline: String(localized: "Betalningen gick inte igenom"),
                 // Android says "Google försöker igen" here. The retry on this platform is
                 // the App Store's, so the sentence names the store the parent would
                 // actually go to.
-                detail: "App Store försöker igen. Appen fungerar som vanligt under tiden.",
+                detail: String(localized: "App Store försöker igen. Appen fungerar som vanligt under tiden."),
                 urgent: false
             )
         default:
             guard status.inTrial, status.trialDaysRemaining <= trialNagDays else { return nil }
             let headline: String
             switch status.trialDaysRemaining {
-            case ...0: headline = "Provperioden slutar idag"
-            case 1: headline = "1 dag kvar av provperioden"
-            default: headline = "\(status.trialDaysRemaining) dagar kvar av provperioden"
+            case ...0: headline = String(localized: "Provperioden slutar idag")
+            case 1: headline = String(localized: "1 dag kvar av provperioden")
+            default: headline = String(localized: "\(status.trialDaysRemaining) dagar kvar av provperioden")
             }
             return Message(
                 headline: headline,
-                detail: "Sedan kostar KidQuest 29 kr per månad för hela familjen.",
+                detail: String(localized: "Sedan kostar KidQuest 29 kr per månad för hela familjen."),
                 urgent: false
             )
         }

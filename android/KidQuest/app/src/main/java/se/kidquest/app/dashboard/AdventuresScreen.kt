@@ -1,5 +1,8 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.trp
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -61,15 +64,17 @@ import se.kidquest.app.theme.SeasonPalette
 
 /** A place a pet can be sent. `key` is stored server-side; `drawable` is the scene art in
  *  res/drawable (scene_<key>). */
-private data class AdventureScene(val key: String, val label: String, val drawable: String)
+private data class AdventureScene(val key: String, val labelRes: Int, val drawable: String) {
+    val label: String get() = tr(labelRes)
+}
 
 private val SCENES = listOf(
-    AdventureScene("glade", "Gläntan", "scene_glade"),
-    AdventureScene("forest", "Skogen", "scene_forest"),
-    AdventureScene("snow", "Snöstigen", "scene_snow"),
-    AdventureScene("mountain", "Berget", "scene_mountain"),
-    AdventureScene("cave", "Grottan", "scene_cave"),
-    AdventureScene("reef", "Korallrevet", "scene_reef"),
+    AdventureScene("glade", R.string.adventure_scene_glade, "scene_glade"),
+    AdventureScene("forest", R.string.adventure_scene_forest, "scene_forest"),
+    AdventureScene("snow", R.string.adventure_scene_snow, "scene_snow"),
+    AdventureScene("mountain", R.string.adventure_scene_mountain, "scene_mountain"),
+    AdventureScene("cave", R.string.adventure_scene_cave, "scene_cave"),
+    AdventureScene("reef", R.string.adventure_scene_reef, "scene_reef"),
 )
 
 @Composable
@@ -122,7 +127,7 @@ fun AdventuresScreen(
             equippedFrame = pet?.equippedFrame
             equippedSceneItem = pet?.equippedSceneItem
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte hämta äventyr")
+            error = ApiErrors.message(e, tr(R.string.adv_load_failed))
         } finally {
             loading = false
         }
@@ -156,7 +161,7 @@ fun AdventuresScreen(
                 // Gå direkt tillbaka till bandet så barnet genast ser djuret på äventyr.
                 onBack()
             } catch (e: Exception) {
-                error = ApiErrors.message(e, "Kunde inte skicka iväg djuret")
+                error = ApiErrors.message(e, tr(R.string.adv_send_failed))
             } finally {
                 busy = false
             }
@@ -175,7 +180,7 @@ fun AdventuresScreen(
                 }
                 refreshKey++
             } catch (e: Exception) {
-                error = ApiErrors.message(e, "Kunde inte hämta belöningen")
+                error = ApiErrors.message(e, tr(R.string.adv_reward_failed))
             } finally {
                 busy = false
             }
@@ -195,7 +200,7 @@ fun AdventuresScreen(
                 }
                 equippedFrame = updated.equippedFrame
             } catch (e: Exception) {
-                error = ApiErrors.message(e, "Kunde inte byta ram")
+                error = ApiErrors.message(e, tr(R.string.adv_frame_failed))
             } finally {
                 busy = false
             }
@@ -215,7 +220,7 @@ fun AdventuresScreen(
                 }
                 equippedSceneItem = updated.equippedSceneItem
             } catch (e: Exception) {
-                error = ApiErrors.message(e, "Kunde inte byta dekoration")
+                error = ApiErrors.message(e, tr(R.string.adv_deco_failed))
             } finally {
                 busy = false
             }
@@ -223,7 +228,7 @@ fun AdventuresScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(season.pageBg)) {
-        SeasonHeaderBar(title = "Äventyr", subtitle = childName, onBack = onBack)
+        SeasonHeaderBar(title = tr(R.string.adv_title), subtitle = childName, onBack = onBack)
 
         if (loading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -253,7 +258,7 @@ fun AdventuresScreen(
             // Send-out section, only while there is a ticket to spend.
             if (balance > 0) {
                 Text(
-                    text = "Skicka på äventyr",
+                    text = tr(R.string.adv_send_on),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = season.ink,
@@ -261,7 +266,7 @@ fun AdventuresScreen(
                 SceneList(enabled = !busy, season = season, onPick = { startAdventure(it.key) })
             } else if (ongoing.isEmpty()) {
                 Text(
-                    text = "Klara fler nivåer för att få en äventyrsbiljett.",
+                    text = tr(R.string.adv_need_ticket),
                     style = MaterialTheme.typography.bodyMedium,
                     color = season.inkFaint,
                 )
@@ -269,7 +274,7 @@ fun AdventuresScreen(
 
             if (ongoing.isNotEmpty()) {
                 Text(
-                    text = "På äventyr",
+                    text = tr(R.string.adv_ongoing),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = season.ink,
@@ -329,7 +334,7 @@ private fun TicketBadge(balance: Long, season: SeasonPalette) {
     ) {
         Text("🎟️", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = if (balance == 1L) "1 biljett" else "$balance biljetter",
+            text = trp(R.plurals.adv_tickets, balance.toInt()),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = season.tipStrong,
@@ -399,7 +404,7 @@ private fun SceneList(
                 ) {
                     Text("🗺️", style = MaterialTheme.typography.labelMedium)
                     Text(
-                        text = "Skicka",
+                        text = tr(R.string.adv_send),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = Color.Black.copy(alpha = 0.8f),
@@ -451,20 +456,20 @@ private fun OngoingAdventureCard(
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = scene?.label ?: "Äventyr",
+                text = scene?.label ?: tr(R.string.adv_title),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = season.ink,
             )
             Text(
-                text = if (ready) "Djuret är hemma!" else "Hemma om ${formatRemaining(remainingSecs)}",
+                text = if (ready) tr(R.string.adv_home) else tr(R.string.adv_home_in, formatRemaining(remainingSecs)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (ready) season.goodInk else season.inkFaint,
             )
         }
         if (ready) {
             TextButton(onClick = onClaim, enabled = !busy) {
-                Text("Hämta", fontWeight = FontWeight.Bold, color = season.goodInk)
+                Text(tr(R.string.adv_collect), fontWeight = FontWeight.Bold, color = season.goodInk)
             }
         }
     }
@@ -490,11 +495,10 @@ internal fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: ()
         if (id != 0) id else null
     }
     val (emoji, message) = when (loot.type) {
-        "EGG" -> "🥚" to "Du hittade ett nytt ägg! Det väntar i äggväljaren."
-        "FRAME" -> "🖼️" to "En ny ram till din scen!"
-        "SCENE_ITEM" -> "✨" to "En ny dekoration till din scen!"
-        else -> "🍎" to (if (loot.quantity == 1) "Du hittade 1 mat till ditt djur!"
-        else "Du hittade ${loot.quantity} mat till ditt djur!")
+        "EGG" -> "🥚" to tr(R.string.adv_loot_egg)
+        "FRAME" -> "🖼️" to tr(R.string.adv_loot_frame)
+        "SCENE_ITEM" -> "✨" to tr(R.string.adv_loot_deco)
+        else -> "🍎" to trp(R.plurals.adv_loot_food, loot.quantity)
     }
     // Den faktiska konsten för lootet: ett ägg visar hur det ser ut, så nyfikenheten
     // byggs inför nästa månadsskifte. Faller tillbaka på emojin när konst saknas.
@@ -511,10 +515,10 @@ internal fun LootDialog(loot: LootResponse, season: SeasonPalette, onDismiss: ()
         onDismissRequest = { if (revealed) onDismiss() },
         confirmButton = {
             if (revealed) {
-                TextButton(onClick = onDismiss) { Text("Toppen!", fontWeight = FontWeight.Bold) }
+                TextButton(onClick = onDismiss) { Text(tr(R.string.adv_awesome), fontWeight = FontWeight.Bold) }
             }
         },
-        title = { Text(if (revealed) "Titta vad du fick!" else "Öppnar kistan…") },
+        title = { Text(if (revealed) tr(R.string.adv_look) else tr(R.string.adv_opening)) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -566,7 +570,7 @@ private fun FramesSection(
 ) {
     if (frameIds.isEmpty()) return
     Text(
-        text = "Dina ramar",
+        text = tr(R.string.adv_your_frames),
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
         color = season.ink,
@@ -607,7 +611,7 @@ private fun DecorationsSection(
 ) {
     if (sceneItemIds.isEmpty()) return
     Text(
-        text = "Dina dekorationer",
+        text = tr(R.string.adv_your_decos),
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
         color = season.ink,
@@ -672,7 +676,7 @@ private fun DecorationTile(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Ingen",
+                    text = tr(R.string.adv_none),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = season.inkFaint,
@@ -696,7 +700,7 @@ private fun DecorationTile(
                 }
             }
             Text(
-                text = label ?: "Dekoration",
+                text = label ?: tr(R.string.adv_decoration),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = season.ink,
@@ -737,7 +741,7 @@ private fun FrameTile(
     ) {
         if (frameId == null) {
             Text(
-                text = "Ingen ram",
+                text = tr(R.string.adv_no_frame),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = season.inkFaint,
@@ -746,7 +750,7 @@ private fun FrameTile(
         } else if (drawable != null) {
             Image(
                 painter = painterResource(id = drawable),
-                contentDescription = "Ram",
+                contentDescription = tr(R.string.adv_frame),
                 modifier = Modifier.size(64.dp),
                 contentScale = ContentScale.Fit,
             )
@@ -760,5 +764,5 @@ private fun FrameTile(
 private fun formatRemaining(secs: Long): String {
     val m = secs / 60
     val s = secs % 60
-    return if (m >= 3) "$m min" else "%d:%02d".format(m, s)
+    return if (m >= 3) tr(R.string.adv_minutes, m.toInt()) else "%d:%02d".format(m, s)
 }

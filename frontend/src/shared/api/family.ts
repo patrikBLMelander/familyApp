@@ -43,6 +43,8 @@ export type FamilyResponse = {
   name: string;
   createdAt: string;
   updatedAt: string;
+  /** ISO 4217 code for the kids' wallet money. Absent from older backends (= SEK). */
+  currency?: string;
 };
 
 export type FamilyMemberResponse = {

@@ -5,6 +5,8 @@ import {
   SavingsGoalResponse,
   SavingsGoalAllocationRequest,
 } from "../../shared/api/wallet";
+import { formatMoney, currencySymbol } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type GiveAllowanceDialogProps = {
   childName: string;
@@ -19,6 +21,7 @@ export function GiveAllowanceDialog({
   onClose,
   onSuccess,
 }: GiveAllowanceDialogProps) {
+  const currency = useFamilyCurrency();
   const [amount, setAmount] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoalResponse[]>([]);
@@ -170,7 +173,7 @@ export function GiveAllowanceDialog({
         {/* Amount */}
         <div style={{ marginBottom: "16px" }}>
           <label htmlFor="allowance-amount" style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>
-            Belopp (kr) *
+            Belopp ({currencySymbol(currency)}) *
           </label>
           <input
             id="allowance-amount"
@@ -242,7 +245,7 @@ export function GiveAllowanceDialog({
                         {goal.name}
                       </span>
                       <span style={{ fontSize: "0.875rem", color: "#6b6b6b" }}>
-                        {goal.currentAmount} / {goal.targetAmount} kr
+                        {goal.currentAmount} / {formatMoney(goal.targetAmount, currency)}
                       </span>
                     </div>
                     {canAllocate ? (
@@ -264,7 +267,7 @@ export function GiveAllowanceDialog({
                           }}
                         />
                         <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#6b6b6b" }}>
-                          {remaining} kr kvar till målet
+                          {formatMoney(remaining, currency)} kvar till målet
                         </p>
                       </>
                     ) : (
@@ -284,12 +287,12 @@ export function GiveAllowanceDialog({
                   <div style={{ marginTop: "12px", padding: "8px", background: "#f7fafc", borderRadius: "6px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem" }}>
                       <span>Totalt till sparmål:</span>
-                      <span style={{ fontWeight: 600 }}>{totalAllocated} kr</span>
+                      <span style={{ fontWeight: 600 }}>{formatMoney(totalAllocated, currency)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", marginTop: "4px" }}>
                       <span>Kvar på kontot:</span>
                       <span style={{ fontWeight: 600, color: remaining >= 0 ? "#48bb78" : "#c53030" }}>
-                        {remaining} kr
+                        {formatMoney(remaining, currency)}
                       </span>
                     </div>
                   </div>

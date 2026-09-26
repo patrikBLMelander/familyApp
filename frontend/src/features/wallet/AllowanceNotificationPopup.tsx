@@ -1,4 +1,6 @@
 import { WalletNotificationResponse } from "../../shared/api/wallet";
+import { formatMoney } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type AllowanceNotificationPopupProps = {
   notification: WalletNotificationResponse;
@@ -9,6 +11,7 @@ export function AllowanceNotificationPopup({
   notification,
   onClose,
 }: AllowanceNotificationPopupProps) {
+  const currency = useFamilyCurrency();
   return (
     <div
       style={{
@@ -63,7 +66,7 @@ export function AllowanceNotificationPopup({
           color: "#48bb78",
           marginBottom: "8px",
         }}>
-          +{notification.amount} kr
+          +{formatMoney(notification.amount, currency)}
         </div>
 
         {/* Description */}

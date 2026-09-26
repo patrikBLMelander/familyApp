@@ -1,5 +1,8 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,7 +61,7 @@ fun RecordExpenseDialog(
                 categoryId = categories.first().id
             }
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte ladda kategorier")
+            error = ApiErrors.message(e, tr(R.string.expense_load_categories_failed))
         } finally {
             loadingData = false
         }
@@ -66,11 +69,11 @@ fun RecordExpenseDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (childName != null) "Registrera köp – $childName" else "Registrera köp") },
+        title = { Text(if (childName != null) tr(R.string.expense_title_for, childName) else tr(R.string.expense_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (loadingData) {
-                    Text("Laddar kategorier…")
+                    Text(tr(R.string.expense_loading_categories))
                     return@Column
                 }
                 if (error != null) {
@@ -80,7 +83,7 @@ fun RecordExpenseDialog(
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it.filter { c -> c.isDigit() }; error = null },
-                    label = { Text("Belopp (kr) *") },
+                    label = { Text(tr(R.string.amount_label_required, Money.symbol())) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -88,13 +91,13 @@ fun RecordExpenseDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it; error = null },
-                    label = { Text("Beskrivning (valfritt)") },
+                    label = { Text(tr(R.string.expense_description_optional)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
                 if (categories.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Kategori", style = MaterialTheme.typography.labelMedium)
+                    Text(tr(R.string.expense_category), style = MaterialTheme.typography.labelMedium)
                     categories.forEach { cat ->
                         Row(
                             modifier = Modifier
@@ -128,16 +131,16 @@ fun RecordExpenseDialog(
                 onClick = {
                     val amountKr = amount.toIntOrNull() ?: 0
                     if (amountKr <= 0) {
-                        error = "Ange ett belopp"
+                        error = tr(R.string.common_enter_amount)
                         return@TextButton
                     }
                     if (amountKr > currentBalance) {
-                        error = "Du har bara $currentBalance kr"
+                        error = tr(R.string.expense_only_have, Money.format(currentBalance))
                         return@TextButton
                     }
                     val cat = categoryId
                     if (categories.isNotEmpty() && cat == null) {
-                        error = "Välj en kategori"
+                        error = tr(R.string.expense_pick_category)
                         return@TextButton
                     }
                     loading = true
@@ -159,19 +162,19 @@ fun RecordExpenseDialog(
                             }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte registrera köpet")
+                            error = ApiErrors.message(e, tr(R.string.expense_failed))
                         } finally {
                             loading = false
                         }
                     }
                 },
             ) {
-                Text(if (loading) "Sparar…" else "Betala")
+                Text(if (loading) tr(R.string.common_saving) else tr(R.string.expense_pay))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Avbryt")
+                Text(tr(R.string.common_cancel))
             }
         },
     )

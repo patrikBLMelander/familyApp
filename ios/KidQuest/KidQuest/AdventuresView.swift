@@ -29,12 +29,12 @@ struct AdventuresView: View {
         var id: String { key }
     }
     private let scenes: [AdventureScene] = [
-        .init(key: "glade", label: "Gläntan"),
-        .init(key: "forest", label: "Skogen"),
-        .init(key: "snow", label: "Snöstigen"),
-        .init(key: "mountain", label: "Berget"),
-        .init(key: "cave", label: "Grottan"),
-        .init(key: "reef", label: "Korallrevet"),
+        .init(key: "glade", label: String(localized: "Gläntan")),
+        .init(key: "forest", label: String(localized: "Skogen")),
+        .init(key: "snow", label: String(localized: "Snöstigen")),
+        .init(key: "mountain", label: String(localized: "Berget")),
+        .init(key: "cave", label: String(localized: "Grottan")),
+        .init(key: "reef", label: String(localized: "Korallrevet")),
     ]
     private let cols = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8),
                         GridItem(.flexible(), spacing: 8)]
@@ -43,7 +43,7 @@ struct AdventuresView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SeasonHeaderBar(title: "Äventyr", subtitle: childName, onBack: onBack)
+            SeasonHeaderBar(title: String(localized: "Äventyr"), subtitle: childName, onBack: onBack)
             if loading {
                 Spacer()
                 ProgressView()
@@ -72,7 +72,7 @@ struct AdventuresView: View {
                 let ongoing = state?.adventures.filter { $0.status == "ONGOING" } ?? []
 
                 if (state?.ticketBalance ?? 0) > 0 {
-                    sectionTitle("Skicka på äventyr")
+                    sectionTitle(String(localized: "Skicka på äventyr"))
                     sceneGrid
                 } else if ongoing.isEmpty {
                     Text("Klara fler nivåer för att få en äventyrsbiljett.")
@@ -81,7 +81,7 @@ struct AdventuresView: View {
                 }
 
                 if !ongoing.isEmpty {
-                    sectionTitle("På äventyr").padding(.top, 4)
+                    sectionTitle(String(localized: "På äventyr")).padding(.top, 4)
                     ForEach(ongoing) { adv in
                         ongoingCard(adv)
                     }
@@ -170,8 +170,8 @@ struct AdventuresView: View {
                 Text("🗺️").font(.title2)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(scene?.label ?? "Äventyr").font(.subheadline.weight(.bold)).foregroundStyle(palette.ink)
-                Text(ready ? "Djuret är hemma!" : "Hemma om \(formatRemaining(remaining))")
+                Text(scene?.label ?? String(localized: "Äventyr")).font(.subheadline.weight(.bold)).foregroundStyle(palette.ink)
+                Text(ready ? String(localized: "Djuret är hemma!") : String(localized: "Hemma om \(formatRemaining(remaining))"))
                     .font(.body)
                     .foregroundStyle(ready ? palette.goodInk : palette.inkFaint)
             }
@@ -195,7 +195,7 @@ struct AdventuresView: View {
         // to frames, matching the pre-scene-item behaviour.
         let frames = inventory.map { $0.itemId }.filter { catalog[$0]?.type != "SCENE_ITEM" }
         if !frames.isEmpty {
-            sectionTitle("Dina ramar").padding(.top, 4)
+            sectionTitle(String(localized: "Dina ramar")).padding(.top, 4)
             let options: [String?] = [nil] + frames
             LazyVGrid(columns: cols, spacing: 8) {
                 ForEach(Array(options.enumerated()), id: \.offset) { _, frameId in
@@ -209,7 +209,7 @@ struct AdventuresView: View {
     private var decorationsSection: some View {
         let items = inventory.map { $0.itemId }.filter { catalog[$0]?.type == "SCENE_ITEM" }
         if !items.isEmpty {
-            sectionTitle("Dina dekorationer").padding(.top, 4)
+            sectionTitle(String(localized: "Dina dekorationer")).padding(.top, 4)
             let options: [String?] = [nil] + items
             LazyVGrid(columns: cols, spacing: 8) {
                 ForEach(Array(options.enumerated()), id: \.offset) { _, itemId in
@@ -233,13 +233,13 @@ struct AdventuresView: View {
                         .frame(height: 52)
                 } else if let name = PetImagesIOS.sceneItemImageName(itemId), let img = UIImage(named: name) {
                     Image(uiImage: img).resizable().scaledToFit().frame(height: 52)
-                    Text(label ?? "Dekoration")
+                    Text(label ?? String(localized: "Dekoration"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(palette.ink)
                         .lineLimit(1)
                 } else {
                     Text("✨").font(.title2).frame(height: 52)
-                    Text(label ?? "Dekoration")
+                    Text(label ?? String(localized: "Dekoration"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(palette.ink)
                         .lineLimit(1)
@@ -310,7 +310,7 @@ struct AdventuresView: View {
             }
         } catch {
             await MainActor.run {
-                self.error = "Kunde inte hämta äventyr."
+                self.error = String(localized: "Kunde inte hämta äventyr.")
                 loading = false
             }
         }
@@ -325,7 +325,7 @@ struct AdventuresView: View {
             // Gå direkt tillbaka till bandet så barnet genast ser djuret på äventyr.
             await MainActor.run { onBack() }
         } catch {
-            await MainActor.run { self.error = "Kunde inte skicka iväg djuret." }
+            await MainActor.run { self.error = String(localized: "Kunde inte skicka iväg djuret.") }
         }
         await MainActor.run { busy = false }
     }
@@ -339,7 +339,7 @@ struct AdventuresView: View {
             await MainActor.run { loot = won }
             await load()
         } catch {
-            await MainActor.run { self.error = "Kunde inte hämta belöningen." }
+            await MainActor.run { self.error = String(localized: "Kunde inte hämta belöningen.") }
         }
         await MainActor.run { busy = false }
     }
@@ -352,7 +352,7 @@ struct AdventuresView: View {
             let pet = try await AdventureRepository.setFrame(memberId: memberId, frameId: frameId)
             await MainActor.run { equippedFrame = pet.equippedFrame }
         } catch {
-            await MainActor.run { self.error = "Kunde inte byta ram." }
+            await MainActor.run { self.error = String(localized: "Kunde inte byta ram.") }
         }
         await MainActor.run { busy = false }
     }
@@ -365,7 +365,7 @@ struct AdventuresView: View {
             let pet = try await AdventureRepository.setSceneItem(memberId: memberId, itemId: itemId)
             await MainActor.run { equippedSceneItem = pet.equippedSceneItem }
         } catch {
-            await MainActor.run { self.error = "Kunde inte byta dekoration." }
+            await MainActor.run { self.error = String(localized: "Kunde inte byta dekoration.") }
         }
         await MainActor.run { busy = false }
     }
@@ -373,7 +373,7 @@ struct AdventuresView: View {
     private func formatRemaining(_ secs: Int) -> String {
         let m = secs / 60
         let s = secs % 60
-        return m >= 3 ? "\(m) min" : String(format: "%d:%02d", m, s)
+        return m >= 3 ? String(localized: "\(m) min") : String(format: "%d:%02d", m, s)
     }
 }
 
@@ -389,12 +389,12 @@ struct LootReveal: View {
 
     private var reward: (emoji: String, message: String) {
         switch loot.type {
-        case "EGG": return ("🥚", "Du hittade ett nytt ägg! Det väntar i äggväljaren.")
-        case "FRAME": return ("🖼️", "En ny ram till din scen!")
-        case "SCENE_ITEM": return ("✨", "En ny dekoration till din scen!")
+        case "EGG": return ("🥚", String(localized: "Du hittade ett nytt ägg! Det väntar i äggväljaren."))
+        case "FRAME": return ("🖼️", String(localized: "En ny ram till din scen!"))
+        case "SCENE_ITEM": return ("✨", String(localized: "En ny dekoration till din scen!"))
         default:
-            return ("🍎", loot.quantity == 1 ? "Du hittade 1 mat till ditt djur!"
-                : "Du hittade \(loot.quantity) mat till ditt djur!")
+            return ("🍎", loot.quantity == 1 ? String(localized: "Du hittade 1 mat till ditt djur!")
+                : String(localized: "Du hittade \(loot.quantity) mat till ditt djur!"))
         }
     }
 

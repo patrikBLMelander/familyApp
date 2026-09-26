@@ -60,7 +60,7 @@ struct AddFamilyMemberSheet: View {
                     if createdWithoutChores {
                         Button("Klar") { dismiss() }
                     } else {
-                        Button(isSaving ? "Lägger till…" : "Lägg till") {
+                        Button(isSaving ? String(localized: "Lägger till…") : String(localized: "Lägg till")) {
                             Task { await save() }
                         }
                         .disabled(!canSave)
@@ -95,16 +95,15 @@ struct AddFamilyMemberSheet: View {
 
     private var roleChips: some View {
         HStack(spacing: 10) {
-            chip(label: "Barn", selected: !isParent) { isParent = false }
-            chip(label: "Förälder", selected: isParent) { isParent = true }
+            chip(label: String(localized: "Barn"), selected: !isParent) { isParent = false }
+            chip(label: String(localized: "Förälder"), selected: isParent) { isParent = true }
             Spacer(minLength: 0)
         }
     }
 
     private var parentNote: some View {
         Text(
-            "Föräldern kopplar sin telefon med QR-koden på deras kort. E-post och lösenord "
-            + "kan sättas i webbappen om de behöver logga in på en ny enhet."
+            String(localized: "Föräldern kopplar sin telefon med QR-koden på deras kort. E-post och lösenord kan sättas i webbappen om de behöver logga in på en ny enhet.")
         )
         .font(.footnote)
         .foregroundStyle(palette.inkSoft)
@@ -172,7 +171,7 @@ struct AddFamilyMemberSheet: View {
                 } catch {
                     choreProblem = ApiErrors.message(
                         error,
-                        fallback: "Barnet är tillagt, men de färdiga sysslorna kunde inte skapas."
+                        fallback: String(localized: "Barnet är tillagt, men de färdiga sysslorna kunde inte skapas.")
                     )
                 }
             }
@@ -191,7 +190,7 @@ struct AddFamilyMemberSheet: View {
         } catch {
             await MainActor.run {
                 isSaving = false
-                errorMessage = ApiErrors.message(error, fallback: "Kunde inte lägga till")
+                errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte lägga till"))
             }
         }
     }
@@ -226,10 +225,10 @@ enum AgeRange: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .fourToSix: "4–6 år"
-        case .sevenToNine: "7–9 år"
-        case .tenToTwelve: "10–12 år"
-        case .thirteenPlus: "13+ år"
+        case .fourToSix: String(localized: "4–6 år")
+        case .sevenToNine: String(localized: "7–9 år")
+        case .tenToTwelve: String(localized: "10–12 år")
+        case .thirteenPlus: String(localized: "13+ år")
         }
     }
 
@@ -237,35 +236,35 @@ enum AgeRange: String, CaseIterable, Identifiable {
         switch self {
         case .fourToSix:
             [
-                "Klä på mig",
-                "Borsta tänder",
-                "Plocka leksaker i mitt rum",
-                "Ställ undan min disk",
-                "Hänga upp jacka & skor",
+                String(localized: "Klä på mig"),
+                String(localized: "Borsta tänder"),
+                String(localized: "Plocka leksaker i mitt rum"),
+                String(localized: "Ställ undan min disk"),
+                String(localized: "Hänga upp jacka & skor"),
             ]
         case .sevenToNine:
             [
-                "Packa skolväskan",
-                "Bädda sängen",
-                "Plocka undan efter mellis",
-                "Kvällsrutin utan tjat",
-                "Hjälpa till med disk/dukning",
+                String(localized: "Packa skolväskan"),
+                String(localized: "Bädda sängen"),
+                String(localized: "Plocka undan efter mellis"),
+                String(localized: "Kvällsrutin utan tjat"),
+                String(localized: "Hjälpa till med disk/dukning"),
             ]
         case .tenToTwelve:
             [
-                "Läx-/pluggstund",
-                "Skräpkoll hemma",
-                "Ordning på rummet",
-                "Hjälpa till med maten",
-                "Skärm efter uppgifter",
+                String(localized: "Läx-/pluggstund"),
+                String(localized: "Skräpkoll hemma"),
+                String(localized: "Ordning på rummet"),
+                String(localized: "Hjälpa till med maten"),
+                String(localized: "Skärm efter uppgifter"),
             ]
         case .thirteenPlus:
             [
-                "Hålla rummet i ordning",
-                "Ta hand om min tvätt",
-                "Min dagliga hemmasyssla",
-                "Kolla dagens schema & tider",
-                "Kolla ekonomi & sparmål",
+                String(localized: "Hålla rummet i ordning"),
+                String(localized: "Ta hand om min tvätt"),
+                String(localized: "Min dagliga hemmasyssla"),
+                String(localized: "Kolla dagens schema & tider"),
+                String(localized: "Kolla ekonomi & sparmål"),
             ]
         }
     }

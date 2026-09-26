@@ -12,7 +12,8 @@ public record FamilyMember(
         UUID familyId,
         Boolean petEnabled,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        String language // sv/en/de/es, or null = follow the device
 ) {
     public enum Role {
         CHILD,      // Yngre barn - enkel vy, bara tasks

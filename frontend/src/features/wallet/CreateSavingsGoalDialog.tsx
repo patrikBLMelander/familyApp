@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { currencySymbol } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type CreateSavingsGoalDialogProps = {
   onClose: () => void;
@@ -8,6 +10,7 @@ type CreateSavingsGoalDialogProps = {
 const EMOJI_OPTIONS = ["🚲", "🎴", "🎮", "📱", "👕", "👟", "🎁", "🏆", "🎨", "📚", "🎵", "🎬"];
 
 export function CreateSavingsGoalDialog({ onClose, onSuccess }: CreateSavingsGoalDialogProps) {
+  const currency = useFamilyCurrency();
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState<string>("");
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
@@ -138,7 +141,7 @@ export function CreateSavingsGoalDialog({ onClose, onSuccess }: CreateSavingsGoa
         {/* Target Amount */}
         <div style={{ marginBottom: "20px" }}>
           <label htmlFor="goal-amount" style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>
-            Målbelopp (kr) *
+            Målbelopp ({currencySymbol(currency)}) *
           </label>
           <input
             id="goal-amount"

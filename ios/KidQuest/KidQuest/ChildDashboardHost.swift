@@ -244,7 +244,7 @@ struct ChildDashboardHost: View {
     private var actingAsParentBar: some View {
         let palette = SeasonTheme.current(dark: false)
         return HStack(spacing: 4) {
-            Text("Du ser \(possessive(activeChild.name)) vy")
+            Text("Du ser \(kqPossessive(activeChild.name)) vy")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(palette.inkFaint)
                 .lineLimit(1)
@@ -288,15 +288,9 @@ struct ChildDashboardHost: View {
         .padding(.bottom, 2)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Du tittar på \(activeChild.name)s vy som förälder")
+        .accessibilityLabel("Du tittar på \(kqPossessive(activeChild.name)) vy som förälder")
     }
 
-    /// Svensk genitiv: "Signes vy", men "Lukas vy" — namn som slutar på s, x eller z
-    /// får inget extra s.
-    private func possessive(_ name: String) -> String {
-        guard let last = name.lowercased().last else { return name }
-        return "sxz".contains(last) ? name : name + "s"
-    }
 
     private func noticeBanner(_ text: String) -> some View {
         Text(text)
@@ -428,7 +422,7 @@ struct ChildDashboardHost: View {
             }
         } catch {
             guard target == activeChild.id else { return }
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda barnvyn.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ladda barnvyn."))
             isLoading = false
         }
     }
@@ -467,7 +461,7 @@ struct ChildDashboardHost: View {
         )
         farewell = MonthFarewellData(
             entry: senaste,
-            petName: PetNameUtilsIOS.getPetNameSwedish(senaste.petType),
+            petName: PetNameUtilsIOS.getPetName(senaste.petType),
             tasks: tasks
         )
     }
@@ -494,7 +488,7 @@ struct ChildDashboardHost: View {
             await load(showSpinner: false)
         } catch {
             snapshot = current
-            notice = ApiErrors.message(error, fallback: "Kunde inte ge mat just nu.")
+            notice = ApiErrors.message(error, fallback: String(localized: "Kunde inte ge mat just nu."))
         }
         isFeeding = false
     }
@@ -532,7 +526,7 @@ struct ChildDashboardHost: View {
             snapshot = current
             // Unticking is refused once the food has been eaten, and the server says so
             // in Swedish. That sentence is worth more than "något gick fel".
-            notice = ApiErrors.message(error, fallback: "Kunde inte ändra sysslan.")
+            notice = ApiErrors.message(error, fallback: String(localized: "Kunde inte ändra sysslan."))
         }
     }
 }
@@ -552,7 +546,7 @@ extension ChildDashboardHost {
     ///   is the default: hungry pet, food waiting, chores half done.
     static func fixture(fed: Bool = false) -> ChildDashboardHost {
         ChildDashboardHost(
-            child: ChildRef(id: "child-1", name: "Signe"),
+            child: ChildRef(id: "child-1", name: "Ella"),
             // Samma siffror som barnets egen skärm, ur ChildFixtures. Poängen är att de
             // två går att jämföra sida vid sida i harnesket: skiljer de sig ska det bero
             // på layouten, inte på att de fick olika data.
@@ -566,8 +560,8 @@ extension ChildDashboardHost {
                 todaysChores: ChildFixtures.tasks(allDone: false)
             ),
             preloadedSiblings: [
-                ChildRef(id: "child-1", name: "Signe"),
-                ChildRef(id: "child-2", name: "Walter"),
+                ChildRef(id: "child-1", name: "Ella"),
+                ChildRef(id: "child-2", name: "Leo"),
             ],
             preloadedHistory: ChildFixtures.history
         )

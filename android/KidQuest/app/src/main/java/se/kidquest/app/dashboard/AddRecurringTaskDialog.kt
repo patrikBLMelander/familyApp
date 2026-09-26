@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -59,34 +61,34 @@ fun AddRecurringTaskDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (editing) "Redigera uppgift – $childName" else "Återkommande uppgift – $childName") },
+        title = { Text(if (editing) tr(R.string.recurring_edit_title, childName) else tr(R.string.recurring_new_title, childName)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it; error = null },
-                    label = { Text("Titel") },
+                    label = { Text(tr(R.string.common_title)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = "Veckodagar", style = MaterialTheme.typography.bodyMedium)
+                Text(text = tr(R.string.recurring_weekdays), style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    WeekdayChip("M", 1, selectedWeekdays.contains(1), ::toggleWeekday)
-                    WeekdayChip("T", 2, selectedWeekdays.contains(2), ::toggleWeekday)
-                    WeekdayChip("O", 3, selectedWeekdays.contains(3), ::toggleWeekday)
-                    WeekdayChip("T", 4, selectedWeekdays.contains(4), ::toggleWeekday)
-                    WeekdayChip("F", 5, selectedWeekdays.contains(5), ::toggleWeekday)
-                    WeekdayChip("L", 6, selectedWeekdays.contains(6), ::toggleWeekday)
-                    WeekdayChip("S", 7, selectedWeekdays.contains(7), ::toggleWeekday)
+                    WeekdayChip(tr(R.string.weekday_initial_1), 1, selectedWeekdays.contains(1), ::toggleWeekday)
+                    WeekdayChip(tr(R.string.weekday_initial_2), 2, selectedWeekdays.contains(2), ::toggleWeekday)
+                    WeekdayChip(tr(R.string.weekday_initial_3), 3, selectedWeekdays.contains(3), ::toggleWeekday)
+                    WeekdayChip(tr(R.string.weekday_initial_4), 4, selectedWeekdays.contains(4), ::toggleWeekday)
+                    WeekdayChip(tr(R.string.weekday_initial_5), 5, selectedWeekdays.contains(5), ::toggleWeekday)
+                    WeekdayChip(tr(R.string.weekday_initial_6), 6, selectedWeekdays.contains(6), ::toggleWeekday)
+                    WeekdayChip(tr(R.string.weekday_initial_7), 7, selectedWeekdays.contains(7), ::toggleWeekday)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = "XP (mat)", style = MaterialTheme.typography.bodyMedium)
+                Text(text = tr(R.string.common_xp_food), style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     XpChip(label = "x1", selected = xpMultiplier == 1) { xpMultiplier = 1 }
@@ -103,11 +105,11 @@ fun AddRecurringTaskDialog(
             TextButton(
                 onClick = {
                     if (title.isBlank()) {
-                        error = "Titel krävs"
+                        error = tr(R.string.common_title_required)
                         return@TextButton
                     }
                     if (selectedWeekdays.isEmpty()) {
-                        error = "Välj minst en veckodag"
+                        error = tr(R.string.recurring_pick_weekday)
                         return@TextButton
                     }
                     loading = true
@@ -133,7 +135,7 @@ fun AddRecurringTaskDialog(
                         } catch (e: Exception) {
                             error = ApiErrors.message(
                                 e,
-                                if (editing) "Kunde inte spara ändringarna" else "Kunde inte skapa uppgifterna",
+                                if (editing) tr(R.string.recurring_save_failed) else tr(R.string.recurring_create_failed),
                             )
                         } finally {
                             loading = false
@@ -143,16 +145,16 @@ fun AddRecurringTaskDialog(
             ) {
                 Text(
                     when {
-                        loading -> "Sparar…"
-                        editing -> "Spara ändringar"
-                        else -> "Skapa uppgifter"
+                        loading -> tr(R.string.common_saving)
+                        editing -> tr(R.string.recurring_save_changes)
+                        else -> tr(R.string.recurring_create)
                     },
                 )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Avbryt")
+                Text(tr(R.string.common_cancel))
             }
         },
     )

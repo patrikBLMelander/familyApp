@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,13 +48,13 @@ fun AddFamilyMemberDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lägg till familjemedlem") },
+        title = { Text(tr(R.string.member_add_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it; error = null },
-                    label = { Text("Namn") },
+                    label = { Text(tr(R.string.member_name)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -64,20 +66,18 @@ fun AddFamilyMemberDialog(
                     FilterChip(
                         selected = !isParent,
                         onClick = { isParent = false },
-                        label = { Text("Barn") },
+                        label = { Text(tr(R.string.member_child)) },
                     )
                     FilterChip(
                         selected = isParent,
                         onClick = { isParent = true },
-                        label = { Text("Förälder") },
+                        label = { Text(tr(R.string.member_parent)) },
                     )
                 }
                 if (isParent) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Föräldern kopplar sin telefon med QR-koden på deras kort. " +
-                            "E-post och lösenord kan sättas i webbappen om de behöver " +
-                            "logga in på en ny enhet.",
+                        text = tr(R.string.member_parent_hint),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -85,7 +85,7 @@ fun AddFamilyMemberDialog(
                 if (!isParent) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Ålder (valfritt – för färdiga uppgifter)",
+                    text = tr(R.string.member_age),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -94,14 +94,14 @@ fun AddFamilyMemberDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     AgeRangeChip(
-                        label = "4–6 år",
+                        label = tr(R.string.member_age_4_6),
                         selected = selectedAgeRange == AgeRange.FOUR_TO_SIX,
                         onClick = {
                             selectedAgeRange = if (selectedAgeRange == AgeRange.FOUR_TO_SIX) null else AgeRange.FOUR_TO_SIX
                         },
                     )
                     AgeRangeChip(
-                        label = "7–9 år",
+                        label = tr(R.string.member_age_7_9),
                         selected = selectedAgeRange == AgeRange.SEVEN_TO_NINE,
                         onClick = {
                             selectedAgeRange = if (selectedAgeRange == AgeRange.SEVEN_TO_NINE) null else AgeRange.SEVEN_TO_NINE
@@ -114,14 +114,14 @@ fun AddFamilyMemberDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     AgeRangeChip(
-                        label = "10–12 år",
+                        label = tr(R.string.member_age_10_12),
                         selected = selectedAgeRange == AgeRange.TEN_TO_TWELVE,
                         onClick = {
                             selectedAgeRange = if (selectedAgeRange == AgeRange.TEN_TO_TWELVE) null else AgeRange.TEN_TO_TWELVE
                         },
                     )
                     AgeRangeChip(
-                        label = "13+ år",
+                        label = tr(R.string.member_age_13),
                         selected = selectedAgeRange == AgeRange.THIRTEEN_PLUS,
                         onClick = {
                             selectedAgeRange = if (selectedAgeRange == AgeRange.THIRTEEN_PLUS) null else AgeRange.THIRTEEN_PLUS
@@ -163,19 +163,19 @@ fun AddFamilyMemberDialog(
                             }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte lägga till")
+                            error = ApiErrors.message(e, tr(R.string.member_add_failed))
                         } finally {
                             loading = false
                         }
                     }
                 },
             ) {
-                Text(if (loading) "Lägger till…" else "Lägg till")
+                Text(if (loading) tr(R.string.member_adding) else tr(R.string.member_add))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Avbryt")
+                Text(tr(R.string.common_cancel))
             }
         },
     )
@@ -198,31 +198,31 @@ private suspend fun createDefaultTasksForAgeRange(
         AgeRange.FOUR_TO_SIX -> {
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Klä på mig",
+                title = tr(R.string.preset_chore_1),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Borsta tänder",
+                title = tr(R.string.preset_chore_2),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Plocka leksaker i mitt rum",
+                title = tr(R.string.preset_chore_3),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Ställ undan min disk",
+                title = tr(R.string.preset_chore_4),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Hänga upp jacka & skor",
+                title = tr(R.string.preset_chore_5),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
@@ -230,31 +230,31 @@ private suspend fun createDefaultTasksForAgeRange(
         AgeRange.SEVEN_TO_NINE -> {
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Packa skolväskan",
+                title = tr(R.string.preset_chore_6),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Bädda sängen",
+                title = tr(R.string.preset_chore_7),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Plocka undan efter mellis",
+                title = tr(R.string.preset_chore_8),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Kvällsrutin utan tjat",
+                title = tr(R.string.preset_chore_9),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Hjälpa till med disk/dukning",
+                title = tr(R.string.preset_chore_10),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
@@ -262,31 +262,31 @@ private suspend fun createDefaultTasksForAgeRange(
         AgeRange.TEN_TO_TWELVE -> {
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Läx-/pluggstund",
+                title = tr(R.string.preset_chore_11),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Skräpkoll hemma",
+                title = tr(R.string.preset_chore_12),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Ordning på rummet",
+                title = tr(R.string.preset_chore_13),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Hjälpa till med maten",
+                title = tr(R.string.preset_chore_14),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Skärm efter uppgifter",
+                title = tr(R.string.preset_chore_15),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
@@ -294,31 +294,31 @@ private suspend fun createDefaultTasksForAgeRange(
         AgeRange.THIRTEEN_PLUS -> {
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Hålla rummet i ordning",
+                title = tr(R.string.preset_chore_16),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Ta hand om min tvätt",
+                title = tr(R.string.preset_chore_17),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Min dagliga hemmasyssla",
+                title = tr(R.string.preset_chore_18),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Kolla dagens schema & tider",
+                title = tr(R.string.preset_chore_19),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )
             DailyChoreRepository.createChore(
                 memberId = memberId,
-                title = "Kolla ekonomi & sparmål",
+                title = tr(R.string.preset_chore_20),
                 weekdays = allWeekdays,
                 xpPoints = 1,
             )

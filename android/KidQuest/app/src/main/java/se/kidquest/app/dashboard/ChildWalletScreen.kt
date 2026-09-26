@@ -1,5 +1,9 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.L10n
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -133,6 +137,7 @@ fun ChildWalletScreen(
                 }
 
                 balance = balanceDeferred.await()
+                Money.remember(balance?.currency)
                 transactions = txDeferred.await()
                 savingsGoals = goalsDeferred.await()
                 val petResp = petDeferred.await()
@@ -140,7 +145,7 @@ fun ChildWalletScreen(
                 recurring = recurringDeferred.await()
             }
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte ladda")
+            error = ApiErrors.message(e, tr(R.string.wallet_load_failed))
         } finally {
             loading = false
         }
@@ -168,7 +173,7 @@ fun ChildWalletScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(text = error!!, color = skin.onBackground)
-                Button(onClick = { refreshKey++ }) { Text("Försök igen") }
+                Button(onClick = { refreshKey++ }) { Text(tr(R.string.common_retry)) }
             }
         } else {
             Column(
@@ -189,13 +194,13 @@ fun ChildWalletScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Tillbaka",
+                            contentDescription = tr(R.string.common_back),
                             tint = skin.onBackground,
                         )
                     }
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
-                        text = "$childName – Plånbok",
+                        text = tr(R.string.wallet_title, childName),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = skin.onBackground,
@@ -206,12 +211,12 @@ fun ChildWalletScreen(
                 balance?.let { b ->
                     WalletCard(skin) {
                         Text(
-                            text = "Saldo",
+                            text = tr(R.string.wallet_balance),
                             fontSize = 14.sp,
                             color = skin.inkSoft,
                         )
                         Text(
-                            text = "${b.balance} kr",
+                            text = Money.format(b.balance, b.currency ?: Money.familyCurrency),
                             fontSize = 34.sp,
                             fontWeight = FontWeight.Bold,
                             color = skin.ink,
@@ -227,7 +232,7 @@ fun ChildWalletScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38A169)),
                             ) {
-                                Text("Ge pengar")
+                                Text(tr(R.string.wallet_give_money))
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                         }
@@ -239,7 +244,7 @@ fun ChildWalletScreen(
                                 containerColor = if (canGiveMoney) Color(0xFF2B6CB0) else Color(0xFF38A169),
                             ),
                         ) {
-                            Text("Registrera köp")
+                            Text(tr(R.string.wallet_record_purchase))
                         }
                     }
                 }
@@ -264,7 +269,7 @@ fun ChildWalletScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Sparmål",
+                                text = tr(R.string.wallet_goals),
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = textPrimary,
@@ -274,18 +279,18 @@ fun ChildWalletScreen(
                                 val hasActiveGoals = savingsGoals.any { it.isActive && !it.isCompleted }
                                 if (hasBalance && hasActiveGoals) {
                                     TextButton(onClick = { showAllocateDialog = true }) {
-                                        Text("Fördela", fontSize = 13.sp)
+                                        Text(tr(R.string.wallet_allocate), fontSize = 13.sp)
                                     }
                                 }
                                 TextButton(onClick = { showCreateGoalDialog = true }) {
-                                    Text("+ Nytt mål", fontSize = 13.sp)
+                                    Text(tr(R.string.wallet_new_goal), fontSize = 13.sp)
                                 }
                             }
                         }
 
                         if (savingsGoals.isEmpty()) {
                             Text(
-                                text = "Inga sparmål ännu.",
+                                text = tr(R.string.wallet_no_goals),
                                 fontSize = 14.sp,
                                 color = textSecondary,
                             )
@@ -303,7 +308,7 @@ fun ChildWalletScreen(
                 // Transactions
                 WalletCard(skin) {
                     Text(
-                        text = "Senaste transaktioner",
+                        text = tr(R.string.wallet_recent),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = skin.ink,
@@ -311,7 +316,7 @@ fun ChildWalletScreen(
                     Spacer(modifier = Modifier.height(4.dp))
                     if (transactions.isEmpty()) {
                         Text(
-                            text = "Inga transaktioner ännu.",
+                            text = tr(R.string.wallet_no_transactions),
                             fontSize = 14.sp,
                             color = skin.inkSoft,
                         )
@@ -413,7 +418,7 @@ private fun RecurringAllowanceRow(
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Automatisk utbetalning",
+                text = tr(R.string.wallet_auto),
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = skin.ink,
@@ -436,16 +441,16 @@ private fun RecurringAllowanceRow(
 }
 
 private fun describeSchedule(schedule: RecurringAllowanceResponse?): String {
-    if (schedule == null || !schedule.active) return "Inte inställt"
+    if (schedule == null || !schedule.active) return tr(R.string.wallet_auto_not_set)
     val kind = when (schedule.kind) {
-        "WEEKLY" -> "Veckopeng"
-        "MONTHLY" -> "Månadspeng"
-        else -> "Efter nivå"
+        "WEEKLY" -> tr(R.string.wallet_auto_weekly)
+        "MONTHLY" -> tr(R.string.wallet_auto_monthly)
+        else -> tr(R.string.wallet_auto_level)
     }
     val due = schedule.nextDueOn
         ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-        ?.format(DateTimeFormatter.ofPattern("d MMMM", Locale("sv", "SE")))
-    return if (due == null) kind else "$kind · nästa $due"
+        ?.format(DateTimeFormatter.ofPattern(tr(R.string.date_pattern_day_month), L10n.locale()))
+    return if (due == null) kind else tr(R.string.wallet_auto_next, kind, due)
 }
 
 // MARK: - Savings goal row
@@ -474,9 +479,9 @@ private fun SavingsGoalRow(goal: SavingsGoalResponse, dimmed: Boolean) {
                 )
                 Text(
                     text = when {
-                        goal.isPurchased -> "🛒 Köpt"
-                        goal.isCompleted -> "✓ Klar"
-                        else -> "${goal.currentAmount} / ${goal.targetAmount} kr"
+                        goal.isPurchased -> tr(R.string.wallet_goal_bought)
+                        goal.isCompleted -> tr(R.string.wallet_goal_done)
+                        else -> tr(R.string.wallet_goal_progress, goal.currentAmount.toString(), Money.format(goal.targetAmount))
                     },
                     fontSize = 12.sp,
                     color = if (goal.isCompleted && !goal.isPurchased) Color(0xFF22C55E)
@@ -495,7 +500,7 @@ private fun SavingsGoalRow(goal: SavingsGoalResponse, dimmed: Boolean) {
                     strokeCap = StrokeCap.Round,
                 )
                 Text(
-                    text = "${goal.remainingAmount} kr kvar",
+                    text = tr(R.string.wallet_goal_left, Money.format(goal.remainingAmount)),
                     fontSize = 11.sp,
                     color = textSecondary.copy(alpha = alpha),
                 )
@@ -550,7 +555,7 @@ private fun TransactionRow(skin: WalletSkin, t: WalletTransactionResponse) {
             )
         }
         Text(
-            text = "$sign${t.amount} kr",
+            text = sign + Money.format(t.amount),
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             color = accentColor,
@@ -562,20 +567,20 @@ private fun TransactionRow(skin: WalletSkin, t: WalletTransactionResponse) {
 // MARK: - Helpers
 
 private fun localizedType(type: String) = when (type) {
-    "ALLOWANCE" -> "Fickpengar"
-    "EXPENSE" -> "Köp"
-    "SAVINGS_ALLOCATION" -> "Sparmål"
+    "ALLOWANCE" -> tr(R.string.tx_allowance)
+    "EXPENSE" -> tr(R.string.tx_expense)
+    "SAVINGS_ALLOCATION" -> tr(R.string.tx_savings)
     // TransactionType har fem värden, inte tre. De två sista syntes aldrig här, så
     // MANUAL_ADJUSTMENT stod med versaler och understreck i barnets egen plånbok.
-    "MANUAL_ADJUSTMENT" -> "Justering"
-    "DELETION" -> "Borttagen"
+    "MANUAL_ADJUSTMENT" -> tr(R.string.tx_adjustment)
+    "DELETION" -> tr(R.string.tx_deleted)
     // Aldrig råvärdet. En okänd typ ska se tråkig ut, inte teknisk.
-    else -> "Övrigt"
+    else -> tr(R.string.tx_other)
 }
 
 private fun formatDate(iso: String): String = try {
     val dt = OffsetDateTime.parse(iso)
-    dt.format(DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale("sv", "SE")))
+    dt.format(DateTimeFormatter.ofPattern(tr(R.string.date_pattern_day_month_time), L10n.locale()))
 } catch (_: Exception) {
     iso
 }

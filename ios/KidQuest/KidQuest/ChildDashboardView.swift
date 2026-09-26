@@ -115,7 +115,7 @@ struct ChildDashboardView: View {
             if harnessFarewell, farewell == nil, let senaste = ChildFixtures.history.first {
                 farewell = MonthFarewellData(
                     entry: senaste,
-                    petName: PetNameUtilsIOS.getPetNameSwedish(senaste.petType),
+                    petName: PetNameUtilsIOS.getPetName(senaste.petType),
                     tasks: 47
                 )
             }
@@ -263,7 +263,7 @@ struct ChildDashboardView: View {
             }
         } catch {
             await MainActor.run {
-                self.error = "Kunde inte ladda barnvyn."
+                self.error = String(localized: "Kunde inte ladda barnvyn.")
                 isLoading = false
             }
         }
@@ -303,7 +303,7 @@ struct ChildDashboardView: View {
         )
         farewell = MonthFarewellData(
             entry: senaste,
-            petName: PetNameUtilsIOS.getPetNameSwedish(senaste.petType),
+            petName: PetNameUtilsIOS.getPetName(senaste.petType),
             tasks: tasks
         )
     }
@@ -333,7 +333,7 @@ struct ChildDashboardView: View {
 #if DEBUG
 extension ChildDashboardView {
 
-    /// Signe en vardag i september. Uppgifterna är hämtade ur den färdiga listan för
+    /// Ella en vardag i september. Uppgifterna är hämtade ur den färdiga listan för
     /// 7-9 år, alltså samma ord ett riktigt barn möts av.
     ///
     /// @param allDone renderar läget efter sista bocken, som är det enda sättet att se
@@ -355,7 +355,7 @@ extension ChildDashboardView {
         let history = ChildFixtures.history
         return ChildDashboardView(
             childId: "child-1",
-            childName: "Signe",
+            childName: "Ella",
             preloaded: ChildDashboardRepository.Summary(
                 pet: (noPet || farewell) ? nil : ChildFixtures.pet,
                 xp: nearLevelUp ? ChildFixtures.xpNearLevelUp : ChildFixtures.xp,
@@ -431,11 +431,11 @@ enum ChildFixtures {
             )
         }
         return [
-            chore("1", "Bädda sängen", 1, true),
-            chore("2", "Packa skolväskan", 1, true),
-            chore("3", "Plocka undan efter mellis", 1, allDone),
-            chore("4", "Kvällsrutin utan tjat", 2, allDone),
-            chore("5", "Hjälpa till med disken", 1, allDone),
+            chore("1", String(localized: "Bädda sängen"), 1, true),
+            chore("2", String(localized: "Packa skolväskan"), 1, true),
+            chore("3", String(localized: "Plocka undan efter mellis"), 1, allDone),
+            chore("4", String(localized: "Kvällsrutin utan tjat"), 2, allDone),
+            chore("5", String(localized: "Hjälpa till med disken"), 1, allDone),
         ]
     }
 }

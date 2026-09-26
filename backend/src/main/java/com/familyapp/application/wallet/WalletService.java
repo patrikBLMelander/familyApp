@@ -1,6 +1,10 @@
 package com.familyapp.application.wallet;
 
+import com.familyapp.domain.family.FamilyCurrencies;
+import com.familyapp.domain.i18n.LocalizedException;
+import com.familyapp.domain.i18n.Money;
 import com.familyapp.domain.wallet.*;
+import com.familyapp.infrastructure.familymember.FamilyMemberEntity;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
 import com.familyapp.infrastructure.wallet.*;
 import org.springframework.stereotype.Service;
@@ -82,24 +86,24 @@ public class WalletService {
             List<SavingsGoalAllocation> savingsGoalAllocations
     ) {
         if (amount <= 0) {
-            throw new IllegalArgumentException("Beloppet måste vara större än 0");
+            throw new LocalizedException("amount.positive");
         }
 
         var child = memberRepository.findById(childMemberId)
-                .orElseThrow(() -> new IllegalArgumentException("Barn hittades inte: " + childMemberId));
+                .orElseThrow(() -> new LocalizedException("member.notFound"));
 
         // Only CHILD and ASSISTANT can receive allowance
         String role = child.getRole();
         if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
-            throw new IllegalArgumentException("Endast barn kan få månads-/veckopeng");
+            throw new LocalizedException("wallet.allowance.childOnly");
         }
 
         var giver = memberRepository.findById(givenByMemberId)
-                .orElseThrow(() -> new IllegalArgumentException("Givare hittades inte: " + givenByMemberId));
+                .orElseThrow(() -> new LocalizedException("member.notFound"));
 
         // Only PARENT can give allowance
         if (!"PARENT".equals(giver.getRole())) {
-            throw new IllegalArgumentException("Endast vuxna kan ge månads-/veckopeng");
+            throw new LocalizedException("wallet.allowance.adultOnly");
         }
 
         // Validate savings goal allocations BEFORE making any changes
@@ -108,29 +112,26 @@ public class WalletService {
                     .mapToInt(SavingsGoalAllocation::amount)
                     .sum();
             if (totalAllocated > amount) {
-                throw new IllegalArgumentException("Summan av sparmål kan inte överstiga beloppet");
+                throw new LocalizedException("wallet.goals.sumExceedsAmount");
             }
             
             // Validate all goals exist and belong to child (transaction atomicity)
             for (var allocation : savingsGoalAllocations) {
                 if (allocation.amount() <= 0) {
-                    throw new IllegalArgumentException("Allokering måste vara större än 0");
+                    throw new LocalizedException("wallet.allocation.positive");
                 }
                 
                 var goalEntity = savingsGoalRepository.findById(allocation.savingsGoalId())
-                        .orElseThrow(() -> new IllegalArgumentException("Sparmål hittades inte: " + allocation.savingsGoalId()));
+                        .orElseThrow(() -> new LocalizedException("wallet.goal.notFound"));
                 
                 if (!goalEntity.getMember().getId().equals(childMemberId)) {
-                    throw new IllegalArgumentException("Sparmål tillhör inte detta barn");
+                    throw new LocalizedException("wallet.goal.notOwned");
                 }
                 
                 // Validate over-allocation
                 int remaining = goalEntity.getTargetAmount() - goalEntity.getCurrentAmount();
                 if (allocation.amount() > remaining) {
-                    throw new IllegalArgumentException(
-                            String.format("Mål '%s' skulle överskridas. Max %d kr kvar.",
-                                    goalEntity.getName(), remaining)
-                    );
+                    throw new LocalizedException("wallet.goal.wouldOverflow", goalEntity.getName(), money(remaining, goalEntity.getMember()));
                 }
             }
         }
@@ -158,7 +159,7 @@ public class WalletService {
         if (savingsGoalAllocations != null && !savingsGoalAllocations.isEmpty()) {
             for (var allocation : savingsGoalAllocations) {
                 var goalEntity = savingsGoalRepository.findById(allocation.savingsGoalId())
-                        .orElseThrow(() -> new IllegalArgumentException("Sparmål hittades inte: " + allocation.savingsGoalId()));
+                        .orElseThrow(() -> new LocalizedException("wallet.goal.notFound"));
 
                 // Create junction table entry
                 var junctionId = new WalletTransactionSavingsGoalId();
@@ -210,32 +211,30 @@ public class WalletService {
             List<SavingsGoalAllocation> savingsGoalAllocations
     ) {
         if (amount <= 0) {
-            throw new IllegalArgumentException("Beloppet måste vara större än 0");
+            throw new LocalizedException("amount.positive");
         }
 
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Familjemedlem hittades inte: " + memberId));
+                .orElseThrow(() -> new LocalizedException("member.notFound"));
 
         // Only CHILD and ASSISTANT can record expenses
         String role = member.getRole();
         if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
-            throw new IllegalArgumentException("Endast barn kan registrera köp");
+            throw new LocalizedException("wallet.expense.childOnly");
         }
 
         var wallet = getOrCreateWallet(memberId);
 
         // Validate balance
         if (wallet.getBalance() < amount) {
-            throw new IllegalArgumentException(
-                    String.format("Du har inte tillräckligt med pengar. Du har %d kr.", wallet.getBalance())
-            );
+            throw new LocalizedException("wallet.insufficientFunds", money(wallet.getBalance(), member));
         }
 
         // Validate category
         ExpenseCategoryEntity category = null;
         if (categoryId != null) {
             category = categoryRepository.findById(categoryId)
-                    .orElseThrow(() -> new IllegalArgumentException("Kategori hittades inte: " + categoryId));
+                    .orElseThrow(() -> new LocalizedException("wallet.category.notFound"));
         }
 
         // Validate savings goal allocations
@@ -245,26 +244,20 @@ public class WalletService {
                     .sum();
 
             if (totalAllocated > amount) {
-                throw new IllegalArgumentException(
-                        "Summan av sparmål kan inte överstiga köpbeloppet"
-                );
+                throw new LocalizedException("wallet.goals.sumExceedsPurchase");
             }
 
             // Validate each goal
             for (var allocation : savingsGoalAllocations) {
                 var goalEntity = savingsGoalRepository.findById(allocation.savingsGoalId())
-                        .orElseThrow(() -> new IllegalArgumentException("Sparmål hittades inte: " + allocation.savingsGoalId()));
+                        .orElseThrow(() -> new LocalizedException("wallet.goal.notFound"));
 
                 if (!goalEntity.getMember().getId().equals(memberId)) {
-                    throw new IllegalArgumentException("Sparmål tillhör inte detta barn");
+                    throw new LocalizedException("wallet.goal.notOwned");
                 }
 
                 if (goalEntity.getCurrentAmount() + allocation.amount() > goalEntity.getTargetAmount()) {
-                    throw new IllegalArgumentException(
-                            String.format("Mål '%s' skulle överskridas. Max %d kr kvar.",
-                                    goalEntity.getName(),
-                                    goalEntity.getTargetAmount() - goalEntity.getCurrentAmount())
-                    );
+                    throw new LocalizedException("wallet.goal.wouldOverflow", goalEntity.getName(), money(goalEntity.getTargetAmount() - goalEntity.getCurrentAmount(), goalEntity.getMember()));
                 }
             }
         }
@@ -291,7 +284,7 @@ public class WalletService {
         if (savingsGoalAllocations != null && !savingsGoalAllocations.isEmpty()) {
             for (var allocation : savingsGoalAllocations) {
                 var goalEntity = savingsGoalRepository.findById(allocation.savingsGoalId())
-                        .orElseThrow(() -> new IllegalArgumentException("Sparmål hittades inte: " + allocation.savingsGoalId()));
+                        .orElseThrow(() -> new LocalizedException("wallet.goal.notFound"));
 
                 // Create junction table entry
                 var junctionId = new WalletTransactionSavingsGoalId();
@@ -327,7 +320,7 @@ public class WalletService {
     @Transactional(rollbackFor = Exception.class)
     public void allocateToSavingsGoals(UUID memberId, List<SavingsGoalAllocation> allocations) {
         if (allocations == null || allocations.isEmpty()) {
-            throw new IllegalArgumentException("Minst ett sparmål måste anges");
+            throw new LocalizedException("wallet.allocation.atLeastOneGoal");
         }
 
         var wallet = getOrCreateWallet(memberId);
@@ -336,35 +329,33 @@ public class WalletService {
                 .sum();
 
         if (totalAmount <= 0) {
-            throw new IllegalArgumentException("Totalt belopp måste vara större än 0");
+            throw new LocalizedException("wallet.allocation.totalPositive");
         }
 
         if (wallet.getBalance() < totalAmount) {
-            throw new IllegalArgumentException("Otillräckligt saldo. Du har " + wallet.getBalance() + " kr men försöker fördela " + totalAmount + " kr");
+            throw new LocalizedException("wallet.allocation.insufficientBalance",
+                    money(wallet.getBalance(), wallet.getMember()), money(totalAmount, wallet.getMember()));
         }
 
         // Validate all goals BEFORE making any changes (transaction atomicity)
         var validatedGoals = new java.util.ArrayList<SavingsGoalEntity>();
         for (var allocation : allocations) {
             if (allocation.amount() <= 0) {
-                throw new IllegalArgumentException("Allokering måste vara större än 0");
+                throw new LocalizedException("wallet.allocation.positive");
             }
             
             var goalEntity = savingsGoalRepository.findById(allocation.savingsGoalId())
-                    .orElseThrow(() -> new IllegalArgumentException("Sparmål hittades inte: " + allocation.savingsGoalId()));
+                    .orElseThrow(() -> new LocalizedException("wallet.goal.notFound"));
 
             // CRITICAL FIX #2: Validate ownership
             if (!goalEntity.getMember().getId().equals(memberId)) {
-                throw new IllegalArgumentException("Sparmål tillhör inte detta barn");
+                throw new LocalizedException("wallet.goal.notOwned");
             }
 
             // CRITICAL FIX #3: Validate over-allocation
             int remaining = goalEntity.getTargetAmount() - goalEntity.getCurrentAmount();
             if (allocation.amount() > remaining) {
-                throw new IllegalArgumentException(
-                        String.format("Mål '%s' skulle överskridas. Max %d kr kvar.",
-                                goalEntity.getName(), remaining)
-                );
+                throw new LocalizedException("wallet.goal.wouldOverflow", goalEntity.getName(), money(remaining, goalEntity.getMember()));
             }
 
             validatedGoals.add(goalEntity);
@@ -456,7 +447,7 @@ public class WalletService {
     @Transactional(readOnly = true)
     public UUID getNotificationOwnerId(UUID notificationId) {
         return notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new IllegalArgumentException("Notifikation hittades inte: " + notificationId))
+                .orElseThrow(() -> new LocalizedException("wallet.notification.notFound"))
                 .getMember().getId();
     }
 
@@ -465,7 +456,7 @@ public class WalletService {
      */
     public void markNotificationAsShown(UUID notificationId) {
         var notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new IllegalArgumentException("Notifikation hittades inte: " + notificationId));
+                .orElseThrow(() -> new LocalizedException("wallet.notification.notFound"));
         
         notification.setShownAt(OffsetDateTime.now());
         notificationRepository.save(notification);
@@ -509,16 +500,16 @@ public class WalletService {
      */
     public SavingsGoal createSavingsGoal(UUID memberId, String name, int targetAmount, String emoji) {
         if (targetAmount <= 0) {
-            throw new IllegalArgumentException("Målbeloppet måste vara större än 0");
+            throw new LocalizedException("wallet.goal.targetPositive");
         }
 
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Familjemedlem hittades inte: " + memberId));
+                .orElseThrow(() -> new LocalizedException("member.notFound"));
 
         // Only CHILD and ASSISTANT can create savings goals
         String role = member.getRole();
         if (!"CHILD".equals(role) && !"ASSISTANT".equals(role)) {
-            throw new IllegalArgumentException("Endast barn kan skapa sparmål");
+            throw new LocalizedException("wallet.goal.childOnly");
         }
 
         var goal = new SavingsGoalEntity();
@@ -543,15 +534,15 @@ public class WalletService {
      */
     public void deleteSavingsGoal(UUID memberId, UUID goalId) {
         var goal = savingsGoalRepository.findById(goalId)
-                .orElseThrow(() -> new IllegalArgumentException("Sparmål hittades inte: " + goalId));
+                .orElseThrow(() -> new LocalizedException("wallet.goal.notFound"));
 
         if (!goal.getMember().getId().equals(memberId)) {
-            throw new IllegalArgumentException("Sparmål tillhör inte detta barn");
+            throw new LocalizedException("wallet.goal.notOwned");
         }
 
         // Only allow deletion if goal is not completed or if completed but not purchased
         if (goal.isCompleted() && goal.isPurchased()) {
-            throw new IllegalArgumentException("Kan inte ta bort ett köpt mål");
+            throw new LocalizedException("wallet.goal.cannotDeletePurchased");
         }
 
         savingsGoalRepository.delete(goal);
@@ -562,14 +553,14 @@ public class WalletService {
      */
     public void markGoalAsPurchased(UUID memberId, UUID goalId, UUID purchaseTransactionId) {
         var goal = savingsGoalRepository.findById(goalId)
-                .orElseThrow(() -> new IllegalArgumentException("Sparmål hittades inte: " + goalId));
+                .orElseThrow(() -> new LocalizedException("wallet.goal.notFound"));
 
         if (!goal.getMember().getId().equals(memberId)) {
-            throw new IllegalArgumentException("Sparmål tillhör inte detta barn");
+            throw new LocalizedException("wallet.goal.notOwned");
         }
 
         if (!goal.isCompleted()) {
-            throw new IllegalArgumentException("Målet är inte avklarat ännu");
+            throw new LocalizedException("wallet.goal.notCompleted");
         }
 
         goal.setPurchased(true);
@@ -653,5 +644,20 @@ public class WalletService {
      * DTO for savings goal allocation
      */
     public record SavingsGoalAllocation(UUID savingsGoalId, int amount) {
+    }
+
+    /** The currency the member's family keeps wallets in (SEK for older families). */
+    @Transactional(readOnly = true)
+    public String currencyOf(UUID memberId) {
+        var family = memberRepository.findById(memberId)
+                .map(FamilyMemberEntity::getFamily)
+                .orElse(null);
+        return FamilyCurrencies.orDefault(family != null ? family.getCurrency() : null);
+    }
+
+    /** An amount in the currency of the member's family, for a message argument. */
+    private static Money money(int amount, FamilyMemberEntity member) {
+        var family = member != null ? member.getFamily() : null;
+        return new Money(amount, FamilyCurrencies.orDefault(family != null ? family.getCurrency() : null));
     }
 }

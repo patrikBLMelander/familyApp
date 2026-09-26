@@ -54,7 +54,7 @@ struct ChildTasksView: View {
     var body: some View {
         VStack(spacing: 0) {
             SeasonHeaderBar(
-                title: "\(childName) – Sysslor",
+                title: String(localized: "\(childName) – Sysslor"),
                 subtitle: todayLabel,
                 onBack: onBack
             ) {
@@ -145,10 +145,7 @@ struct ChildTasksView: View {
 
     /// "söndag 30/8" — the same line Android puts under the title.
     private var todayLabel: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateFormat = "EEEE d/M"
-        return formatter.string(from: Date())
+        return kqFormatDate(Date(), template: "EEEEdM")
     }
 
     // MARK: - Tabs
@@ -164,7 +161,7 @@ struct ChildTasksView: View {
     private func todayList(_ chores: DailyChoreRepositoryIOS.Chores) -> some View {
         List {
             if chores.today.isEmpty {
-                emptyCard("Inga sysslor idag.")
+                emptyCard(String(localized: "Inga sysslor idag."))
                     .plainChoreRow()
             } else {
                 ForEach(chores.today, id: \.chore.id) { item in
@@ -307,7 +304,7 @@ struct ChildTasksView: View {
         do {
             chores = try await DailyChoreRepositoryIOS.fetchChores(memberId: childId)
         } catch {
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda uppgifter.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ladda uppgifter."))
         }
         isLoading = false
     }
@@ -333,8 +330,8 @@ struct ChildTasksView: View {
                 // The one refusal the backend makes here that is not a fault: the XP
                 // this chore earned has already been fed to the pet, so it cannot be
                 // taken back. Worth saying plainly rather than as an HTTP failure.
-                ? "Kan inte avmarkera – all mat har redan matats till husdjuret."
-                : ApiErrors.message(error, fallback: "Kunde inte markera sysslan.")
+                ? String(localized: "Kan inte avmarkera – all mat har redan matats till husdjuret.")
+                : ApiErrors.message(error, fallback: String(localized: "Kunde inte markera sysslan."))
         }
     }
 
@@ -367,7 +364,7 @@ struct ChildTasksView: View {
             notice = nil
         } catch {
             chores = previous
-            notice = ApiErrors.message(error, fallback: "Kunde inte ta bort sysslan.")
+            notice = ApiErrors.message(error, fallback: String(localized: "Kunde inte ta bort sysslan."))
         }
     }
 }
@@ -490,7 +487,7 @@ private struct WeekDayCard: View {
     private var countLabel: String {
         if scheduled.isEmpty { return "–" }
         if isToday { return "\(doneCount)/\(scheduled.count)" }
-        return scheduled.count == 1 ? "1 syssla" : "\(scheduled.count) sysslor"
+        return scheduled.count == 1 ? String(localized: "1 syssla") : String(localized: "\(scheduled.count) sysslor")
     }
 
     var body: some View {
@@ -591,23 +588,25 @@ struct ChoreWeekday: Identifiable, Hashable {
     let index: Int
     /// The code the daily-chore endpoints use.
     let code: String
-    let short: String
-    let initial: String
-    /// Swedish, and every one of them takes -ar in the plural: "söndagar".
-    let full: String
+    /// "Mån" / "Mon" / "Mo" / "Lun", in the app's language.
+    var short: String { KQWeekdays.short[index] }
+    var initial: String { KQWeekdays.initial[index] }
+    var full: String { KQWeekdays.full[index] }
+    /// The recurring form: "måndagar", "Mondays", "montags", "los lunes".
+    var recurring: String { KQWeekdays.recurring(index) }
 
     var id: Int { index }
 
-    static let monday = ChoreWeekday(index: 0, code: "MON", short: "Mån", initial: "M", full: "måndag")
+    static let monday = ChoreWeekday(index: 0, code: "MON")
 
     static let all: [ChoreWeekday] = [
         monday,
-        ChoreWeekday(index: 1, code: "TUE", short: "Tis", initial: "T", full: "tisdag"),
-        ChoreWeekday(index: 2, code: "WED", short: "Ons", initial: "O", full: "onsdag"),
-        ChoreWeekday(index: 3, code: "THU", short: "Tor", initial: "T", full: "torsdag"),
-        ChoreWeekday(index: 4, code: "FRI", short: "Fre", initial: "F", full: "fredag"),
-        ChoreWeekday(index: 5, code: "SAT", short: "Lör", initial: "L", full: "lördag"),
-        ChoreWeekday(index: 6, code: "SUN", short: "Sön", initial: "S", full: "söndag"),
+        ChoreWeekday(index: 1, code: "TUE"),
+        ChoreWeekday(index: 2, code: "WED"),
+        ChoreWeekday(index: 3, code: "THU"),
+        ChoreWeekday(index: 4, code: "FRI"),
+        ChoreWeekday(index: 5, code: "SAT"),
+        ChoreWeekday(index: 6, code: "SUN"),
     ]
 
     static func of(_ date: Date, calendar: Calendar = .current) -> ChoreWeekday {
@@ -679,7 +678,7 @@ private struct AddChoreSheet: View {
                     // a chore on today's weekday, and it comes back next week unless it
                     // is deleted. Android says nothing about this at all.
                     if !repeatsWeekly {
-                        Text("Läggs på \(ChoreWeekday.of(Date()).full)ar och kommer tillbaka nästa vecka om den inte tas bort.")
+                        Text("Läggs på \(ChoreWeekday.of(Date()).recurring) och kommer tillbaka nästa vecka om den inte tas bort.")
                     }
                 }
 
@@ -751,14 +750,14 @@ private struct AddChoreSheet: View {
 
     private func save() async {
         guard !trimmedTitle.isEmpty else {
-            errorMessage = "Fyll i en titel."
+            errorMessage = String(localized: "Fyll i en titel.")
             return
         }
 
         let days: [String]
         if repeatsWeekly {
             guard !weekdays.isEmpty else {
-                errorMessage = "Välj minst en veckodag."
+                errorMessage = String(localized: "Välj minst en veckodag.")
                 return
             }
             days = ChoreWeekday.all.filter { weekdays.contains($0.index) }.map(\.code)
@@ -778,7 +777,7 @@ private struct AddChoreSheet: View {
             onCreated()
             dismiss()
         } catch {
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte skapa sysslan.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte skapa sysslan."))
         }
         isSaving = false
     }
@@ -803,14 +802,14 @@ extension ChildTasksView {
         let todayCode = ChoreWeekday.of(Date()).code
 
         let all: [DailyChoreResponseDTO] = [
-            fixtureChore(id: "c1", title: "Borsta håret", weekdays: everyDay, xp: 1),
-            fixtureChore(id: "c2", title: "Klippa naglar", weekdays: ["SUN"], xp: 1),
-            fixtureChore(id: "c3", title: "Städa lekrum", weekdays: everyDay, xp: 1),
-            fixtureChore(id: "c4", title: "Borsta tänderna morgon och kväll", weekdays: everyDay, xp: 2),
-            fixtureChore(id: "c5", title: "Häng upp ytterkläder", weekdays: everyDay, xp: 1),
-            fixtureChore(id: "c6", title: "Städa sovrum", weekdays: ["MON", "WED", "FRI"], xp: 1),
-            fixtureChore(id: "c7", title: "Inga leksaker på övervåningen", weekdays: everyDay, xp: 1),
-            fixtureChore(id: "c8", title: "Ställ undan disk", weekdays: everyDay, xp: 1),
+            fixtureChore(id: "c1", title: String(localized: "Borsta håret"), weekdays: everyDay, xp: 1),
+            fixtureChore(id: "c2", title: String(localized: "Klippa naglar"), weekdays: ["SUN"], xp: 1),
+            fixtureChore(id: "c3", title: String(localized: "Städa lekrum"), weekdays: everyDay, xp: 1),
+            fixtureChore(id: "c4", title: String(localized: "Borsta tänderna morgon och kväll"), weekdays: everyDay, xp: 2),
+            fixtureChore(id: "c5", title: String(localized: "Häng upp ytterkläder"), weekdays: everyDay, xp: 1),
+            fixtureChore(id: "c6", title: String(localized: "Städa sovrum"), weekdays: ["MON", "WED", "FRI"], xp: 1),
+            fixtureChore(id: "c7", title: String(localized: "Inga leksaker på övervåningen"), weekdays: everyDay, xp: 1),
+            fixtureChore(id: "c8", title: String(localized: "Ställ undan disk"), weekdays: everyDay, xp: 1),
         ]
 
         // Today's list is derived from the schedule rather than written out twice, so
@@ -826,7 +825,7 @@ extension ChildTasksView {
             }
 
         return ChildTasksView(
-            childName: "Signe",
+            childName: "Ella",
             childId: "child-1",
             preloaded: DailyChoreRepositoryIOS.Chores(today: today, all: all),
             initialTab: tab

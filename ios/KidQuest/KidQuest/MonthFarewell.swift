@@ -196,19 +196,19 @@ struct MonthFarewell: View {
     }
 
     private var summary: String {
-        var s = "Nivå \(data.entry.finalGrowthStage) av 5"
-        if let tasks = data.tasks, tasks > 0 { s += " · \(tasks) sysslor avbockade" }
+        var s = String(localized: "Nivå \(data.entry.finalGrowthStage) av 5")
+        if let tasks = data.tasks, tasks > 0 { s += String(localized: " · \(tasks) sysslor avbockade") }
         return s
     }
 
     /// "Fullvuxen" när det nådde toppen, annars något mildare.
     private func stageWord(_ stage: Int) -> String {
         switch stage {
-        case 5: return "fullvuxen"
-        case 4: return "nästan fullvuxen"
-        case 3: return "stor"
-        case 2: return "lite större"
-        default: return "en liten unge"
+        case 5: return String(localized: "fullvuxen")
+        case 4: return String(localized: "nästan fullvuxen")
+        case 3: return String(localized: "stor")
+        case 2: return String(localized: "lite större")
+        default: return String(localized: "en liten unge")
         }
     }
 }

@@ -2,6 +2,8 @@ package com.familyapp.application.familymember;
 
 import com.familyapp.application.cache.CacheService;
 import com.familyapp.domain.familymember.FamilyMember;
+import com.familyapp.domain.i18n.AppLanguages;
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.domain.familymember.FamilyMember.Role;
 import com.familyapp.infrastructure.familymember.FamilyMemberEntity;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
@@ -575,6 +577,30 @@ public class FamilyMemberService {
         return result;
     }
 
+    /**
+     * Sets a member's app language (sv/en/de/es), or clears it with null to follow the
+     * device. The member themselves or a parent in the same family may change it.
+     */
+    @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
+    public FamilyMember updateLanguage(UUID memberId, String language, UUID requesterId) {
+        if (language != null && !AppLanguages.isSupported(language)) {
+            throw new LocalizedException("member.language.unsupported", language);
+        }
+        var entity = requireAdministrableBy(memberId, requesterId);
+        entity.setLanguage(language);
+        entity.setUpdatedAt(OffsetDateTime.now());
+
+        var result = toDomain(repository.save(entity));
+
+        // The device-token cache feeds the locale of every request, so it must not go stale.
+        String deviceToken = entity.getDeviceToken();
+        if (deviceToken != null && !deviceToken.isEmpty()) {
+            cacheService.evictDeviceToken(deviceToken);
+        }
+        cacheService.evictFamilyMembers(entity.getFamily() != null ? entity.getFamily().getId() : null);
+        return result;
+    }
+
     private FamilyMember toDomain(FamilyMemberEntity entity) {
         Role role = Role.CHILD;
         if (entity.getRole() != null) {
@@ -595,7 +621,8 @@ public class FamilyMemberService {
                 entity.getFamily() != null ? entity.getFamily().getId() : null,
                 entity.getPetEnabled() != null ? entity.getPetEnabled() : false,
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                entity.getLanguage()
         );
     }
 }

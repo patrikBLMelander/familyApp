@@ -12,6 +12,8 @@ import {
 } from "../../shared/api/wallet";
 import { GiveAllowanceDialog } from "./GiveAllowanceDialog";
 import { RecordChildExpenseDialog } from "./RecordChildExpenseDialog";
+import { formatMoney } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type ViewKey = "dashboard" | "todos" | "schedule" | "chores" | "familymembers";
 
@@ -29,6 +31,7 @@ type ChildWalletData = {
 };
 
 export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
+  const currency = useFamilyCurrency();
   const [children, setChildren] = useState<FamilyMemberResponse[]>([]);
   const [childrenWalletData, setChildrenWalletData] = useState<Map<string, ChildWalletData>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -193,7 +196,7 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
                     >
                       <p style={{ margin: "0 0 4px", fontSize: "0.875rem", color: "#6b6b6b" }}>Saldo</p>
                       <p style={{ margin: 0, fontSize: "2rem", fontWeight: 700, color: "#2d5a2d" }}>
-                        {walletData.balance?.balance || 0} kr
+                        {formatMoney(walletData.balance?.balance || 0, currency)}
                       </p>
                     </div>
 
@@ -227,7 +230,7 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
                                 {goal.name}
                               </span>
                               <span>
-                                {goal.currentAmount} / {goal.targetAmount} kr
+                                {goal.currentAmount} / {formatMoney(goal.targetAmount, currency)}
                               </span>
                             </div>
                             <div
@@ -251,7 +254,7 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
                               />
                             </div>
                             <p style={{ margin: 0, fontSize: "0.75rem", color: "#6b6b6b", textAlign: "right" }}>
-                              {goal.remainingAmount} kr kvar
+                              {formatMoney(goal.remainingAmount, currency)} kvar
                             </p>
                           </div>
                         ))}
@@ -288,7 +291,7 @@ export function ChildrenWalletView({ onNavigate }: ChildrenWalletViewProps) {
                               >
                                 <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                                   <span style={{ color: isExpense ? "#c53030" : "#48bb78", fontWeight: 600 }}>
-                                    {isExpense ? "-" : "+"}{Math.abs(transaction.amount)} kr
+                                    {isExpense ? "-" : "+"}{formatMoney(Math.abs(transaction.amount), currency)}
                                   </span>
                                   {(transaction.description || transaction.categoryId) && (
                                     <span style={{ color: "#6b6b6b", fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

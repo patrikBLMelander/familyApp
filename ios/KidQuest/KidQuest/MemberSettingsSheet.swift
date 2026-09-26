@@ -51,8 +51,8 @@ struct MemberSettingsSheet: View {
 
     private var passwordProblem: String? {
         if password.isEmpty && passwordRepeat.isEmpty { return nil }
-        if password.count < 6 { return "Lösenordet måste vara minst 6 tecken." }
-        if password != passwordRepeat { return "Lösenorden är inte lika." }
+        if password.count < 6 { return String(localized: "Lösenordet måste vara minst 6 tecken.") }
+        if password != passwordRepeat { return String(localized: "Lösenorden är inte lika.") }
         return nil
     }
 
@@ -99,8 +99,7 @@ struct MemberSettingsSheet: View {
                 }
             } message: {
                 Text(
-                    "Sysslor, avklaranden, XP, djur och plånbokshistorik försvinner med "
-                    + "medlemmen. Det går inte att ångra."
+                    String(localized: "Sysslor, avklaranden, XP, djur och plånbokshistorik försvinner med medlemmen. Det går inte att ångra.")
                 )
             }
         }
@@ -110,10 +109,10 @@ struct MemberSettingsSheet: View {
     // MARK: - Namn
 
     private var nameSection: some View {
-        section(title: "Namn") {
-            field(placeholder: "Namn", text: $name)
+        section(title: String(localized: "Namn")) {
+            field(placeholder: String(localized: "Namn"), text: $name)
             actionButton(
-                title: isSavingName ? "Sparar…" : "Spara namn",
+                title: isSavingName ? String(localized: "Sparar…") : String(localized: "Spara namn"),
                 enabled: canSaveName
             ) {
                 Task { await saveName() }
@@ -124,19 +123,18 @@ struct MemberSettingsSheet: View {
     // MARK: - Lösenord
 
     private var passwordSection: some View {
-        section(title: "Lösenord") {
+        section(title: String(localized: "Lösenord")) {
             Text(
                 target.isCurrentUser
-                ? "Sätt ett nytt lösenord för ditt eget konto."
-                : "En förälder kan sätta lösenordet åt en annan vuxen. Det är vägen "
-                  + "tillbaka in för den som låst ute sig."
+                ? String(localized: "Sätt ett nytt lösenord för ditt eget konto.")
+                : String(localized: "En förälder kan sätta lösenordet åt en annan vuxen. Det är vägen tillbaka in för den som låst ute sig.")
             )
             .font(.footnote)
             .foregroundStyle(palette.inkSoft)
             .fixedSize(horizontal: false, vertical: true)
 
-            secureField(placeholder: "Nytt lösenord", text: $password)
-            secureField(placeholder: "Upprepa lösenord", text: $passwordRepeat)
+            secureField(placeholder: String(localized: "Nytt lösenord"), text: $password)
+            secureField(placeholder: String(localized: "Upprepa lösenord"), text: $passwordRepeat)
 
             if let passwordProblem {
                 Text(passwordProblem)
@@ -145,7 +143,7 @@ struct MemberSettingsSheet: View {
             }
 
             actionButton(
-                title: isSavingPassword ? "Sparar…" : "Spara lösenord",
+                title: isSavingPassword ? String(localized: "Sparar…") : String(localized: "Spara lösenord"),
                 enabled: canSavePassword
             ) {
                 Task { await savePassword() }
@@ -156,7 +154,7 @@ struct MemberSettingsSheet: View {
     // MARK: - Radera
 
     private var deleteSection: some View {
-        section(title: "Ta bort") {
+        section(title: String(localized: "Ta bort")) {
             Text("Tar bort \(target.name) och allt som hör till dem. Går inte att ångra.")
                 .font(.footnote)
                 .foregroundStyle(palette.inkSoft)
@@ -165,7 +163,7 @@ struct MemberSettingsSheet: View {
             Button {
                 showDeleteConfirm = true
             } label: {
-                Text(isDeleting ? "Tar bort…" : "Ta bort \(target.name)")
+                Text(isDeleting ? String(localized: "Tar bort…") : String(localized: "Ta bort \(target.name)"))
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
@@ -275,13 +273,13 @@ struct MemberSettingsSheet: View {
             _ = try await FamilyRepository.updateMemberName(memberId: target.id, name: trimmedName)
             await MainActor.run {
                 isSavingName = false
-                statusMessage = "Namnet är sparat."
+                statusMessage = String(localized: "Namnet är sparat.")
                 onChanged()
             }
         } catch {
             await MainActor.run {
                 isSavingName = false
-                errorMessage = ApiErrors.message(error, fallback: "Kunde inte spara namnet")
+                errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte spara namnet"))
             }
         }
     }
@@ -296,12 +294,12 @@ struct MemberSettingsSheet: View {
                 isSavingPassword = false
                 password = ""
                 passwordRepeat = ""
-                statusMessage = "Lösenordet är satt."
+                statusMessage = String(localized: "Lösenordet är satt.")
             }
         } catch {
             await MainActor.run {
                 isSavingPassword = false
-                errorMessage = ApiErrors.message(error, fallback: "Kunde inte sätta lösenordet")
+                errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte sätta lösenordet"))
             }
         }
     }
@@ -319,7 +317,7 @@ struct MemberSettingsSheet: View {
         } catch {
             await MainActor.run {
                 isDeleting = false
-                errorMessage = ApiErrors.message(error, fallback: "Kunde inte ta bort")
+                errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ta bort"))
             }
         }
     }

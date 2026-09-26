@@ -1,5 +1,6 @@
 package com.familyapp.application.allowance;
 
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.application.subscription.SubscriptionService;
 import com.familyapp.application.wallet.WalletService;
 import com.familyapp.domain.allowance.AllowanceKind;
@@ -338,13 +339,13 @@ public class RecurringAllowanceService {
 
     private void validate(AllowanceSpec spec) {
         if (spec == null || spec.kind() == null) {
-            throw new IllegalArgumentException("Välj vecko- eller månadspeng");
+            throw new LocalizedException("allowance.chooseKind");
         }
         switch (spec.kind()) {
             case WEEKLY -> {
                 requireAmount(spec.amount());
                 if (spec.weekday() == null || spec.weekday() < 1 || spec.weekday() > 7) {
-                    throw new IllegalArgumentException("Välj en veckodag");
+                    throw new LocalizedException("allowance.chooseWeekday");
                 }
             }
             case MONTHLY -> {
@@ -356,7 +357,7 @@ public class RecurringAllowanceService {
                 for (int level = 1; level <= 5; level++) {
                     var value = spec.levelAmount(level);
                     if (value == null || value < 0) {
-                        throw new IllegalArgumentException("Fyll i ett belopp för nivå " + level);
+                        throw new LocalizedException("allowance.levelAmountRequired", level);
                     }
                 }
             }
@@ -365,13 +366,13 @@ public class RecurringAllowanceService {
 
     private void requireAmount(Integer amount) {
         if (amount == null || amount <= 0) {
-            throw new IllegalArgumentException("Beloppet måste vara större än 0");
+            throw new LocalizedException("amount.positive");
         }
     }
 
     private void requireDayOfMonth(Integer day) {
         if (day == null || day < 1 || day > MAX_DAY_OF_MONTH) {
-            throw new IllegalArgumentException("Välj en dag mellan 1 och " + MAX_DAY_OF_MONTH);
+            throw new LocalizedException("allowance.chooseDay", MAX_DAY_OF_MONTH);
         }
     }
 
@@ -389,7 +390,7 @@ public class RecurringAllowanceService {
         var requester = memberRepository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
         if (!Role.PARENT.name().equals(requester.getRole())) {
-            throw new IllegalArgumentException("Endast en förälder kan ändra automatisk utbetalning");
+            throw new LocalizedException("allowance.parentOnly");
         }
         var child = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Family member not found"));

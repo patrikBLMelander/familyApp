@@ -146,6 +146,17 @@ public class FamilyMemberController {
         return toResponse(member);
     }
 
+    /** App language for a member; null follows the device. Self or a parent. */
+    @PatchMapping("/{memberId}/language")
+    public FamilyMemberResponse updateLanguage(
+            @PathVariable("memberId") UUID memberId,
+            @RequestBody UpdateLanguageRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        var member = service.updateLanguage(memberId, request.language(), requireRequesterId(deviceToken));
+        return toResponse(member);
+    }
+
     @DeleteMapping("/{memberId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteMember(
@@ -185,7 +196,8 @@ public class FamilyMemberController {
                 member.role(),
                 member.familyId() != null ? member.familyId().toString() : null,
                 member.deviceToken() != null && !member.deviceToken().isEmpty(),
-                member.petEnabled() != null ? member.petEnabled() : false
+                member.petEnabled() != null ? member.petEnabled() : false,
+                member.language()
         );
     }
 
@@ -213,6 +225,11 @@ public class FamilyMemberController {
     ) {
     }
 
+    public record UpdateLanguageRequest(
+            String language  // null = follow the device
+    ) {
+    }
+
     public record UpdatePetSettingsRequest(
             Boolean enabled
     ) {
@@ -231,7 +248,9 @@ public class FamilyMemberController {
              * fact: web renders it as "Kopplad" / "Ej kopplad".
              */
             boolean hasPairedDevice,
-            Boolean petEnabled
+            Boolean petEnabled,
+            /** sv/en/de/es, or null to follow the device. */
+            String language
     ) {
     }
 

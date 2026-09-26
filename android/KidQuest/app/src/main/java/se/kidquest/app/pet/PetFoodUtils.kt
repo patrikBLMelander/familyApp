@@ -1,5 +1,8 @@
 package se.kidquest.app.pet
 
+import se.kidquest.app.R
+import se.kidquest.app.i18n.tr
+
 object PetFoodUtils {
     private val foodEmojiMap = mapOf(
         "dragon" to "🔥",
@@ -29,35 +32,35 @@ object PetFoodUtils {
     )
 
     private val foodNameMap = mapOf(
-        "dragon" to "eldbär",
-        "cat" to "fisk",
-        "dog" to "ben",
-        "bird" to "frön",
-        "rabbit" to "morötter",
-        "bear" to "honung",
-        "snake" to "ägg",
-        "panda" to "bambu",
-        "slot" to "löv",
-        "hydra" to "vattendroppar",
-        "unicorn" to "stjärnfrukter",
-        "kapybara" to "gräs",
-        "shark" to "fiskar",
-        "lion" to "kött",
-        "scorpion" to "syrsor",
-        "octopus" to "räkor",
-        "snowleopard" to "kött",
-        "tiger" to "kött",
-        "polarbear" to "fisk",
-        "giraffe" to "blad",
-        "elephant" to "jordnötter",
-        "crocodile" to "kött",
-        "panther" to "kött",
-        "wolf" to "kött",
+        "dragon" to R.string.pet_food_dragon,
+        "cat" to R.string.pet_food_cat,
+        "dog" to R.string.pet_food_dog,
+        "bird" to R.string.pet_food_bird,
+        "rabbit" to R.string.pet_food_rabbit,
+        "bear" to R.string.pet_food_bear,
+        "snake" to R.string.pet_food_snake,
+        "panda" to R.string.pet_food_panda,
+        "slot" to R.string.pet_food_slot,
+        "hydra" to R.string.pet_food_hydra,
+        "unicorn" to R.string.pet_food_unicorn,
+        "kapybara" to R.string.pet_food_kapybara,
+        "shark" to R.string.pet_food_shark,
+        "lion" to R.string.pet_food_lion,
+        "scorpion" to R.string.pet_food_scorpion,
+        "octopus" to R.string.pet_food_octopus,
+        "snowleopard" to R.string.pet_food_snowleopard,
+        "tiger" to R.string.pet_food_tiger,
+        "polarbear" to R.string.pet_food_polarbear,
+        "giraffe" to R.string.pet_food_giraffe,
+        "elephant" to R.string.pet_food_elephant,
+        "crocodile" to R.string.pet_food_crocodile,
+        "panther" to R.string.pet_food_panther,
+        "wolf" to R.string.pet_food_wolf,
     )
 
     fun getPetFoodEmoji(petType: String?): String =
         foodEmojiMap[petType?.lowercase()] ?: "🍎"
 
     fun getPetFoodName(petType: String?): String =
-        foodNameMap[petType?.lowercase()] ?: "mat"
+        foodNameMap[petType?.lowercase()]?.let { tr(it) } ?: tr(R.string.pet_food_default)
 }

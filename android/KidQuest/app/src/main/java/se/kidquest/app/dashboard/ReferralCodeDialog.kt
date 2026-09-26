@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,13 +50,13 @@ fun ReferralCodeDialog(season: SeasonPalette, onDismiss: () -> Unit) {
                     done = true
                 } else {
                     error = if (response.code() == 400) {
-                        "Koden känns inte igen. Dubbelkolla stavningen."
+                        tr(R.string.referral_unknown)
                     } else {
-                        "Något gick fel (${response.code()})."
+                        tr(R.string.error_with_code, response.code())
                     }
                 }
             } catch (e: Exception) {
-                error = ApiErrors.message(e, "Kunde inte registrera koden")
+                error = ApiErrors.message(e, tr(R.string.referral_failed))
             } finally {
                 submitting = false
             }
@@ -63,13 +65,13 @@ fun ReferralCodeDialog(season: SeasonPalette, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!submitting) onDismiss() },
-        title = { Text(if (done) "Tack!" else "Värvningskod") },
+        title = { Text(if (done) tr(R.string.referral_thanks) else tr(R.string.referral_title)) },
         text = {
             if (done) {
-                Text("Din kod är registrerad. Tack för att du stödjer den som tipsade dig om KidQuest!")
+                Text(tr(R.string.referral_done_body))
             } else {
                 Column {
-                    Text("Har du fått en kod av någon? Skriv in den så kopplas ditt konto till dem.")
+                    Text(tr(R.string.referral_prompt))
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = code,
@@ -78,7 +80,7 @@ fun ReferralCodeDialog(season: SeasonPalette, onDismiss: () -> Unit) {
                             error = null
                         },
                         singleLine = true,
-                        label = { Text("Kod") },
+                        label = { Text(tr(R.string.referral_code_label)) },
                         isError = error != null,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -91,16 +93,16 @@ fun ReferralCodeDialog(season: SeasonPalette, onDismiss: () -> Unit) {
         },
         confirmButton = {
             if (done) {
-                TextButton(onClick = onDismiss) { Text("Klar") }
+                TextButton(onClick = onDismiss) { Text(tr(R.string.common_done)) }
             } else {
                 TextButton(enabled = code.isNotBlank() && !submitting, onClick = { submit() }) {
-                    Text(if (submitting) "…" else "Registrera")
+                    Text(if (submitting) "…" else tr(R.string.referral_register))
                 }
             }
         },
         dismissButton = {
             if (!done) {
-                TextButton(onClick = onDismiss, enabled = !submitting) { Text("Avbryt") }
+                TextButton(onClick = onDismiss, enabled = !submitting) { Text(tr(R.string.common_cancel)) }
             }
         },
     )

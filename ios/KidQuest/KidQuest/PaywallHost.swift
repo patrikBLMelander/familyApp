@@ -43,7 +43,7 @@ struct PaywallHost: View {
         let deadline = Task {
             try? await Task.sleep(for: .seconds(10))
             if price == nil, !Task.isCancelled {
-                message = "Butiken svarar inte just nu. Försök igen om en stund."
+                message = String(localized: "Butiken svarar inte just nu. Försök igen om en stund.")
             }
         }
         defer { deadline.cancel() }
@@ -52,7 +52,7 @@ struct PaywallHost: View {
             let offerings = try await Purchases.shared.offerings()
             guard let package = offerings.current?.monthly
                 ?? offerings.current?.availablePackages.first else {
-                message = "Ingen prenumeration är upplagd i butiken än."
+                message = String(localized: "Ingen prenumeration är upplagd i butiken än.")
                 return
             }
             monthly = package
@@ -61,7 +61,7 @@ struct PaywallHost: View {
             price = package.storeProduct.localizedPriceString
             message = nil
         } catch {
-            message = "Kunde inte hämta priset. Försök igen om en stund."
+            message = String(localized: "Kunde inte hämta priset. Försök igen om en stund.")
         }
     }
 
@@ -82,7 +82,7 @@ struct PaywallHost: View {
             onDismiss()
         } catch {
             isWorking = false
-            message = "Köpet gick inte igenom. Ingenting har debiterats."
+            message = String(localized: "Köpet gick inte igenom. Ingenting har debiterats.")
         }
     }
 
@@ -95,11 +95,11 @@ struct PaywallHost: View {
             if info.entitlements[BillingConfig.entitlementPro]?.isActive == true {
                 onDismiss()
             } else {
-                message = "Vi hittade inget köp att återställa på det här Apple-kontot."
+                message = String(localized: "Vi hittade inget köp att återställa på det här Apple-kontot.")
             }
         } catch {
             isWorking = false
-            message = "Kunde inte återställa köp just nu."
+            message = String(localized: "Kunde inte återställa köp just nu.")
         }
     }
 }

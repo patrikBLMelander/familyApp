@@ -1,5 +1,7 @@
 package com.familyapp.api.wallet;
 
+import com.familyapp.application.i18n.MessageTranslator;
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.application.subscription.EntitlementGuard;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.wallet.WalletService;
@@ -19,15 +21,18 @@ public class WalletController {
     private final WalletService walletService;
     private final FamilyMemberService memberService;
     private final EntitlementGuard entitlementGuard;
+    private final MessageTranslator translator;
 
     public WalletController(
             WalletService walletService,
             FamilyMemberService memberService,
-            EntitlementGuard entitlementGuard
+            EntitlementGuard entitlementGuard,
+            MessageTranslator translator
     ) {
         this.walletService = walletService;
         this.memberService = memberService;
         this.entitlementGuard = entitlementGuard;
+        this.translator = translator;
     }
 
     /**
@@ -39,7 +44,8 @@ public class WalletController {
     ) {
         UUID memberId = getMemberIdFromToken(deviceToken);
         var wallet = walletService.getBalance(memberId);
-        return new WalletBalanceResponse(wallet.id(), wallet.memberId(), wallet.balance());
+        return new WalletBalanceResponse(wallet.id(), wallet.memberId(), wallet.balance(),
+                walletService.currencyOf(memberId));
     }
 
     /**
@@ -81,7 +87,7 @@ public class WalletController {
         UUID memberId = getMemberIdFromToken(deviceToken);
         
         if (request.savingsGoalAllocations() == null || request.savingsGoalAllocations().isEmpty()) {
-            throw new IllegalArgumentException("Minst ett sparmål måste anges");
+            throw new LocalizedException("wallet.allocation.atLeastOneGoal");
         }
         
         List<WalletService.SavingsGoalAllocation> allocations = request.savingsGoalAllocations().stream()
@@ -252,7 +258,8 @@ public class WalletController {
         requireWalletAccess(deviceToken, memberId);
 
         var wallet = walletService.getBalance(memberId);
-        return new WalletBalanceResponse(wallet.id(), wallet.memberId(), wallet.balance());
+        return new WalletBalanceResponse(wallet.id(), wallet.memberId(), wallet.balance(),
+                walletService.currencyOf(memberId));
     }
 
     /**
@@ -359,7 +366,7 @@ public class WalletController {
                 transaction.walletId(),
                 transaction.amount(),
                 transaction.transactionType().name(),
-                transaction.description(),
+                translator.systemText(transaction.description()),
                 transaction.categoryId(),
                 transaction.createdByMemberId(),
                 transaction.isDeleted(),
@@ -375,7 +382,7 @@ public class WalletController {
                 notification.memberId(),
                 notification.transactionId(),
                 notification.amount(),
-                notification.description(),
+                translator.systemText(notification.description()),
                 notification.shownAt(),
                 notification.createdAt()
         );
@@ -384,7 +391,7 @@ public class WalletController {
     private ExpenseCategoryResponse toResponse(ExpenseCategory category) {
         return new ExpenseCategoryResponse(
                 category.id(),
-                category.name(),
+                category.isDefault() ? translator.systemText(category.name()) : category.name(),
                 category.emoji(),
                 category.isDefault()
         );
@@ -412,7 +419,7 @@ public class WalletController {
     }
 
     // Request/Response DTOs
-    public record WalletBalanceResponse(UUID id, UUID memberId, int balance) {
+    public record WalletBalanceResponse(UUID id, UUID memberId, int balance, String currency) {
     }
 
     public record AddAllowanceRequest(

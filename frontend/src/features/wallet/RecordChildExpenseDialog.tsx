@@ -8,6 +8,8 @@ import {
   SavingsGoalResponse,
   SavingsGoalAllocationRequest,
 } from "../../shared/api/wallet";
+import { formatMoney, currencySymbol } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type RecordChildExpenseDialogProps = {
   childMemberId: string;
@@ -22,6 +24,7 @@ export function RecordChildExpenseDialog({
   onClose,
   onSuccess,
 }: RecordChildExpenseDialogProps) {
+  const currency = useFamilyCurrency();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -69,7 +72,7 @@ export function RecordChildExpenseDialog({
     setError(null);
     if (amountNum <= 0) { setError("Beloppet måste vara större än 0"); return; }
     if (currentBalance !== null && amountNum > currentBalance) {
-      setError(`${childName} har inte tillräckligt med pengar (${currentBalance} kr).`);
+      setError(`${childName} har inte tillräckligt med pengar (${formatMoney(currentBalance, currency)}).`);
       return;
     }
     if (!categoryId) { setError("Välj en kategori"); return; }
@@ -106,7 +109,7 @@ export function RecordChildExpenseDialog({
           Registrera köp
         </h3>
         <p style={{ margin: "0 0 20px", fontSize: "0.9rem", color: "#6b6b6b" }}>
-          {childName} · {currentBalance !== null ? `${currentBalance} kr kvar` : "laddar..."}
+          {childName} · {currentBalance !== null ? `${formatMoney(currentBalance, currency)} kvar` : "laddar..."}
         </p>
 
         {loadingData ? (
@@ -121,7 +124,7 @@ export function RecordChildExpenseDialog({
 
             {/* Amount */}
             <div style={{ marginBottom: "16px" }}>
-              <label htmlFor="child-expense-amount" style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>Belopp (kr) *</label>
+              <label htmlFor="child-expense-amount" style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>Belopp ({currencySymbol(currency)}) *</label>
               <input
                 id="child-expense-amount"
                 type="text"
@@ -179,14 +182,14 @@ export function RecordChildExpenseDialog({
                       {allocationValue !== "" && (
                         <input type="text" inputMode="numeric" value={allocationValue} onChange={(e) => handleGoalAllocationChange(goal.id, e.target.value)} disabled={loading} style={{ width: "80px", padding: "6px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "0.875rem" }} />
                       )}
-                      <span style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>(max {maxAmount} kr)</span>
+                      <span style={{ fontSize: "0.75rem", color: "#6b6b6b" }}>(max {formatMoney(maxAmount, currency)})</span>
                     </div>
                   );
                 })}
                 {amountNum > 0 && (
                   <div style={{ marginTop: "8px", padding: "8px", background: "rgba(72,187,120,0.1)", borderRadius: "8px", fontSize: "0.875rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><span>Totalt sparat:</span><span style={{ fontWeight: 600 }}>{totalAllocated} kr</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}><span>Kvar att betala:</span><span style={{ fontWeight: 600 }}>{remaining} kr</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><span>Totalt sparat:</span><span style={{ fontWeight: 600 }}>{formatMoney(totalAllocated, currency)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}><span>Kvar att betala:</span><span style={{ fontWeight: 600 }}>{formatMoney(remaining, currency)}</span></div>
                   </div>
                 )}
               </div>

@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,10 +55,10 @@ import se.kidquest.app.theme.SeasonPalette
 /** Ordning och svenska rubriker per sällsynthetstier. Hela väljaren grupperas på detta,
  *  så en vunnen sällsynthet hamnar i sin egen tier och inte bland de vanliga. */
 private val RARITY_TIERS = listOf(
-    "COMMON" to "Vanliga",
-    "RARE" to "Sällsynta",
-    "LEGENDARY" to "Legendariska",
-    "MYTHIC" to "Mytiska",
+    "COMMON" to R.string.rarity_common,
+    "RARE" to R.string.rarity_rare,
+    "LEGENDARY" to R.string.rarity_legendary,
+    "MYTHIC" to R.string.rarity_mythic,
 )
 
 @Composable
@@ -89,7 +91,8 @@ fun EggCollectionBoard(
         // Hela väljaren grupperas per sällsynthetstier. Inom varje tier ligger de valbara
         // (upplåsta, tryckbara) äggen först och de oupptäckta ("?") efter -- så en vunnen
         // sällsynthet hamnar under "Sällsynta", inte bland de vanliga.
-        RARITY_TIERS.forEach { (key, label) ->
+        RARITY_TIERS.forEach { (key, labelRes) ->
+            val label = tr(labelRes)
             val sel = selectable.filter { it.rarity == key }
             val myst = mystery.filter { it.rarity == key }
             if (sel.isNotEmpty() || myst.isNotEmpty()) {
@@ -117,7 +120,7 @@ fun EggCollectionBoard(
 
         if (mystery.isNotEmpty()) {
             Text(
-                text = "Skicka djuret på äventyr för att hitta fler.",
+                text = tr(R.string.eggs_find_more),
                 style = MaterialTheme.typography.labelSmall,
                 color = season.inkFaint,
                 textAlign = TextAlign.Center,
@@ -126,7 +129,7 @@ fun EggCollectionBoard(
         }
 
         if (taken.isNotEmpty()) {
-            ZoneDivider("${taken.size} av ${eggs.size} samlade", season)
+            ZoneDivider(tr(R.string.eggs_collected, taken.size, eggs.size), season)
             taken.chunked(3).forEach { row ->
                 TileRow(row.size) { i -> CollectedTile(row[i], season) }
             }
@@ -281,7 +284,7 @@ private fun EggTile(
         if (drawable != null) {
             Image(
                 painter = painterResource(id = drawable),
-                contentDescription = "Ägg $ordinal av $total",
+                contentDescription = tr(R.string.egg_n_of, ordinal, total),
                 modifier = Modifier.size(64.dp),
                 contentScale = ContentScale.Fit,
             )
@@ -318,7 +321,7 @@ private fun MysteryTile(season: SeasonPalette) {
         if (drawable != null) {
             Image(
                 painter = painterResource(id = drawable),
-                contentDescription = "Oupptäckt ägg",
+                contentDescription = tr(R.string.egg_undiscovered),
                 modifier = Modifier.size(64.dp),
                 contentScale = ContentScale.Fit,
             )
@@ -340,10 +343,11 @@ private fun MysteryTile(season: SeasonPalette) {
     }
 }
 
-/** Månadens namn, för raden under ett samlat djur. */
-fun collectionMonthName(month: Int): String = when (month) {
-    1 -> "januari"; 2 -> "februari"; 3 -> "mars"; 4 -> "april"
-    5 -> "maj"; 6 -> "juni"; 7 -> "juli"; 8 -> "augusti"
-    9 -> "september"; 10 -> "oktober"; 11 -> "november"; 12 -> "december"
-    else -> ""
+/**
+ * Month name (1-12) in the UI language, as used mid-sentence: lowercase in Swedish and
+ * Spanish, capitalised in English and German.
+ */
+fun collectionMonthName(month: Int): String {
+    if (month !in 1..12) return ""
+    return java.text.DateFormatSymbols.getInstance(se.kidquest.app.i18n.L10n.locale()).months[month - 1]
 }

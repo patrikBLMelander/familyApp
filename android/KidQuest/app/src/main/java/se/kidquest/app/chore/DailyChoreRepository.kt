@@ -1,5 +1,7 @@
 package se.kidquest.app.chore
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.CreateDailyChoreRequest
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
@@ -76,7 +78,7 @@ object DailyChoreRepository {
     suspend fun deleteChore(choreId: String) = withContext(Dispatchers.IO) {
         val response = ApiClient.dailyChoreApi.deleteChore(choreId)
         if (!response.isSuccessful) {
-            throw IllegalStateException("Kunde inte ta bort sysslan (HTTP ${response.code()})")
+            throw IllegalStateException(tr(R.string.chore_delete_failed_http, response.code()))
         }
     }
 

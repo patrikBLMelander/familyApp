@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -106,7 +108,7 @@ fun ParentPinDialog(
                 error = null
             } else if (first != code) {
                 firstEntry = null
-                error = "Koderna var olika. Försök igen."
+                error = tr(R.string.pin_mismatch)
             } else {
                 onPinChosen(code)
             }
@@ -120,9 +122,9 @@ fun ParentPinDialog(
         if (attempts >= MAX_ATTEMPTS) {
             attempts = 0
             lockedFor = LOCKOUT_SECONDS
-            error = "För många försök."
+            error = tr(R.string.pin_too_many)
         } else {
-            error = "Fel kod."
+            error = tr(R.string.pin_wrong)
         }
     }
 
@@ -132,10 +134,10 @@ fun ParentPinDialog(
         title = {
             Text(
                 text = when {
-                    confirming -> "En gång till"
-                    purpose == PinPurpose.UNLOCK -> "Skriv koden"
-                    purpose == PinPurpose.CHANGE -> "Välj en ny kod"
-                    else -> "Välj en kod"
+                    confirming -> tr(R.string.pin_again)
+                    purpose == PinPurpose.UNLOCK -> tr(R.string.pin_enter)
+                    purpose == PinPurpose.CHANGE -> tr(R.string.pin_choose_new)
+                    else -> tr(R.string.pin_choose)
                 },
                 fontWeight = FontWeight.Bold,
                 color = season.ink,
@@ -149,12 +151,12 @@ fun ParentPinDialog(
             ) {
                 Text(
                     text = when {
-                        lockedFor > 0 -> "Vänta $lockedFor sekunder."
-                        confirming -> "Så att den inte blev fel."
+                        lockedFor > 0 -> se.kidquest.app.i18n.trp(R.plurals.pin_wait_seconds, lockedFor)
+                        confirming -> tr(R.string.pin_confirm_hint)
                         purpose == PinPurpose.UNLOCK ->
-                            childName?.let { "För att lämna ${possessiveSwedish(it)} vy." }
-                                ?: "För att lämna barnläget."
-                        else -> "Fyra siffror. Den behövs för att komma tillbaka hit."
+                            childName?.let { tr(R.string.pin_leave_child_view, possessiveName(it)) }
+                                ?: tr(R.string.pin_leave_child_mode)
+                        else -> tr(R.string.pin_intro)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = season.inkSoft,
@@ -207,17 +209,17 @@ fun ParentPinDialog(
         confirmButton = {
             if (purpose == PinPurpose.CHANGE) {
                 TextButton(onClick = { onPinChosen(null) }) {
-                    Text("Ta bort koden", color = season.danger, fontWeight = FontWeight.SemiBold)
+                    Text(tr(R.string.pin_remove), color = season.danger, fontWeight = FontWeight.SemiBold)
                 }
             } else if (purpose == PinPurpose.UNLOCK) {
                 TextButton(onClick = onSignOut) {
-                    Text("Glömt? Logga ut", color = season.inkSoft, fontWeight = FontWeight.SemiBold)
+                    Text(tr(R.string.pin_forgot), color = season.inkSoft, fontWeight = FontWeight.SemiBold)
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Avbryt", color = season.inkSoft, fontWeight = FontWeight.SemiBold)
+                Text(tr(R.string.common_cancel), color = season.inkSoft, fontWeight = FontWeight.SemiBold)
             }
         },
     )

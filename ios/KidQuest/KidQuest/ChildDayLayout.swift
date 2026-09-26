@@ -265,7 +265,7 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     private func adventureRemainingText(_ secs: Int) -> String {
         let m = secs / 60
         let s = secs % 60
-        return m >= 3 ? "\(m) min kvar" : String(format: "%d:%02d kvar", m, s)
+        return m >= 3 ? String(localized: "\(m) min kvar") : String(format: String(localized: "%d:%02d kvar"), m, s)
     }
 
     private var band: some View {
@@ -408,11 +408,11 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                     .font(.system(size: 11, weight: .bold))
                     .tracking(1.1)
                     .foregroundStyle(.white.opacity(0.9))
-                Text(PetNameUtilsIOS.getPetNameSwedish(past.petType))
+                Text(PetNameUtilsIOS.getPetName(past.petType))
                     .font(.title3.weight(.bold))
                     .foregroundStyle(.white)
             } else if let pet {
-                Text("\(petDisplayName(pet)) · NIVÅ \(shownLevel)".uppercased())
+                Text(String(localized: "\(petDisplayName(pet)) · nivå \(shownLevel)").uppercased())
                     .font(.system(size: 11, weight: .bold))
                     .tracking(1.1)
                     .foregroundStyle(.white.opacity(0.92))
@@ -420,6 +420,14 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
                 // öppnar appen på morgonen ska se hur nära nästa stadie djuret är utan
                 // att först mata det.
                 XpMeter(xpInLevel: shownXpInLevel, span: xpSpan, level: shownLevel, stars: shownStars, xpToNextStar: shownXpToNextStar)
+                if pet.followsIntoNextMonth == true {
+                    // Barnets första djur, kläckt sent i månaden: det nollställs inte den 1:a.
+                    Text("Följer med dig hela \(kqMonthName(pet.month % 12 + 1)) 🥚")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(Capsule().fill(.white.opacity(0.22)))
+                }
                 if allDone {
                     Text("Allt klart idag!")
                         .font(.title2.weight(.bold))
@@ -445,7 +453,7 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
             HStack(spacing: 5) {
                 Image(systemName: "wallet.bifold.fill")
                     .font(.system(size: 12, weight: .semibold))
-                Text(balance.map { "\($0) kr" } ?? "Plånbok")
+                Text(balance.map { Money.format($0) } ?? String(localized: "Plånbok"))
                     .font(.caption.weight(.bold))
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
@@ -517,7 +525,7 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
             .opacity(active ? 1 : 0.72)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(PetNameUtilsIOS.getPetNameSwedish(type))
+        .accessibilityLabel(PetNameUtilsIOS.getPetName(type))
     }
 
     // MARK: - Uppgifterna
@@ -727,12 +735,10 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     private func petDisplayName(_ pet: PetResponseDTO) -> String {
         let given = pet.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let given, !given.isEmpty { return given }
-        return PetNameUtilsIOS.getPetNameSwedish(pet.petType)
+        return PetNameUtilsIOS.getPetName(pet.petType)
     }
 
     private func monthLabel(year: Int, month: Int) -> String {
-        let names = ["januari", "februari", "mars", "april", "maj", "juni",
-                     "juli", "augusti", "september", "oktober", "november", "december"]
-        return "\(names[max(0, min(11, month - 1))]) \(year)"
+        "\(kqMonthName(max(1, min(12, month)))) \(year)"
     }
 }

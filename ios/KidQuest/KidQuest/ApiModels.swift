@@ -2,11 +2,18 @@ import Foundation
 
 // MARK: - Auth
 
-struct FamilyResponseDTO: Decodable {
+/// Svar som bär familjens valuta (ISO 4217). ApiClient sparar den i `Money`.
+protocol CurrencyCarrying {
+    var currency: String? { get }
+}
+
+struct FamilyResponseDTO: Decodable, CurrencyCarrying {
     let id: String
     let name: String
     let createdAt: String
     let updatedAt: String
+    /// Optional: äldre servrar skickar inte fältet.
+    var currency: String? = nil
 }
 
 struct FamilyMemberResponseDTO: Decodable {
@@ -20,6 +27,8 @@ struct FamilyMemberResponseDTO: Decodable {
     /// Om medlemmen har en kopplad telefon, utan att lämna ut token som skulle låta
     /// den som frågar bli dem. Optional eftersom äldre svar inte bär med sig fältet.
     let hasPairedDevice: Bool?
+    /// Medlemmens valda språk ("sv", "en", "de", "es"), nil = följ telefonen.
+    var language: String? = nil
 }
 
 struct FamilyRegistrationResponseDTO: Decodable {
@@ -172,6 +181,17 @@ struct PetResponseDTO: Decodable {
     let updatedAt: String
     let equippedFrame: String?
     let equippedSceneItem: String?
+    /// Barnets första djur, kläckt de sista dagarna i månaden: följer med hela nästa
+    /// månad. Valfri så att äldre svar och fixturer utan fältet fortfarande avkodas.
+    var followsIntoNextMonth: Bool? = nil
+}
+
+/// Vad äggväljaren berättar om månaden. `daysLeftInMonth` är 0 sista dagen,
+/// `nextMonth` 1-12, `firstPetGrace` sant om ett ägg valt nu följer med nästa månad.
+struct MonthInfoDTO: Decodable {
+    let daysLeftInMonth: Int
+    let nextMonth: Int
+    let firstPetGrace: Bool
 }
 
 /// Ett djur barnet haft tidigare. Bär inte namnet -- historiken har det inte -- och
@@ -306,10 +326,12 @@ struct XpHistoryResponseDTO: Decodable {
     let totalTasksCompleted: Int
 }
 
-struct WalletBalanceResponseDTO: Decodable {
+struct WalletBalanceResponseDTO: Decodable, CurrencyCarrying {
     let id: String?
     let memberId: String
     let balance: Int
+    /// Familjens valuta; optional för äldre servrar.
+    var currency: String? = nil
 }
 
 struct WalletTransactionResponseDTO: Decodable, Identifiable {

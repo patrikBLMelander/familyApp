@@ -108,22 +108,22 @@ struct ParentPinSheet: View {
     }
 
     private var title: String {
-        if confirming { return "En gång till" }
+        if confirming { return String(localized: "En gång till") }
         switch purpose {
-        case .unlock: return "Skriv koden"
-        case .change: return "Välj en ny kod"
-        case .set: return "Välj en kod"
+        case .unlock: return String(localized: "Skriv koden")
+        case .change: return String(localized: "Välj en ny kod")
+        case .set: return String(localized: "Välj en kod")
         }
     }
 
     private var subtitle: String {
-        if lockedFor > 0 { return "Vänta \(lockedFor) sekunder." }
-        if confirming { return "Så att den inte blev fel." }
+        if lockedFor > 0 { return String(localized: "Vänta \(lockedFor) sekunder.") }
+        if confirming { return String(localized: "Så att den inte blev fel.") }
         if purpose == .unlock {
-            if let childName { return "För att lämna \(possessiveSwedish(childName)) vy." }
-            return "För att lämna barnläget."
+            if let childName { return String(localized: "För att lämna \(kqPossessive(childName)) vy.") }
+            return String(localized: "För att lämna barnläget.")
         }
-        return "Fyra siffror. Den behövs för att komma tillbaka hit."
+        return String(localized: "Fyra siffror. Den behövs för att komma tillbaka hit.")
     }
 
     /// Nollan i mitten på nedersta raden, som på en telefon.
@@ -173,7 +173,7 @@ struct ParentPinSheet: View {
             guard let first = firstEntry else { firstEntry = code; error = nil; return }
             if first != code {
                 firstEntry = nil
-                error = "Koderna var olika. Försök igen."
+                error = String(localized: "Koderna var olika. Försök igen.")
             } else {
                 onPinChosen(code)
             }
@@ -184,9 +184,9 @@ struct ParentPinSheet: View {
         if attempts >= Self.maxAttempts {
             attempts = 0
             lockedFor = Self.lockoutSeconds
-            error = "För många försök."
+            error = String(localized: "För många försök.")
         } else {
-            error = "Fel kod."
+            error = String(localized: "Fel kod.")
         }
     }
 }
