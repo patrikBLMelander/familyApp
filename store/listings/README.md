@@ -6,11 +6,12 @@ Svenska originalet ligger i `../play/`. Mapparna här har samma innehåll, anpas
 |---|---|---|---|
 | `play-kort-beskrivning.txt` | Kort beskrivning | – | 80 |
 | `play-fullstandig-beskrivning.txt` | Fullständig beskrivning | Description (samma text) | 4000 |
+| `appstore-namn.txt` | – | Name (en/de/es) | 30 |
 | `appstore-undertitel.txt` | – | Subtitle | 30 |
 | `appstore-reklamtext.txt` | – | Promotional Text (kan ändras utan ny granskning) | 170 |
 | `appstore-nyckelord.txt` | – | Keywords (kommaseparerade, utan mellanslag efter komma) | 100 |
 
-Appnamnet är `KidQuest` på alla språk.
+Appnamnet i App Store är `KidQuest` på svenska. "KidQuest" är upptaget på andra språk, så en/de/es använder `appstore-namn.txt` (t.ex. "KidQuest – Chores & Pets"). Namnet under ikonen är fortfarande KidQuest.
 
 ## Ändringar mot den ursprungliga svenska texten (punkt 1–2 och äventyren är nu rättade även i svenskan)
 - **Provperiod: 1 månad**, inte tre (`FamilySubscription.TRIAL_MONTHS = 1`).
