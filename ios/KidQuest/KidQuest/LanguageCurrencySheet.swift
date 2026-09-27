@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Språk för den som är inloggad, och familjens valuta (bara föräldrar).
 ///
-/// Språket sparas både lokalt (gäller från nästa start, se `AppLanguage`) och på servern,
+/// Språket sparas både lokalt (byts direkt, se `AppLanguage`) och på servern,
 /// så att felmeddelanden och e-post följer samma val och valet följer med till en ny telefon.
 struct LanguageCurrencySheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -45,10 +45,6 @@ struct LanguageCurrencySheet: View {
                     }
                 } header: {
                     Text("Språk")
-                } footer: {
-                    if language != AppLanguage.preference || AppLanguage.needsRestart {
-                        Text("Starta om appen för att byta språk.")
-                    }
                 }
 
                 if canChangeCurrency {
@@ -88,20 +84,17 @@ struct LanguageCurrencySheet: View {
         }
     }
 
+    /// Servern först: språkbytet bygger om hela gränssnittet, och det här arket med det.
+    /// Misslyckas sparningen gäller det lokala valet ändå; servern får veta nästa gång.
     private func saveLanguage(_ code: String?) async {
-        AppLanguage.setPreference(code)
-        errorMessage = nil
-        guard let memberId = TokenStoreIOS.shared.getSession()?.memberId else { return }
-        do {
-            try await ApiClient.shared.sendWithoutResponse(
+        if let memberId = TokenStoreIOS.shared.getSession()?.memberId {
+            try? await ApiClient.shared.sendWithoutResponse(
                 path: "family-members/\(memberId)/language",
                 method: "PATCH",
                 body: LanguageRequest(language: code)
             )
-        } catch {
-            // Det lokala valet gäller ändå; servern får veta nästa gång.
-            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte spara språket på servern."))
         }
+        AppLanguage.setPreference(code)
     }
 
     private func saveCurrency(_ code: String, revertTo previous: String) async {

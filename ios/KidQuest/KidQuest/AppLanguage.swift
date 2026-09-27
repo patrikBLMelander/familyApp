@@ -1,10 +1,12 @@
+import Combine
 import Foundation
 
 /// Vilket språk appen körs på, och förälderns/barnets eget val.
 ///
-/// iOS väljer språk när appen startar, utifrån `AppleLanguages` och de språk som finns i
-/// String Catalog. Ett eget val skrivs därför till `AppleLanguages` och gäller från nästa
-/// start -- det finns inget stödat sätt att byta Bundle-språk medan appen kör.
+/// iOS väljer språk när appen startar och byter inte medan den kör. Att be användaren
+/// "starta om appen" höll inte: att gå till hemskärmen och tillbaka startar inte om den,
+/// så valet syntes aldrig. Ett eget val pekar därför om textuppslagen direkt (se
+/// `activate`) och ritar om gränssnittet via `LanguageState`.
 /// Ett språk telefonen har men appen saknar (t.ex. franska) landar på engelska, eftersom
 /// projektets development region är `en`.
 enum AppLanguage {
@@ -13,11 +15,47 @@ enum AppLanguage {
     private static let preferenceKey = "kq.appLanguage"
     private static let appleLanguagesKey = "AppleLanguages"
 
-    /// Språket gränssnittet faktiskt visas på just nu (det Bundle valde vid start).
+    /// Språket gränssnittet faktiskt visas på just nu.
     static var current: String {
+        if let activeLanguage { return activeLanguage }
         let picked = Bundle.main.preferredLocalizations.first ?? "en"
         let code = String(picked.prefix(2))
         return supported.contains(code) ? code : "en"
+    }
+
+    /// Språket vars .lproj alla textuppslag går mot, eller nil när iOS eget val gäller.
+    /// Satt från start när användaren valt ett språk, och när språket byts medan appen kör.
+    nonisolated(unsafe) private(set) static var activeLanguage: String?
+    nonisolated(unsafe) fileprivate static var activeBundle: Bundle?
+
+    /// Anropas en gång vid start, före första vyn: ett eget val gäller direkt, även om
+    /// iOS vid starten valt ett annat språk ur `AppleLanguages`.
+    static func activateAtLaunch() {
+        if let preference { activate(preference) }
+    }
+
+    /// Pekar om alla textuppslag (Text, String(localized:), NSLocalizedString) till
+    /// språkets .lproj. `Bundle.main` får en underklass som bara ändrar uppslaget --
+    /// det enda sättet att byta språk utan omstart, eftersom iOS låser språket vid start.
+    private static func activate(_ code: String) {
+        installOverrideOnce
+        activeLanguage = code
+        activeBundle = Bundle.main.path(forResource: code, ofType: "lproj").flatMap(Bundle.init(path:))
+    }
+
+    private static let installOverrideOnce: Void = {
+        object_setClass(Bundle.main, LanguageOverrideBundle.self)
+    }()
+
+    /// Telefonens eget språk, för "Följ telefonen" medan appen kör. `Locale.preferredLanguages`
+    /// duger inte här: den innehåller appens egen `AppleLanguages` från starten.
+    private static var deviceLanguage: String {
+        let global = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String]
+        for tag in global ?? Locale.preferredLanguages {
+            let code = String(tag.prefix(2))
+            if supported.contains(code) { return code }
+        }
+        return "en"
     }
 
     /// Locale för datum, veckodagar, månader och pengar -- samma språk som texten.
@@ -38,16 +76,20 @@ enum AppLanguage {
         return value.flatMap { supported.contains($0) ? $0 : nil }
     }
 
-    /// Sparar valet och ser till att iOS använder det från nästa start.
+    /// Sparar valet och byter språk direkt. `AppleLanguages` skrivs också, så att iOS egna
+    /// texter (systemdialoger, tangentbord) följer med från nästa start.
     static func setPreference(_ code: String?) {
         let defaults = UserDefaults.standard
         if let code, supported.contains(code) {
             defaults.set(code, forKey: preferenceKey)
             defaults.set([code], forKey: appleLanguagesKey)
+            activate(code)
         } else {
             defaults.removeObject(forKey: preferenceKey)
             defaults.removeObject(forKey: appleLanguagesKey)
+            activate(deviceLanguage)
         }
+        LanguageState.shared.revision += 1
     }
 
     /// Vid inloggning/koppling: ett språk som sparats på servern (t.ex. från en annan
@@ -57,11 +99,6 @@ enum AppLanguage {
         setPreference(code)
     }
 
-    /// Om valet skiljer sig från det som visas nu behöver appen startas om.
-    static var needsRestart: Bool {
-        guard let preference else { return false }
-        return preference != current
-    }
 
     /// Språket i eget namn, för väljaren.
     static func displayName(_ code: String) -> String {
@@ -73,6 +110,44 @@ enum AppLanguage {
         default: return code
         }
     }
+}
+
+/// Byter bara textuppslaget; allt annat i Bundle.main är orört.
+private final class LanguageOverrideBundle: Bundle, @unchecked Sendable {
+    override func localizedString(forKey key: String, value: String?, table tableName: String?) -> String {
+        guard let bundle = AppLanguage.activeBundle else {
+            return super.localizedString(forKey: key, value: value, table: tableName)
+        }
+        return bundle.localizedString(forKey: key, value: value, table: tableName)
+    }
+
+    /// String(localized:) väljer språk härifrån i stället för via localizedString(forKey:).
+    override var preferredLocalizations: [String] {
+        guard let language = AppLanguage.activeLanguage else { return super.preferredLocalizations }
+        return [language]
+    }
+}
+
+extension String {
+    /// Appens egen String(localized:), som alla anrop i modulen träffar före Foundations:
+    /// Foundations version går inte via Bundle.localizedString och väljer språk ur
+    /// Locale.current, som iOS låser vid start. Här skickas det valda språkets .lproj med,
+    /// så att ett språkbyte slår igenom direkt. Strängkatalogens extrahering påverkas inte.
+    init(localized value: String.LocalizationValue, comment: StaticString? = nil) {
+        self.init(
+            localized: value,
+            table: nil,
+            bundle: AppLanguage.activeBundle ?? .main,
+            locale: AppLanguage.locale,
+            comment: comment
+        )
+    }
+}
+
+/// Ökar när språket byts; roten lyssnar och ritar om hela gränssnittet på det nya språket.
+final class LanguageState: ObservableObject {
+    static let shared = LanguageState()
+    @Published var revision = 0
 }
 
 // MARK: - Språkberoende hjälpare

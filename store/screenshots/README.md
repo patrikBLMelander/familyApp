@@ -18,7 +18,7 @@ Valuta: **en = USD, de/es = EUR**. Svenska originalen ligger kvar i `~/kidquest-
 | 05-allowance | `allowance` |
 | 06-all-done | `child-done` |
 
-Ta om: `SIMCTL_CHILD_KQ_SCREEN=<fixtur> xcrun simctl launch <udid> se.kidquest.app -AppleLanguages "(de)" -AppleLocale de_DE -kq.familyCurrency EUR`
+Ta om: `SIMCTL_CHILD_KQ_SCREEN=<fixtur> xcrun simctl launch <udid> se.kidquest.app -AppleLanguages "(de)" -AppleLocale de_DE -kq.appLanguage de -kq.familyCurrency EUR` (`-kq.appLanguage` behövs: ett sparat språkval i simulatorn vinner annars)
 
 ## Android (`android/<språk>/`), 1080×1920
 | Fil | Fixtur (`--es kq_screen`) |
