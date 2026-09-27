@@ -23,12 +23,21 @@
   .adm-top{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;}
   .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
   tfoot td{font-weight:700;color:var(--ink);}
+  .adm-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;}
+  .adm-nav{display:flex;gap:.25rem;}
+  .adm-nav a{padding:.4rem .8rem;border-radius:8px;color:var(--soft);text-decoration:none;font-weight:600;font-size:.9rem;}
+  .adm-nav a[aria-current="page"]{background:#DCEBE3;color:var(--accent);}
+  .adm-nav a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 </style>
 </head>
 <body>
 <div class="wrap">
-<header>
-  <div class="brand"><a href="/">KidQuest</a></div>
+<header class="adm-head">
+  <div class="brand"><a href="/">KidQuest</a> <span style="color:var(--faint);font-weight:500">· Admin</span></div>
+  <nav class="adm-nav" aria-label="Adminvyer">
+    <a href="/affiliate/admin" aria-current="page">Affiliates</a>
+    <a href="/affiliate/stats">Statistik</a>
+  </nav>
 </header>
 <div id="root"><p class="liten">Laddar…</p></div>
 <footer>

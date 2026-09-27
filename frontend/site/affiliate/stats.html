@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statistik · Admin — KidQuest</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="../favicon.png">
+<link rel="stylesheet" href="../_style.css">
+<style>
+  /* Sidans egna tokens ovanpå _style.css, plus ett mörkt läge (resten av sajten är ljus). */
+  :root {
+    --grid: #EEF0EC; --accent-soft: #DCEBE3; --warn-bg: #FFF4DE; --warn-line: #F0DFB8; --warn-ink: #8A5A00;
+    --bad-ink: #B42318; --good-ink: #17703F; --tip-bg: #1F2421; --tip-ink: #FBFAF7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #141816; --card: #1C211F; --ink: #E9ECEA; --soft: #AEB6B2; --faint: #7F8883; --line: #2C3330;
+      --accent: #5FBF93; --grid: #252B28; --accent-soft: #1F3A2E; --warn-bg: #3A2E14; --warn-line: #4A3E1E;
+      --warn-ink: #F2C46B; --bad-ink: #FF8A80; --good-ink: #7ED9A5; --tip-bg: #E9ECEA; --tip-ink: #141816;
+    }
+  }
+  .wrap { max-width: 64rem; }
+  .adm-nav { display: flex; gap: .25rem; }
+  .adm-nav a { padding: .4rem .8rem; border-radius: 8px; color: var(--soft); text-decoration: none; font-weight: 600; font-size: .9rem; }
+  .adm-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .adm-login { max-width: 24rem; margin: 2rem auto 0; }
+  .adm-field { display: flex; flex-direction: column; gap: .35rem; margin-bottom: 1rem; font-size: .85rem; color: var(--soft); }
+  .adm-field input { padding: .65rem .75rem; border-radius: 10px; border: 1px solid var(--line); font-size: 1rem; font-family: inherit; background: var(--card); color: var(--ink); }
+  .adm-err { color: var(--bad-ink); font-size: .9rem; margin: .25rem 0 0; }
+  #root { display: grid; gap: 1.5rem; }
+  .titlebar { display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap; }
+  .titlebar h1 { margin: 0; font-size: 1.6rem; text-wrap: balance; }
+  .sub { color: var(--faint); font-size: .88rem; margin: .2rem 0 0; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; padding: 2px; background: var(--card); }
+  .seg button { border: 0; background: transparent; color: var(--soft); font: inherit; font-size: .85rem; font-weight: 600; padding: .35rem .75rem; border-radius: 7px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--card); }
+  .seg button:focus-visible, .adm-nav a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { margin: 0; }
+  h2 { margin: 0; font-size: 1.05rem; }
+  .sechead { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
+  .sechead p { margin: 0; color: var(--faint); font-size: .85rem; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: .9rem 1rem; display: grid; gap: .15rem; }
+  .kpi .label { color: var(--soft); font-size: .82rem; }
+  .kpi .value { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .kpi .note { font-size: .8rem; color: var(--faint); }
+  .up { color: var(--good-ink); font-weight: 600; }
+  .down { color: var(--bad-ink); font-weight: 600; }
+  .kpi.attention { background: var(--warn-bg); border-color: var(--warn-line); }
+  .kpi.attention .label, .kpi.attention .note { color: var(--warn-ink); }
+  .funnel { display: grid; gap: .45rem; }
+  .frow { display: grid; grid-template-columns: minmax(9rem, 13rem) 1fr 7.5rem; gap: .75rem; align-items: center; font-size: .9rem; }
+  .frow .name { color: var(--ink); }
+  .track { height: 22px; background: var(--grid); border-radius: 4px; }
+  .bar { height: 100%; background: var(--accent); border-radius: 4px; min-width: 0; }
+  .frow .val { text-align: right; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .frow .val b { color: var(--ink); }
+  .drop { font-size: .78rem; color: var(--bad-ink); margin-left: .35rem; }
+  .callout { margin: .9rem 0 0; padding-top: .8rem; border-top: 1px solid var(--line); font-size: .88rem; }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .75rem; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .axis text { fill: var(--faint); font-size: 11px; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .endlabel { fill: var(--ink); font-size: 12px; font-weight: 700; }
+  .tip { position: absolute; pointer-events: none; background: var(--tip-bg); color: var(--tip-ink); font-size: .8rem; padding: .35rem .55rem; border-radius: 7px; white-space: nowrap; transform: translate(-50%, -115%); opacity: 0; transition: opacity .12s; }
+  .tip.on { opacity: 1; }
+  .dist { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; }
+  .dist h3 { margin: 0 0 .6rem; font-size: .92rem; }
+  .drow { display: grid; grid-template-columns: 6.5rem 1fr 3rem; gap: .5rem; align-items: center; font-size: .85rem; margin: .3rem 0; }
+  .drow .t { height: 10px; background: var(--grid); border-radius: 3px; }
+  .drow .b { height: 100%; background: var(--accent); border-radius: 3px; }
+  .drow .p { text-align: right; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); column-gap: 1.5rem; }
+  .stat { padding: .6rem .2rem; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: .75rem; font-size: .9rem; }
+  .stat span { color: var(--soft); }
+  .stat b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
+  .pay { color: var(--accent); font-weight: 700; }
+  .empty { color: var(--faint); font-size: .88rem; margin: 0; }
+  @media (max-width: 520px) {
+    .frow { grid-template-columns: 1fr 5.5rem; }
+    .frow .track { grid-column: 1 / -1; order: 3; }
+  }
+  @media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand"><a href="/">KidQuest</a> <span style="color:var(--faint);font-weight:500">· Admin</span></div>
+  <nav class="adm-nav" aria-label="Adminvyer">
+    <a href="/affiliate/admin">Affiliates</a>
+    <a href="/affiliate/stats" aria-current="page">Statistik</a>
+  </nav>
+</header>
+<div id="root"><p class="liten">Laddar…</p></div>
+<footer>
+  <a href="/privacy">Integritetspolicy</a><a href="/villkor">Villkor</a><a href="/support">Support</a>
+</footer>
+</div>
+<script>
+"use strict";
+var API = "/api/v1";
+var DK = "deviceToken";
+var PK = "kq.admin.statsDays";
+function getDevice(){ try { return localStorage.getItem(DK); } catch(e){ return null; } }
+function setDevice(v){ try { localStorage.setItem(DK, v); } catch(e){} }
+function clearDevice(){ try { localStorage.removeItem(DK); } catch(e){} }
+function getDays(){ try { var d = parseInt(localStorage.getItem(PK), 10); return [7,30,90].indexOf(d) >= 0 ? d : 30; } catch(e){ return 30; } }
+function setDays(d){ try { localStorage.setItem(PK, String(d)); } catch(e){} }
+var root = document.getElementById("root");
+var days = getDays();
+
+async function parse(res){
+  if(!res.ok){
+    var msg = "Något gick fel ("+res.status+")";
+    try { var b = await res.json(); if(b && b.message) msg = b.message; else if(b && b.error) msg = b.error; } catch(e){}
+    var err = new Error(msg); err.status = res.status; throw err;
+  }
+  return res.json();
+}
+function deviceHeaders(){ var t = getDevice(); var h = {"Content-Type":"application/json"}; if(t) h["X-Device-Token"] = t; return h; }
+function loginByEmail(email,password){
+  return fetch(API+"/families/login-by-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,password:password})}).then(parse);
+}
+function fetchStats(d){ return fetch(API+"/admin/stats?days="+d,{headers:deviceHeaders()}).then(parse); }
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function n(v){ return (v==null?0:v).toLocaleString("sv-SE"); }
+function pct(share){ return Math.round((share||0)*100) + " %"; }
+function share(part, whole){ return whole > 0 ? part / whole : 0; }
+function dec(v, digits){ return (v||0).toLocaleString("sv-SE",{minimumFractionDigits:digits,maximumFractionDigits:digits}); }
+// Whole kronor stay whole ("0 kr"); anything with öre shows both decimals ("333,20 kr").
+function kr(v){ var x = v==null?0:v; var d = Math.round(x*100)%100===0 ? 0 : 2; return x.toLocaleString("sv-SE",{minimumFractionDigits:d,maximumFractionDigits:d})+" kr"; }
+function money(v, cur){ return (v||0).toLocaleString("sv-SE",{style:"currency",currency:cur||"USD",maximumFractionDigits:0}); }
+
+function renderLogin(msg){
+  root.innerHTML =
+    '<div class="adm-login card">'
+    + '<h1 style="font-size:1.4rem;margin:.1rem 0 .3rem">Statistik — admin</h1>'
+    + '<p class="liten" style="margin:0 0 1.1rem">Logga in med ditt förälderkonto i KidQuest. Bara adminkontot kommer in.</p>'
+    + (msg?'<p class="adm-err" style="margin-bottom:1rem">'+esc(msg)+'</p>':'')
+    + '<form id="f">'
+    + '<label class="adm-field">E-post<input type="email" id="email" required autocomplete="email"></label>'
+    + '<label class="adm-field">Lösenord<input type="password" id="password" required autocomplete="current-password"></label>'
+    + '<p class="adm-err" id="err" hidden></p>'
+    + '<button type="submit" class="btn" id="submit" style="width:100%;text-align:center">Logga in</button>'
+    + '</form></div>';
+  root.querySelector("#f").onsubmit = async function(e){
+    e.preventDefault();
+    var btn=root.querySelector("#submit"), err=root.querySelector("#err");
+    btn.disabled=true; btn.textContent="…"; err.hidden=true;
+    try {
+      var res = await loginByEmail(root.querySelector("#email").value.trim(), root.querySelector("#password").value);
+      var token = (res && res.member && res.member.deviceToken) || res.deviceToken;
+      if(!token) throw new Error("Inget device-token i svaret.");
+      setDevice(token);
+      load();
+    } catch(ex){
+      err.textContent = ex.message || "Kunde inte logga in."; err.hidden=false;
+      btn.disabled=false; btn.textContent="Logga in";
+    }
+  };
+}
+
+var FUNNEL = [
+  ["registered", "Registrerad"], ["addedChild", "Lagt till barn"], ["linkedChildPhone", "Kopplat barnets telefon"],
+  ["firstChoreDone", "Första syssla bockad"], ["pickedFirstEgg", "Valt första ägg"], ["activeAfter7Days", "Aktiv efter 7 dagar"]
+];
+var LANG = { sv: "Svenska", en: "Engelska", de: "Tyska", es: "Spanska", device: "Följer telefonen" };
+var PLATFORM = { IOS: "App Store", ANDROID: "Google Play", WEB: "Webben", UNKNOWN: "Okänd" };
+var SOURCE = { organic: "På egen hand", referred: "Värvningskod" };
+
+function render(s){
+  var k = s.kpis, f = s.funnel, sub = s.subscriptions, e = s.engagement;
+  var change = k.newPrevWeek > 0 ? Math.round((k.newThisWeek - k.newPrevWeek) / k.newPrevWeek * 100) : null;
+  var changeNote = change === null ? "ingen jämförelse ännu"
+    : '<span class="'+(change >= 0 ? "up" : "down")+'">'+(change >= 0 ? "+" : "−")+Math.abs(change)+' %</span> mot förra veckan';
+  var generated = new Date(s.generatedAtUtc + "Z").toLocaleString("sv-SE",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+
+  var html =
+    '<div class="titlebar"><div><h1>Statistik</h1>'
+    + '<p class="sub">Uppdaterad '+esc(generated)+' · Summor och andelar, inga enskilda familjer</p></div>'
+    + '<div class="seg" role="group" aria-label="Period">'
+    + [7,30,90].map(function(d){ return '<button type="button" data-days="'+d+'" aria-pressed="'+(d===days)+'">'+d+' dagar</button>'; }).join("")
+    + '</div></div>'
+
+    + '<section class="kpis" aria-label="Nyckeltal">'
+    + kpi("Familjer totalt", n(k.families), n(k.children)+" barn · "+n(k.adults)+" vuxna")
+    + kpi("Nya den här veckan", n(k.newThisWeek), changeNote)
+    + kpi("Veckoaktiva familjer", n(k.weeklyActive), pct(k.weeklyActiveShare)+" av alla · minst 1 syssla bockad")
+    + kpi("Betalande familjer", n(k.paying), "+ "+n(k.comped)+" gratis (comped)")
+    + kpi("Provperiod slutar inom 7 dagar", n(k.trialsEndingIn7Days), "varav "+n(k.trialsEndingActive)+" aktiva den här veckan", true)
+    + '</section>'
+
+    + '<section class="card" aria-labelledby="h-funnel"><div class="sechead"><h2 id="h-funnel">Hur långt nya familjer kommer</h2>'
+    + '<p>'+n(f.registered)+' familjer som registrerades de senaste '+s.days+' dagarna</p></div>'
+    + funnelHtml(f) + '</section>'
+
+    + '<section class="two" aria-label="Utveckling per vecka">'
+    + '<div class="card"><div class="sechead"><h2>Nya familjer per vecka</h2><p>12 veckor</p></div><div class="chart" id="c-new"><div class="tip" id="tip-new"></div></div></div>'
+    + '<div class="card"><div class="sechead"><h2>Veckoaktiva familjer</h2><p>12 veckor</p></div><div class="chart" id="c-active"><div class="tip" id="tip-active"></div></div></div>'
+    + '</section>'
+
+    + '<section class="card" aria-labelledby="h-rev"><div class="sechead"><h2 id="h-rev">Prenumerationer</h2><p>Senaste '+s.days+' dagarna</p></div><div class="stats">'
+    + stat("Provperiod → betalande", sub.trialsEnded > 0 ? pct(sub.trialToPaidRate)+" av "+n(sub.trialsEnded) : "–")
+    + stat("Nya betalande", n(sub.newPaying))
+    + stat("Uppsagda", n(sub.cancellations))
+    + stat("Betalningsproblem", n(sub.billingIssues))
+    + stat("Intäkter (brutto)", money(sub.revenue, sub.revenueCurrency))
+    + stat("Nya familjer via värvningskod", pct(sub.referredShare))
+    + '</div></section>'
+
+    + '<section aria-labelledby="h-dist"><div class="sechead"><h2 id="h-dist">Vilka familjerna är</h2><p>Andel av alla</p></div><div class="dist">'
+    + distHtml("Språk (vuxna)", s.distributions.adultLanguage, LANG)
+    + distHtml("Valuta", s.distributions.currency, null)
+    + distHtml("Butik (betalande)", s.distributions.payingPlatform, PLATFORM)
+    + distHtml("Hur de hittade appen", s.distributions.source, SOURCE)
+    + '</div></section>'
+
+    + '<section class="card" aria-labelledby="h-eng"><div class="sechead"><h2 id="h-eng">Hur appen används</h2><p>Senaste '+s.days+' dagarna</p></div><div class="stats">'
+    + stat("Bockade sysslor per barn och dag", dec(e.choresPerChildPerDay, 1))
+    + stat("Barn som nått nivå 5 den här månaden", pct(e.level5Share))
+    + stat("Stjärnor efter nivå 5, snitt", dec(e.avgStarsAtLevel5, 1))
+    + stat("Äventyr skickade", n(e.adventuresSent))
+    + stat("Familjer med automatisk peng", pct(e.familiesWithAutoAllowance))
+    + stat("Barn med ett sparmål", pct(e.childrenWithSavingsGoal))
+    + '</div></section>'
+
+    + '<section class="card" aria-labelledby="h-aff"><div class="sechead"><h2 id="h-aff">Affiliates</h2><p>Sedan start</p></div>'
+    + affiliatesHtml(s.affiliates) + '</section>'
+
+    + '<p class="liten">Sidan visar bara summor och andelar som räknas fram ur data appen redan sparar för att fungera. Den går inte att använda för att titta på en enskild familj.</p>';
+  root.innerHTML = html;
+
+  var btns = root.querySelectorAll(".seg button");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].onclick = function(){ var d = parseInt(this.getAttribute("data-days"), 10); if (d !== days) { days = d; setDays(d); load(); } };
+  }
+  var weeks = s.weekly || [];
+  chart("c-new", "tip-new", weeks, weeks.map(function(w){ return w.newFamilies; }), "bar", "nya familjer");
+  chart("c-active", "tip-active", weeks, weeks.map(function(w){ return w.activeFamilies; }), "line", "aktiva familjer");
+}
+
+function kpi(label, value, note, attention){
+  return '<div class="kpi'+(attention?' attention':'')+'"><span class="label">'+label+'</span><span class="value">'+value+'</span><span class="note">'+note+'</span></div>';
+}
+function stat(label, value){ return '<div class="stat"><span>'+label+'</span><b>'+value+'</b></div>'; }
+
+function funnelHtml(f){
+  var base = f.registered || 0;
+  if (!base) return '<p class="empty">Inga nya familjer under perioden.</p>';
+  var worst = -1, worstDrop = 0;
+  for (var i = 1; i < FUNNEL.length; i++) {
+    var d = (f[FUNNEL[i-1][0]] || 0) - (f[FUNNEL[i][0]] || 0);
+    if (d > worstDrop) { worstDrop = d; worst = i; }
+  }
+  var rows = FUNNEL.map(function(step, i){
+    var v = f[step[0]] || 0, p = Math.round(share(v, base) * 100);
+    var drop = i > 0 ? Math.round(share((f[FUNNEL[i-1][0]] || 0) - v, base) * 100) : 0;
+    return '<div class="frow"><span class="name">'+step[1]+'</span>'
+      + '<div class="track" role="img" aria-label="'+step[1]+': '+v+' familjer, '+p+' procent"><div class="bar" style="width:'+p+'%"></div></div>'
+      + '<span class="val"><b>'+n(v)+'</b> · '+p+' %'+(i === worst ? '<span class="drop">−'+drop+'</span>' : '')+'</span></div>';
+  }).join("");
+  var callout = worst > 0
+    ? '<p class="callout"><strong>Största tappet: '+FUNNEL[worst][1].toLowerCase()+'.</strong> '
+      + n(worstDrop)+' familjer kom till "'+FUNNEL[worst-1][1].toLowerCase()+'" men inte vidare.</p>'
+    : '';
+  return '<div class="funnel">'+rows+'</div>'+callout;
+}
+
+function distHtml(title, rows, labels){
+  rows = rows || [];
+  var total = rows.reduce(function(a, r){ return a + r.count; }, 0);
+  var body = !total ? '<p class="empty">Inga ännu.</p>' : rows.map(function(r){
+    var p = Math.round(share(r.count, total) * 100), name = labels ? (labels[r.key] || r.key) : r.key;
+    return '<div class="drow"><span>'+esc(name)+'</span><div class="t" role="img" aria-label="'+esc(name)+' '+p+' procent"><div class="b" style="width:'+p+'%"></div></div><span class="p">'+p+' %</span></div>';
+  }).join("");
+  return '<div class="card"><h3>'+title+'</h3>'+body+'</div>';
+}
+
+function affiliatesHtml(rows){
+  rows = rows || [];
+  if (!rows.length) return '<p class="empty">Inga affiliates ännu.</p>';
+  return '<div class="tbl"><table style="min-width:560px"><thead><tr><th>Affiliate</th><th>Kod</th><th class="r">Värvade</th><th class="r">Betalande</th><th class="r">Konvertering</th><th class="r">Att betala</th><th class="r">Utbetalt</th></tr></thead><tbody>'
+    + rows.map(function(r){
+      return '<tr><td>'+esc(r.name)+'</td><td class="code">'+esc(r.referralCode)+'</td><td class="r">'+n(r.referrals)+'</td><td class="r">'+n(r.paying)+'</td>'
+        + '<td class="r">'+(r.referrals > 0 ? pct(r.conversion) : "–")+'</td><td class="r'+(r.payable > 0 ? ' pay' : '')+'">'+kr(r.payable)+'</td><td class="r">'+kr(r.paidOut)+'</td></tr>';
+    }).join("")
+    + '</tbody></table></div>';
+}
+
+var NS = "http://www.w3.org/2000/svg";
+function svgEl(name, attrs, parent){ var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+/** A round top step (1, 2, 5, 10, 20, 50, …) so the grid has 3–5 lines. */
+function niceStep(max){ var raw = Math.max(1, max) / 4, pow = Math.pow(10, Math.floor(Math.log10(raw))); var m = raw / pow; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * pow; }
+
+function chart(hostId, tipId, weeks, data, kind, unit){
+  var host = document.getElementById(hostId), tip = document.getElementById(tipId);
+  if (!host || !data.length) return;
+  var W = 460, H = 200, L = 34, R = 34, T = 14, B = 26;
+  var step = niceStep(Math.max.apply(null, data)), max = Math.max(step, Math.ceil(Math.max.apply(null, data) / step) * step);
+  var labels = weeks.map(function(w){ return "v " + w.isoWeek; });
+  var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": unit + " per vecka, senast " + data[data.length - 1] });
+  host.insertBefore(svg, tip);
+  var y = function(v){ return T + (H - T - B) * (1 - v / max); };
+  var bw = (W - L - R) / data.length, x = function(i){ return L + bw * i + bw / 2; };
+  var css = getComputedStyle(document.documentElement);
+  var accent = css.getPropertyValue("--accent").trim(), soft = css.getPropertyValue("--accent-soft").trim(), card = css.getPropertyValue("--card").trim();
+  var ax = svgEl("g", { class: "axis" }, svg);
+  for (var t = 0; t <= max; t += step) {
+    svgEl("line", { x1: L, x2: W - R, y1: y(t), y2: y(t), class: "gridline" }, svg);
+    svgEl("text", { x: L - 6, y: y(t) + 4, "text-anchor": "end" }, ax).textContent = t;
+  }
+  [0, 4, 8, data.length - 1].forEach(function(i){ svgEl("text", { x: x(i), y: H - 8, "text-anchor": "middle" }, ax).textContent = labels[i]; });
+  var marks = [], last = data.length - 1;
+  if (kind === "bar") {
+    data.forEach(function(v){ marks.push(null); });
+    data.forEach(function(v, i){
+      if (v <= 0) return;
+      var h = y(0) - y(v), w = bw - 4, bx = x(i) - w / 2, r = Math.min(4, h / 2);
+      marks[i] = svgEl("path", { d: "M"+bx+","+y(0)+"V"+(y(v)+r)+"Q"+bx+","+y(v)+" "+(bx+r)+","+y(v)+"H"+(bx+w-r)+"Q"+(bx+w)+","+y(v)+" "+(bx+w)+","+(y(v)+r)+"V"+y(0)+"Z", fill: accent }, svg);
+    });
+  } else {
+    var pts = data.map(function(v, i){ return x(i) + "," + y(v); });
+    svgEl("path", { d: "M"+x(0)+","+y(0)+"L"+pts.join("L")+"L"+x(last)+","+y(0)+"Z", fill: soft, opacity: "0.7" }, svg);
+    svgEl("polyline", { points: pts.join(" "), fill: "none", stroke: accent, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+    data.forEach(function(v, i){ marks.push(svgEl("circle", { cx: x(i), cy: y(v), r: i === last ? 4.5 : 0, fill: accent, stroke: card, "stroke-width": 2 }, svg)); });
+  }
+  svgEl("text", { x: x(last) + (kind === "bar" ? 0 : 8), y: y(data[last]) - (kind === "bar" ? 6 : -4), class: "endlabel", "text-anchor": kind === "bar" ? "middle" : "start" }, svg).textContent = n(data[last]);
+  var cross = svgEl("line", { y1: T, y2: y(0), stroke: css.getPropertyValue("--faint").trim(), "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 }, svg);
+  data.forEach(function(v, i){
+    var hit = svgEl("rect", { x: L + bw * i, y: T, width: bw, height: H - T - B, fill: "transparent" }, svg);
+    function show(){
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", kind === "bar" ? 0 : 0.6);
+      marks.forEach(function(m, j){ if (!m) return; if (kind === "bar") m.setAttribute("opacity", j === i ? 1 : 0.45); else m.setAttribute("r", j === i || j === last ? 4.5 : 0); });
+      var s = svg.getBoundingClientRect().width / W;
+      tip.style.left = (x(i) * s) + "px"; tip.style.top = (y(v) * s) + "px";
+      tip.textContent = labels[i] + ": " + n(v) + " " + unit; tip.classList.add("on");
+    }
+    function hide(){
+      cross.setAttribute("opacity", 0); tip.classList.remove("on");
+      marks.forEach(function(m, j){ if (!m) return; if (kind === "bar") m.setAttribute("opacity", 1); else m.setAttribute("r", j === last ? 4.5 : 0); });
+    }
+    hit.addEventListener("mouseenter", show); hit.addEventListener("mouseleave", hide);
+    hit.addEventListener("touchstart", show, { passive: true });
+  });
+}
+
+async function load(){
+  if(!getDevice()){ renderLogin(null); return; }
+  if (!root.querySelector(".titlebar")) root.innerHTML = '<p class="liten">Laddar…</p>';
+  try {
+    render(await fetchStats(days));
+  } catch(ex){
+    if(ex.status===401 || ex.status===403){
+      clearDevice();
+      renderLogin(ex.status===403 ? "Det kontot är inte admin. Logga in med adminkontot." : "Sessionen gick ut. Logga in igen.");
+    } else {
+      root.innerHTML = '<p class="adm-err">'+esc(ex.message||"Kunde inte hämta statistiken.")+'</p><button class="btn lugn" id="retry">Försök igen</button>';
+      root.querySelector("#retry").onclick = load;
+    }
+  }
+}
+load();
+</script>
+</body>
+</html>
