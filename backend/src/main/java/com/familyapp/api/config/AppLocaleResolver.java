@@ -7,12 +7,18 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.LocaleResolver;
 
-import java.util.Collections;
 import java.util.Locale;
 
 /**
- * Which language user-facing text is rendered in, per request:
- * the member's saved language, then Accept-Language, then English.
+ * Which language user-facing text is rendered in, per request: the member's saved
+ * language, then the app's own language choice, then Swedish.
+ *
+ * "The app's own choice" is an Accept-Language that is exactly one bare code --
+ * "sv", "en", "de" or "es". That is what the translated apps and the web send. Anything
+ * else comes from a client that never chose a language and is Swedish-only: the
+ * Android app before the translation sends no header at all, and iOS adds one of its
+ * own ("en-US,en;q=0.9") to a Swedish app. Falling back to English there turned Swedish
+ * errors English in apps already in the stores.
  *
  * Registered under the bean name DispatcherServlet looks for, so
  * LocaleContextHolder carries this locale into controllers and exception handlers.
@@ -22,6 +28,8 @@ public class AppLocaleResolver implements LocaleResolver {
 
     private static final String DEVICE_TOKEN_HEADER = "X-Device-Token";
     private static final String CACHE_ATTRIBUTE = AppLocaleResolver.class.getName() + ".locale";
+    /** Clients that never chose a language are the Swedish-only ones. */
+    private static final String LEGACY_CLIENT_LANGUAGE = "sv";
 
     private final FamilyMemberService memberService;
 
@@ -44,19 +52,17 @@ public class AppLocaleResolver implements LocaleResolver {
         throw new UnsupportedOperationException("The locale follows the member and Accept-Language");
     }
 
-    /** Saved language → first supported Accept-Language → English. */
+    /** Saved language → an app-chosen Accept-Language → Swedish. */
     static String resolveLanguage(String savedLanguage, HttpServletRequest request) {
         if (AppLanguages.isSupported(savedLanguage)) {
             return savedLanguage;
         }
-        if (request.getHeader("Accept-Language") != null) {
-            for (var locale : Collections.list(request.getLocales())) {
-                if (AppLanguages.isSupported(locale.getLanguage())) {
-                    return locale.getLanguage();
-                }
-            }
+        var header = request.getHeader("Accept-Language");
+        var chosen = header == null ? null : header.trim().toLowerCase(Locale.ROOT);
+        if (AppLanguages.isSupported(chosen)) {
+            return chosen;
         }
-        return AppLanguages.FALLBACK;
+        return LEGACY_CLIENT_LANGUAGE;
     }
 
     private String savedLanguage(HttpServletRequest request) {

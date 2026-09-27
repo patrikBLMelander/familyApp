@@ -5,7 +5,6 @@ import com.familyapp.application.passwordreset.PasswordResetService;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,13 +35,10 @@ public class PasswordResetController {
      * Always 200 with the same body, whether a mail was sent or the address is unknown.
      */
     @PostMapping("/request")
-    public Map<String, String> request(
-            @RequestBody RequestResetRequest body,
-            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage
-    ) {
-        // Mail language for a member with no saved language: the caller's language if it
-        // named one we have, otherwise Swedish -- the web reset page predates i18n.
-        var fallback = acceptLanguage != null ? LocaleContextHolder.getLocale().getLanguage() : "sv";
+    public Map<String, String> request(@RequestBody RequestResetRequest body) {
+        // Mail language for a member with no saved language: the request's language, which
+        // AppLocaleResolver already turns into Swedish for clients that never chose one.
+        var fallback = LocaleContextHolder.getLocale().getLanguage();
         service.request(body.email(), fallback);
         return Map.of(
                 "message",

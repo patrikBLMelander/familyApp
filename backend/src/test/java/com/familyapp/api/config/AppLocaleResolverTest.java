@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/** Saved member language, then Accept-Language, then English. */
+/** Saved member language, then the app's bare language code, then Swedish for legacy clients. */
 class AppLocaleResolverTest {
 
     private FamilyMemberService members;
@@ -34,23 +34,22 @@ class AppLocaleResolverTest {
     }
 
     @Test
-    void acceptLanguageIsUsedWhenNothingIsSaved() {
+    void theAppsBareLanguageCodeIsUsedWhenNothingIsSaved() {
         when(members.getMemberByDeviceToken("tok")).thenReturn(member(null));
 
-        assertThat(resolver.resolveLocale(request("tok", "sv-SE,sv;q=0.9,en;q=0.8")))
-                .isEqualTo(Locale.forLanguageTag("sv"));
+        assertThat(resolver.resolveLocale(request("tok", "es"))).isEqualTo(Locale.forLanguageTag("es"));
+        assertThat(resolver.resolveLocale(request(null, "EN"))).isEqualTo(Locale.ENGLISH);
     }
 
     @Test
-    void firstSupportedAcceptLanguageWins() {
-        assertThat(resolver.resolveLocale(request(null, "fr-FR,fr;q=0.9,es;q=0.5")))
-                .isEqualTo(Locale.forLanguageTag("es"));
-    }
-
-    @Test
-    void englishWhenNothingMatches() {
-        assertThat(resolver.resolveLocale(request(null, "fr-FR"))).isEqualTo(Locale.ENGLISH);
-        assertThat(resolver.resolveLocale(request(null, null))).isEqualTo(Locale.ENGLISH);
+    void legacyClientsGetSwedish() {
+        // Android before the translation: no header at all.
+        assertThat(resolver.resolveLocale(request(null, null))).isEqualTo(Locale.forLanguageTag("sv"));
+        // iOS adds its own header to a Swedish-only app.
+        assertThat(resolver.resolveLocale(request(null, "en-US,en;q=0.9"))).isEqualTo(Locale.forLanguageTag("sv"));
+        // A browser on the static pages.
+        assertThat(resolver.resolveLocale(request(null, "de-DE,de;q=0.9"))).isEqualTo(Locale.forLanguageTag("sv"));
+        assertThat(resolver.resolveLocale(request(null, "fr"))).isEqualTo(Locale.forLanguageTag("sv"));
     }
 
     @Test
