@@ -1,13 +1,10 @@
 package se.kidquest.app.dashboard
 
-import se.kidquest.app.i18n.trp
-import se.kidquest.app.i18n.Dates
-import se.kidquest.app.i18n.tr
-import se.kidquest.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,16 +24,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,18 +60,29 @@ import java.util.Locale
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import se.kidquest.app.R
 import se.kidquest.app.chore.DailyChoreRepository
+import se.kidquest.app.i18n.Dates
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.i18n.trp
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.DailyChoreResponse
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.network.FamilyMemberResponse
+import se.kidquest.app.session.TokenStore
 import se.kidquest.app.theme.LocalSeasonPalette
 import se.kidquest.app.theme.SeasonHeaderBar
 
 private data class MemberWithChores(
     val member: FamilyMemberResponse,
     val chores: List<DailyChoreWithCompletionResponse>,
+    /** Every active chore, on every weekday -- the week is built from these, not from today's. */
+    val all: List<DailyChoreResponse> = emptyList(),
 )
+
+/** A chore and whose it is: the edit dialog and the delete question both name the child. */
+private data class ChoreTarget(val member: FamilyMemberResponse, val chore: DailyChoreResponse)
 
 private val WEEKDAY_ABBREVS = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 
@@ -89,9 +101,16 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var activeTab by remember { mutableStateOf("today") }
+    var refreshKey by remember { mutableStateOf(0) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    // Long-press on a chore, today or in the week, opens Redigera / Ta bort -- as on a
+    // child's own chore screen. Children never get the menu.
+    val canEdit = TokenStore.getSession()?.isChild != true
+    var choreToEdit by remember { mutableStateOf<ChoreTarget?>(null) }
+    var chorePendingDelete by remember { mutableStateOf<ChoreTarget?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         loading = true
         error = null
         try {
@@ -103,7 +122,10 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         val chores = runCatching {
                             DailyChoreRepository.fetchChoresForToday(member.id)
                         }.getOrElse { emptyList() }
-                        MemberWithChores(member, chores)
+                        val all = runCatching {
+                            DailyChoreRepository.fetchAllChores(member.id)
+                        }.getOrElse { emptyList() }
+                        MemberWithChores(member, chores, all)
                     }
                 }.map { it.await() }
             }
@@ -153,6 +175,30 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 )
             }
 
+            actionError?.let { message ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = palette.warnBg),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(message, fontSize = 13.sp, color = palette.danger, modifier = Modifier.weight(1f))
+                        Text(
+                            "✕",
+                            fontSize = 14.sp,
+                            color = palette.danger,
+                            modifier = Modifier.clickable { actionError = null }.padding(start = 8.dp),
+                        )
+                    }
+                }
+            }
+
             // ── Content ───────────────────────────────────────────────────────
             when {
                 loading -> Box(
@@ -192,6 +238,9 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             items(data, key = { it.member.id }) { row ->
                                 TodayMemberCard(
                                     row = row,
+                                    canEdit = canEdit,
+                                    onEdit = { choreToEdit = ChoreTarget(row.member, it) },
+                                    onDelete = { chorePendingDelete = ChoreTarget(row.member, it) },
                                     onToggle = { choreId, isCompleted ->
                                         scope.launch {
                                             data = data.map { r ->
@@ -223,12 +272,85 @@ fun FamilyTasksScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         // Week view — one card per day derived from chore weekdays
                         val weekDays = currentWeekDays()
                         items(weekDays, key = { it.toEpochDay() }) { day ->
-                            WeekDayCard(day = day, members = data)
+                            WeekDayCard(
+                                day = day,
+                                members = data,
+                                canEdit = canEdit,
+                                onEdit = { member, chore -> choreToEdit = ChoreTarget(member, chore) },
+                                onDelete = { member, chore -> chorePendingDelete = ChoreTarget(member, chore) },
+                            )
                         }
                     }
                 }
             }
         }
+    }
+
+    FamilyChoreDialogs(
+        choreToEdit = choreToEdit,
+        chorePendingDelete = chorePendingDelete,
+        onEditDone = { saved ->
+            choreToEdit = null
+            if (saved) refreshKey++
+        },
+        onDeleteConfirmed = { target ->
+            chorePendingDelete = null
+            val previous = data
+            // Optimistic, as on the child's own screen: the chore leaves every list at
+            // once and comes back if the call fails.
+            data = data.map { r ->
+                if (r.member.id != target.member.id) r
+                else r.copy(
+                    chores = r.chores.filterNot { it.chore.id == target.chore.id },
+                    all = r.all.filterNot { it.id == target.chore.id },
+                )
+            }
+            scope.launch {
+                try {
+                    DailyChoreRepository.deleteChore(target.chore.id)
+                    actionError = null
+                } catch (e: Exception) {
+                    data = previous
+                    actionError = ApiErrors.message(e, tr(R.string.chore_delete_failed))
+                }
+            }
+        },
+        onDeleteDismissed = { chorePendingDelete = null },
+    )
+}
+
+@Composable
+private fun FamilyChoreDialogs(
+    choreToEdit: ChoreTarget?,
+    chorePendingDelete: ChoreTarget?,
+    onEditDone: (saved: Boolean) -> Unit,
+    onDeleteConfirmed: (ChoreTarget) -> Unit,
+    onDeleteDismissed: () -> Unit,
+) {
+    val palette = LocalSeasonPalette.current
+    choreToEdit?.let { target ->
+        AddRecurringTaskDialog(
+            childName = target.member.name,
+            childId = target.member.id,
+            existing = target.chore,
+            onDismiss = { onEditDone(false) },
+            onSuccess = { onEditDone(true) },
+        )
+    }
+    chorePendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = onDeleteDismissed,
+            title = { Text(tr(R.string.chore_delete_title)) },
+            text = { Text(tr(R.string.chore_delete_body, target.chore.title, target.member.name)) },
+            confirmButton = {
+                TextButton(onClick = { onDeleteConfirmed(target) }) {
+                    Text(tr(R.string.common_delete), color = palette.danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDeleteDismissed) { Text(tr(R.string.common_cancel)) }
+            },
+        )
     }
 }
 
@@ -274,12 +396,17 @@ private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
 
 // ── Today view ──────────────────────────────────────────────────────────────
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun TodayMemberCard(
     row: MemberWithChores,
+    canEdit: Boolean,
+    onEdit: (DailyChoreResponse) -> Unit,
+    onDelete: (DailyChoreResponse) -> Unit,
     onToggle: (choreId: String, isCompleted: Boolean) -> Unit,
 ) {
     val palette = LocalSeasonPalette.current
+    var menuForChoreId by remember { mutableStateOf<String?>(null) }
     val done = row.chores.count { it.completed }
     val total = row.chores.size
     val allDone = total > 0 && done == total
@@ -329,10 +456,14 @@ private fun TodayMemberCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             row.chores.forEach { item ->
+              Box {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onToggle(item.chore.id, item.completed) }
+                        .combinedClickable(
+                            onClick = { onToggle(item.chore.id, item.completed) },
+                            onLongClick = if (canEdit) ({ menuForChoreId = item.chore.id }) else null,
+                        )
                         .padding(vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -375,6 +506,13 @@ private fun TodayMemberCard(
                         )
                     }
                 }
+                ChoreMenu(
+                    expanded = menuForChoreId == item.chore.id,
+                    onDismiss = { menuForChoreId = null },
+                    onEdit = { onEdit(item.chore) },
+                    onDelete = { onDelete(item.chore) },
+                )
+              }
             }
         }
     }
@@ -382,12 +520,17 @@ private fun TodayMemberCard(
 
 // ── Week view ──────────────────────────────────────────────────────────────
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun WeekDayCard(
     day: LocalDate,
     members: List<MemberWithChores>,
+    canEdit: Boolean,
+    onEdit: (FamilyMemberResponse, DailyChoreResponse) -> Unit,
+    onDelete: (FamilyMemberResponse, DailyChoreResponse) -> Unit,
 ) {
     val palette = LocalSeasonPalette.current
+    var menuForChoreId by remember { mutableStateOf<String?>(null) }
     val today = LocalDate.now()
     val isToday = day == today
     val dayIndex = day.dayOfWeek.value - 1 // 0=Mon…6=Sun
@@ -396,8 +539,13 @@ private fun WeekDayCard(
     val dateStr = "${day.dayOfMonth}/${day.monthValue}"
 
     // For each member, pick chores scheduled on this weekday
+    // Built from every chore, not today's: otherwise a chore that does not fall today
+    // is missing from all seven days. Completion only exists for today.
     val membersThisDay = members.mapNotNull { row ->
-        val scheduled = row.chores.filter { abbrev in it.chore.weekdays }
+        val completedToday = row.chores.filter { it.completed }.map { it.chore.id }.toSet()
+        val scheduled = row.all
+            .filter { abbrev in it.weekdays }
+            .map { DailyChoreWithCompletionResponse(it, completed = isToday && it.id in completedToday, completionId = null) }
         if (scheduled.isEmpty()) null else row to scheduled
     }
 
@@ -486,9 +634,14 @@ private fun WeekDayCard(
                             color = palette.inkSoft,
                         )
                         chores.forEach { item ->
+                          Box {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick = if (canEdit) ({ menuForChoreId = item.chore.id }) else null,
+                                    )
                                     .padding(start = 4.dp, top = 2.dp, bottom = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -518,10 +671,44 @@ private fun WeekDayCard(
                                     )
                                 }
                             }
+                            ChoreMenu(
+                                expanded = menuForChoreId == item.chore.id,
+                                onDismiss = { menuForChoreId = null },
+                                onEdit = { onEdit(row.member, item.chore) },
+                                onDelete = { onDelete(row.member, item.chore) },
+                            )
+                          }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/** Redigera / Ta bort for one chore row, opened by a long-press. */
+@Composable
+private fun ChoreMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val palette = LocalSeasonPalette.current
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(tr(R.string.common_edit)) },
+            onClick = {
+                onDismiss()
+                onEdit()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(tr(R.string.common_delete), color = palette.danger) },
+            onClick = {
+                onDismiss()
+                onDelete()
+            },
+        )
     }
 }

@@ -199,9 +199,8 @@ struct ChildTasksView: View {
     // MARK: - Week
 
     private func weekList(_ chores: DailyChoreRepositoryIOS.Chores) -> some View {
-        // Built from every chore the member has, not from today's list. Android filters
-        // the week out of the day, so Monday's card can only ever show chores that also
-        // happen to fall today — which on a Sunday leaves most of the week empty.
+        // Built from every chore the member has, not from today's list -- otherwise
+        // Monday's card could only show chores that also happen to fall today.
         let completed = Set(chores.today.filter(\.completed).map(\.chore.id))
         return ScrollView {
             LazyVStack(spacing: 10) {
@@ -209,7 +208,12 @@ struct ChildTasksView: View {
                     WeekDayCard(
                         day: day,
                         chores: chores.all,
-                        completedToday: completed
+                        completedToday: completed,
+                        // The week is cards, not a List, so swipe actions are out; a
+                        // long-press menu is the same gesture as Android's.
+                        canEdit: viewerIsAdult,
+                        onEdit: { editChore = $0 },
+                        onDelete: { pendingDelete = ChoreRef(id: $0.id, title: $0.title) }
                     )
                 }
             }
@@ -458,6 +462,9 @@ private struct WeekDayCard: View {
     let day: Date
     let chores: [DailyChoreResponseDTO]
     let completedToday: Set<String>
+    var canEdit = false
+    var onEdit: (DailyChoreResponseDTO) -> Void = { _ in }
+    var onDelete: (DailyChoreResponseDTO) -> Void = { _ in }
 
     private var weekday: ChoreWeekday { ChoreWeekday.of(day) }
 
@@ -545,7 +552,24 @@ private struct WeekDayCard: View {
         } else {
             VStack(spacing: 6) {
                 ForEach(scheduled, id: \.id) { chore in
-                    row(for: chore)
+                    if canEdit {
+                        row(for: chore)
+                            .contentShape(Rectangle())
+                            .contextMenu {
+                                Button {
+                                    onEdit(chore)
+                                } label: {
+                                    Label("Ändra", systemImage: "pencil")
+                                }
+                                Button(role: .destructive) {
+                                    onDelete(chore)
+                                } label: {
+                                    Label("Ta bort", systemImage: "trash")
+                                }
+                            }
+                    } else {
+                        row(for: chore)
+                    }
                 }
             }
             .padding(.horizontal, 14)

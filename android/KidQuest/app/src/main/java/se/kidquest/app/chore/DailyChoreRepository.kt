@@ -4,6 +4,7 @@ import se.kidquest.app.i18n.tr
 import se.kidquest.app.R
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.CreateDailyChoreRequest
+import se.kidquest.app.network.DailyChoreResponse
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.network.MarkChoreCompletedRequest
 import se.kidquest.app.network.UpdateDailyChoreRequest
@@ -33,6 +34,11 @@ object DailyChoreRepository {
 
     suspend fun fetchChoresForToday(memberId: String): List<DailyChoreWithCompletionResponse> =
         fetchChoresForDate(memberId, LocalDate.now())
+
+    /** Every active chore for the member, on every weekday -- what the week view is built from. */
+    suspend fun fetchAllChores(memberId: String): List<DailyChoreResponse> = withContext(Dispatchers.IO) {
+        ApiClient.dailyChoreApi.getAllChores(memberId).filter { it.isActive }
+    }
 
     suspend fun createChore(
         memberId: String,

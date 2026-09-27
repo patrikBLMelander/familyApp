@@ -63,6 +63,7 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 import se.kidquest.app.chore.DailyChoreRepository
 import se.kidquest.app.network.ApiErrors
+import se.kidquest.app.network.DailyChoreResponse
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.theme.LocalSeasonPalette
 import se.kidquest.app.theme.SeasonHeaderBar
@@ -92,6 +93,9 @@ fun ChildTasksScreen(
     // too -- this is so they are not offered a button that answers with an error.
     val isChildSession = TokenStore.getSession()?.isChild == true
     var tasks by remember { mutableStateOf<List<DailyChoreWithCompletionResponse>>(emptyList()) }
+    // The week is built from every chore, not today's: a chore that does not fall today
+    // would otherwise be missing from all seven days -- and impossible to edit there.
+    var allChores by remember { mutableStateOf<List<DailyChoreResponse>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var toggleError by remember { mutableStateOf<String?>(null) }
@@ -113,6 +117,7 @@ fun ChildTasksScreen(
         error = null
         try {
             tasks = DailyChoreRepository.fetchChoresForToday(childId)
+            allChores = DailyChoreRepository.fetchAllChores(childId)
         } catch (e: Exception) {
             error = ApiErrors.message(e, tr(R.string.tasks_load_failed))
         } finally {
@@ -159,6 +164,41 @@ fun ChildTasksScreen(
                 )
             }
 
+            // Above both tabs: a delete from the week view can fail too, and the
+            // restored row alone would not say why.
+            if (toggleError != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = palette.warnBg),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = toggleError!!,
+                            fontSize = 13.sp,
+                            color = palette.danger,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "✕",
+                            fontSize = 14.sp,
+                            color = palette.danger,
+                            modifier = Modifier
+                                .clickable { toggleError = null }
+                                .padding(start = 8.dp),
+                        )
+                    }
+                }
+            }
+
             // ── Content ───────────────────────────────────────────────────────
             when {
                 loading -> Box(
@@ -178,39 +218,6 @@ fun ChildTasksScreen(
                 }
 
                 activeTab == "today" -> {
-                    if (toggleError != null) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = palette.warnBg),
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = toggleError!!,
-                                    fontSize = 13.sp,
-                                    color = palette.danger,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    text = "✕",
-                                    fontSize = 14.sp,
-                                    color = palette.danger,
-                                    modifier = Modifier
-                                        .clickable { toggleError = null }
-                                        .padding(start = 8.dp),
-                                )
-                            }
-                        }
-                    }
-
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
@@ -374,7 +381,16 @@ fun ChildTasksScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(weekDays, key = { it.toEpochDay() }) { day ->
-                            ChildWeekDayCard(day = day, allChores = tasks)
+                            ChildWeekDayCard(
+                                day = day,
+                                allChores = allChores,
+                                todaysTasks = tasks,
+                                // Same menu as today's list; a chore can show on several
+                                // days, so the menu belongs to the chore on this day.
+                                canEdit = !isChildSession,
+                                onEdit = { choreToEdit = it.withoutCompletion() },
+                                onDelete = { chorePendingDelete = it.withoutCompletion() },
+                            )
                         }
                     }
                 }
@@ -398,7 +414,9 @@ fun ChildTasksScreen(
                         val previous = tasks
                         // Optimistic: the row disappears at once and comes back if the
                         // call fails, which is how the web version behaves.
+                        val previousAll = allChores
                         tasks = tasks.filterNot { it.chore.id == choreId }
+                        allChores = allChores.filterNot { it.id == choreId }
                         chorePendingDelete = null
                         scope.launch {
                             try {
@@ -406,6 +424,7 @@ fun ChildTasksScreen(
                                 refreshKey++
                             } catch (e: Exception) {
                                 tasks = previous
+                                allChores = previousAll
                                 toggleError = ApiErrors.message(e, tr(R.string.chore_delete_failed))
                             }
                         }
@@ -502,10 +521,15 @@ private fun ChildSurfaceCard(content: @Composable () -> Unit) {
 
 // ── Week view ────────────────────────────────────────────────────────────────
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ChildWeekDayCard(
     day: LocalDate,
-    allChores: List<DailyChoreWithCompletionResponse>,
+    allChores: List<DailyChoreResponse>,
+    todaysTasks: List<DailyChoreWithCompletionResponse>,
+    canEdit: Boolean,
+    onEdit: (DailyChoreResponse) -> Unit,
+    onDelete: (DailyChoreResponse) -> Unit,
 ) {
     val palette = LocalSeasonPalette.current
     val today = LocalDate.now()
@@ -515,9 +539,14 @@ private fun ChildWeekDayCard(
     val dayLabelSv = Dates.weekdayShort(dayIndex + 1)
     val dateStr = "${day.dayOfMonth}/${day.monthValue}"
 
-    val scheduledChores = allChores.filter { abbrev in it.chore.weekdays }
+    // Completion only exists for today; the other days show what is scheduled.
+    val completedToday = todaysTasks.filter { it.completed }.map { it.chore.id }.toSet()
+    val scheduledChores = allChores
+        .filter { abbrev in it.weekdays }
+        .map { DailyChoreWithCompletionResponse(it, completed = isToday && it.id in completedToday, completionId = null) }
     val totalChores = scheduledChores.size
     val doneChores = if (isToday) scheduledChores.count { it.completed } else 0
+    var menuForChoreId by remember { mutableStateOf<String?>(null) }
     val allDoneToday = isToday && totalChores > 0 && doneChores == totalChores
 
     Card(
@@ -593,9 +622,15 @@ private fun ChildWeekDayCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     scheduledChores.forEach { item ->
+                      Box {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {},
+                                    // Långtryck = förälderns meny, som i dagens lista. Barn får ingen.
+                                    onLongClick = if (canEdit) ({ menuForChoreId = item.chore.id }) else null,
+                                )
                                 .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -624,9 +659,33 @@ private fun ChildWeekDayCard(
                                 )
                             }
                         }
+                        DropdownMenu(
+                            expanded = menuForChoreId == item.chore.id,
+                            onDismissRequest = { menuForChoreId = null },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(tr(R.string.common_edit)) },
+                                onClick = {
+                                    menuForChoreId = null
+                                    onEdit(item.chore)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(tr(R.string.common_delete), color = palette.danger) },
+                                onClick = {
+                                    menuForChoreId = null
+                                    onDelete(item.chore)
+                                },
+                            )
+                        }
+                      }
                     }
                 }
             }
         }
     }
 }
+
+/** The week lists chores without today's completion; the edit and delete dialogs take the wrapped shape. */
+private fun DailyChoreResponse.withoutCompletion() =
+    DailyChoreWithCompletionResponse(chore = this, completed = false, completionId = null)

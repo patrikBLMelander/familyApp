@@ -17,7 +17,7 @@ enum FamilyTasksRepository {
         /// Carries the completions, and is the only list that can be ticked.
         var today: [DailyChoreWithCompletionResponseDTO]
         /// The full schedule, every weekday — what the Vecka tab draws.
-        let all: [DailyChoreResponseDTO]
+        var all: [DailyChoreResponseDTO]
         /// True when this child's row could not be read. The section says so rather
         /// than showing an empty list, which would read as "nothing to do today".
         let loadFailed: Bool
