@@ -1,0 +1,32 @@
+<sv-SE>
+• KidQuest finns nu på engelska, tyska och spanska – välj under ⋯ → Språk
+• Välj familjens valuta för plånboken (⋯ → Valuta): kr, €, $, £ med flera
+• Redigera och ta bort sysslor direkt i veckovyn och i familjeöversikten – håll inne på sysslan
+• Börjar ni sent i månaden? Barnets första djur följer med hela nästa månad
+• Veckovyn visar nu alla sysslor, även de som inte gäller idag
+• Tydligare felmeddelanden
+</sv-SE>
+<en-US>
+• KidQuest is now available in English, German and Spanish – choose under ⋯ → Language
+• Pick your family's currency for the wallet (⋯ → Currency): €, $, £, kr and more
+• Edit and delete chores right in the week view and the family overview – just long-press a chore
+• Joining late in the month? Your child's first pet stays for the whole next month
+• The week view now shows every chore, not only today's
+• Clearer error messages
+</en-US>
+<de-DE>
+• KidQuest gibt es jetzt auf Deutsch, Englisch und Spanisch – wähle die Sprache unter ⋯ → Sprache
+• Wähle die Währung eurer Familie für die Geldbörse (⋯ → Währung): €, $, £, kr und mehr
+• Aufgaben direkt in der Wochenansicht und der Familienübersicht bearbeiten und löschen – einfach lange drücken
+• Spät im Monat gestartet? Das erste Tier deines Kindes bleibt den ganzen nächsten Monat
+• Die Wochenansicht zeigt jetzt alle Aufgaben, nicht nur die von heute
+• Verständlichere Fehlermeldungen
+</de-DE>
+<es-ES>
+• KidQuest ya está disponible en español, inglés y alemán: elígelo en ⋯ → Idioma
+• Elige la moneda de tu familia para el monedero (⋯ → Moneda): €, $, £, kr y más
+• Edita y elimina tareas directamente en la vista semanal y en el resumen familiar: mantén pulsada la tarea
+• ¿Empiezas a final de mes? La primera mascota de tu hijo o hija se queda todo el mes siguiente
+• La vista semanal muestra ahora todas las tareas, no solo las de hoy
+• Mensajes de error más claros
+</es-ES>

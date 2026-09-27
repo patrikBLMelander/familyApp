@@ -1,0 +1,41 @@
+{
+  "slides": ["pet", "egg", "adventures", "wallet", "family", "done"],
+  "text": {
+    "sv": {
+      "pet": ["Sysslor blir mat till djuret", "Barnen bockar av – djuret växer"],
+      "egg": ["Ett nytt ägg varje månad", "Vilket djur kläcks den här gången?"],
+      "adventures": ["Äventyr och sällsynta djur", "Nya nivåer ger biljetter till äventyr"],
+      "wallet": ["Fickpeng och sparmål", "Barnen ser vad de har och vad de sparar till"],
+      "family": ["Hela familjen på en blick", "Se vad som är gjort idag – utan att fråga"],
+      "done": ["Allt klart idag! 🎉", "Inget tjat – djuret är mätt och glatt"],
+      "feature": "Sysslor som barn faktiskt vill göra"
+    },
+    "en": {
+      "pet": ["Chores turn into pet food", "Kids tick them off – their pet grows"],
+      "egg": ["A new egg every month", "Which pet will hatch this time?"],
+      "adventures": ["Adventures and rare pets", "Every new level earns an adventure ticket"],
+      "wallet": ["Pocket money and savings goals", "Kids see what they have and what they're saving for"],
+      "family": ["The whole family at a glance", "See what's done today – without asking"],
+      "done": ["All done today! 🎉", "No nagging – just a happy, well-fed pet"],
+      "feature": "Chores kids actually want to do"
+    },
+    "de": {
+      "pet": ["Aufgaben werden zu Futter", "Kinder haken ab – ihr Tier wächst"],
+      "egg": ["Jeden Monat ein neues Ei", "Welches Tier schlüpft diesmal?"],
+      "adventures": ["Abenteuer und seltene Tiere", "Jedes neue Level bringt ein Abenteuer-Ticket"],
+      "wallet": ["Taschengeld und Sparziele", "Kinder sehen, was sie haben und worauf sie sparen"],
+      "family": ["Die ganze Familie auf einen Blick", "Sieh, was heute erledigt ist – ohne zu fragen"],
+      "done": ["Heute alles erledigt! 🎉", "Kein Meckern – nur ein glückliches, sattes Tier"],
+      "feature": "Aufgaben, die Kinder wirklich machen wollen"
+    },
+    "es": {
+      "pet": ["Las tareas alimentan a su mascota", "Los niños las marcan y su mascota crece"],
+      "egg": ["Un huevo nuevo cada mes", "¿Qué mascota nacerá esta vez?"],
+      "adventures": ["Aventuras y mascotas raras", "Cada nivel nuevo da un ticket de aventura"],
+      "wallet": ["Paga y metas de ahorro", "Los niños ven lo que tienen y para qué ahorran"],
+      "family": ["Toda la familia de un vistazo", "Mira qué está hecho hoy, sin preguntar"],
+      "done": ["¡Todo hecho hoy! 🎉", "Sin regañar: solo una mascota feliz y bien alimentada"],
+      "feature": "Tareas que los niños sí quieren hacer"
+    }
+  }
+}

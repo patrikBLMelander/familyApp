@@ -1,3 +1,24 @@
+# Butiksbilder
+
+## Inramade bilder med rubrik – ANVÄND DESSA (2026-09-27)
+`framed/<iphone|ipad|android>/<sv|en|de|es>/1-pet … 6-done.png` — rubrik + underrad ovanför en telefonram,
+höstgradient i appens färger. Rubriker i `../tools/captions.json`, rendering med `../tools/render.py`
+(headless Chrome): `python3 tools/render.py <plattform> <språk> <slide> <rå-skärmbild> <ut.png>`.
+Play-funktionsgrafik 1024×500: `android/feature/feature-<språk>.png` (`../tools/feature.py <språk> <ut>`).
+
+| # | Slide | iOS `KQ_SCREEN` / Android `kq_screen` |
+|---|---|---|
+| 1 | pet | `child` |
+| 2 | egg | `child-nopet` (öppnar äggväljaren + förstadjur-banner) |
+| 3 | adventures | `adventures` |
+| 4 | wallet | `wallet-child` |
+| 5 | family | `dashboard` |
+| 6 | done | `child-done` |
+
+Valuta: sv SEK, en USD, de/es EUR. Storlekar: iPhone 1284×2778 (6.5"), iPad 2064×2752 (13"), Android 1080×1920.
+
+---
+
 # Butiksbilder – en / de / es
 
 Tagna 2026-09-27 mot appens fixturer (ingen backend, inget riktigt konto). Statusrad 09:41, fullt batteri.
