@@ -1,8 +1,11 @@
 package com.familyapp.api.family;
 
+import com.familyapp.application.i18n.MessageTranslator;
 import com.familyapp.application.passwordreset.PasswordResetService;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,27 +25,35 @@ import java.util.Map;
 public class PasswordResetController {
 
     private final PasswordResetService service;
+    private final MessageTranslator translator;
 
-    public PasswordResetController(PasswordResetService service) {
+    public PasswordResetController(PasswordResetService service, MessageTranslator translator) {
         this.service = service;
+        this.translator = translator;
     }
 
     /**
      * Always 200 with the same body, whether a mail was sent or the address is unknown.
      */
     @PostMapping("/request")
-    public Map<String, String> request(@RequestBody RequestResetRequest body) {
-        service.request(body.email());
+    public Map<String, String> request(
+            @RequestBody RequestResetRequest body,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage
+    ) {
+        // Mail language for a member with no saved language: the caller's language if it
+        // named one we have, otherwise Swedish -- the web reset page predates i18n.
+        var fallback = acceptLanguage != null ? LocaleContextHolder.getLocale().getLanguage() : "sv";
+        service.request(body.email(), fallback);
         return Map.of(
                 "message",
-                "Om adressen finns hos oss har vi skickat en återställningslänk."
+                translator.get("passwordReset.requested")
         );
     }
 
     @PostMapping("/confirm")
     public Map<String, String> confirm(@RequestBody ConfirmResetRequest body) {
         service.confirm(body.token(), body.password());
-        return Map.of("message", "Lösenordet är uppdaterat.");
+        return Map.of("message", translator.get("passwordReset.done"));
     }
 
     public record RequestResetRequest(String email) {

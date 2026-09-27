@@ -2,6 +2,12 @@ spring:
   application:
     name: familyapp-backend
 
+  # User-facing text: messages.properties is English (the fallback), plus _sv/_de/_es.
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/familyapp?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&autoReconnect=true&failOverReadOnly=false&maxReconnects=10&initialTimeout=2&connectTimeout=60000&socketTimeout=60000}
     username: ${SPRING_DATASOURCE_USERNAME:familyapp}

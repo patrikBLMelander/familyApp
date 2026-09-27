@@ -53,6 +53,10 @@ public class FamilyMemberEntity {
     @Column(name = "pet_enabled")
     private Boolean petEnabled;
 
+    /** App language (sv/en/de/es), or null to follow the device. */
+    @Column(name = "language", length = 5)
+    private String language;
+
     @ManyToOne
     @JoinColumn(name = "family_id")
     @Convert(converter = UuidConverter.class)
@@ -160,5 +164,12 @@ public class FamilyMemberEntity {
     public void setPetEnabled(Boolean petEnabled) {
         this.petEnabled = petEnabled;
     }
-}
 
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
+    }
+}

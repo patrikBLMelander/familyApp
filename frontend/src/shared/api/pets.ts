@@ -12,6 +12,14 @@ export type PetResponse = {
   hatchedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** A late first pet that follows its child through next month too. Absent from older backends. */
+  followsIntoNextMonth?: boolean;
+};
+
+export type MonthInfoResponse = {
+  daysLeftInMonth: number; // 0 on the last day
+  nextMonth: number; // 1-12
+  firstPetGrace: boolean;
 };
 
 export type PetHistoryResponse = {
@@ -68,6 +76,13 @@ export async function fetchPetHistory(): Promise<PetHistoryResponse[]> {
     headers: getHeaders(),
   });
   return handleJson<PetHistoryResponse[]>(response);
+}
+
+export async function fetchMonthInfo(): Promise<MonthInfoResponse> {
+  const response = await fetch(`${API_BASE_URL}/pets/month-info`, {
+    headers: getHeaders(),
+  });
+  return handleJson<MonthInfoResponse>(response);
 }
 
 export async function getAvailableEggTypes(): Promise<string[]> {

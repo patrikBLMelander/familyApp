@@ -5,6 +5,8 @@ import {
   SavingsGoalResponse,
   SavingsGoalAllocationRequest,
 } from "../../shared/api/wallet";
+import { formatMoney } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type AllocateToGoalsDialogProps = {
   currentBalance: number;
@@ -17,6 +19,7 @@ export function AllocateToGoalsDialog({
   onClose,
   onSuccess,
 }: AllocateToGoalsDialogProps) {
+  const currency = useFamilyCurrency();
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoalResponse[]>([]);
   const [goalAllocations, setGoalAllocations] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
@@ -63,7 +66,7 @@ export function AllocateToGoalsDialog({
     const { totalAllocated } = calculateTotals();
 
     if (totalAllocated <= 0) {
-      setError("Du måste fördela minst 1 kr");
+      setError(`Du måste fördela minst ${formatMoney(1, currency)}`);
       return;
     }
 
@@ -264,7 +267,7 @@ export function AllocateToGoalsDialog({
         >
           <p style={{ margin: "0 0 4px", fontSize: "0.875rem", color: "#6b6b6b" }}>Tillgängligt på kontot</p>
           <p style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "#2d5a2d" }}>
-            {currentBalance} kr
+            {formatMoney(currentBalance, currency)}
           </p>
         </div>
 
@@ -296,7 +299,7 @@ export function AllocateToGoalsDialog({
                       {goal.name}
                     </span>
                     <span style={{ fontSize: "0.875rem", color: "#6b6b6b" }}>
-                      {goal.currentAmount} / {goal.targetAmount} kr
+                      {goal.currentAmount} / {formatMoney(goal.targetAmount, currency)}
                     </span>
                   </div>
                   {canAllocate ? (
@@ -318,7 +321,7 @@ export function AllocateToGoalsDialog({
                         }}
                       />
                       <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#6b6b6b" }}>
-                        {remaining} kr kvar till målet (max {maxAmount} kr)
+                        {formatMoney(remaining, currency)} kvar till målet (max {formatMoney(maxAmount, currency)})
                       </p>
                     </>
                   ) : (
@@ -337,12 +340,12 @@ export function AllocateToGoalsDialog({
           <div style={{ marginBottom: "20px", padding: "12px", background: "#f7fafc", borderRadius: "8px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem", marginBottom: "4px" }}>
               <span>Totalt fördelat:</span>
-              <span style={{ fontWeight: 600 }}>{totalAllocated} kr</span>
+              <span style={{ fontWeight: 600 }}>{formatMoney(totalAllocated, currency)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem" }}>
               <span>Kvar på kontot:</span>
               <span style={{ fontWeight: 600, color: remaining >= 0 ? "#48bb78" : "#c53030" }}>
-                {remaining} kr
+                {formatMoney(remaining, currency)}
               </span>
             </div>
           </div>

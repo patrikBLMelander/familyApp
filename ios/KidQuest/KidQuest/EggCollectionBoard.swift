@@ -44,10 +44,10 @@ struct EggCollectionBoard: View {
 
     /// Hela väljaren grupperad per sällsynthetstier. Ordning och rubriker på svenska.
     private static let rarityTiers: [(key: String, label: String)] = [
-        ("COMMON", "Vanliga"),
-        ("RARE", "Sällsynta"),
-        ("LEGENDARY", "Legendariska"),
-        ("MYTHIC", "Mytiska"),
+        ("COMMON", String(localized: "Vanliga")),
+        ("RARE", String(localized: "Sällsynta")),
+        ("LEGENDARY", String(localized: "Legendariska")),
+        ("MYTHIC", String(localized: "Mytiska")),
     ]
 
     /// Varje tier visar sina ägg som ännu inte samlats: de valbara (upplåsta, tryckbara)
@@ -84,7 +84,7 @@ struct EggCollectionBoard: View {
     @ViewBuilder
     private var collectedSection: some View {
         if !taken.isEmpty {
-            zoneDivider("\(taken.count) av \(eggs.count) samlade")
+            zoneDivider(String(localized: "\(taken.count) av \(eggs.count) samlade"))
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(taken, id: \.id) { entry in
                     CollectedTile(entry: entry, palette: palette)
@@ -133,7 +133,7 @@ private struct CollectedTile: View {
                         .frame(width: 66, height: 66)
                 }
             }
-            Text(PetNameUtilsIOS.getPetNameSwedish(entry.petType))
+            Text(PetNameUtilsIOS.getPetName(entry.petType))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(palette.goodInk)
                 .multilineTextAlignment(.center)

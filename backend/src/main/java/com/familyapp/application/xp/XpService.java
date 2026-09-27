@@ -21,7 +21,9 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -233,6 +235,18 @@ public class XpService {
         int currentYear = now.getYear();
         int currentMonth = now.getMonthValue();
 
+        var previousMonthPets = petRepository.findAll().stream()
+                .filter(p -> p.getYear() == previousYear && p.getMonth() == previousMonth)
+                .toList();
+
+        // A first pet hatched in the last days of the month follows its child into this
+        // month, XP and all, instead of resetting after a couple of days.
+        Set<UUID> carriedOver = previousMonthPets.stream()
+                .filter(p -> petService.followsIntoNextMonth(
+                        p.getMember().getId(), previousYear, previousMonth, p.getHatchedAt()))
+                .map(p -> p.getMember().getId())
+                .collect(Collectors.toSet());
+
         // Get all progress entries from previous month
         var previousMonthProgress = progressRepository.findAll().stream()
                 .filter(p -> p.getYear() == previousYear && p.getMonth() == previousMonth)
@@ -251,22 +265,29 @@ public class XpService {
             history.setCreatedAt(OffsetDateTime.now());
             historyRepository.save(history);
 
-            // Reset progress for current month
+            // Reset progress for current month. The history row above is still written for a
+            // carried-over child: the level allowance reads last month's level from it.
             progress.setYear(currentYear);
             progress.setMonth(currentMonth);
-            progress.setCurrentXp(0);
-            progress.setCurrentLevel(1);
-            progress.setTotalTasksCompleted(0);
+            if (!carriedOver.contains(progress.getMember().getId())) {
+                progress.setCurrentXp(0);
+                progress.setCurrentLevel(1);
+                progress.setTotalTasksCompleted(0);
+            }
             progress.setUpdatedAt(OffsetDateTime.now());
             progressRepository.save(progress);
         }
 
         // Move pets to history
-        var previousMonthPets = petRepository.findAll().stream()
-                .filter(p -> p.getYear() == previousYear && p.getMonth() == previousMonth)
-                .toList();
-
         for (var pet : previousMonthPets) {
+            if (carriedOver.contains(pet.getMember().getId())) {
+                // Same pet, new month: no history row, or it would count as collected twice.
+                pet.setYear(currentYear);
+                pet.setMonth(currentMonth);
+                pet.setUpdatedAt(OffsetDateTime.now());
+                petRepository.save(pet);
+                continue;
+            }
             // Save to pet history
             var petHistory = new PetHistoryEntity();
             petHistory.setId(UUID.randomUUID());

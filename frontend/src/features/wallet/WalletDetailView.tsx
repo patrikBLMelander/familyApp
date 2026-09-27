@@ -14,6 +14,8 @@ import {
 import { RecordExpenseDialog } from "./RecordExpenseDialog";
 import { CreateSavingsGoalDialog } from "./CreateSavingsGoalDialog";
 import { AllocateToGoalsDialog } from "./AllocateToGoalsDialog";
+import { formatMoney } from "../../shared/utils/money";
+import { useFamilyCurrency } from "../../shared/hooks/useFamilyCurrency";
 
 type ViewKey = "dashboard" | "xp" | "pethistory";
 
@@ -24,6 +26,7 @@ type WalletDetailViewProps = {
 type TabType = "overview" | "goals" | "transactions";
 
 export function WalletDetailView({ onNavigate }: WalletDetailViewProps) {
+  const currency = useFamilyCurrency();
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [balance, setBalance] = useState<WalletBalanceResponse | null>(null);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoalResponse[]>([]);
@@ -211,7 +214,7 @@ export function WalletDetailView({ onNavigate }: WalletDetailViewProps) {
             >
               <p style={{ margin: "0 0 8px", fontSize: "1rem", color: "#6b6b6b" }}>Totalt saldo</p>
               <p style={{ margin: 0, fontSize: "3rem", fontWeight: 700, color: "#2d5a2d" }}>
-                {balance?.balance || 0} kr
+                {formatMoney(balance?.balance || 0, currency)}
               </p>
             </div>
             <button
@@ -268,7 +271,7 @@ export function WalletDetailView({ onNavigate }: WalletDetailViewProps) {
                         {goal.name}
                       </span>
                       <span>
-                        {goal.currentAmount} / {goal.targetAmount} kr
+                        {goal.currentAmount} / {formatMoney(goal.targetAmount, currency)}
                       </span>
                     </div>
                     <div
@@ -292,7 +295,7 @@ export function WalletDetailView({ onNavigate }: WalletDetailViewProps) {
                       />
                     </div>
                     <p style={{ margin: 0, fontSize: "0.875rem", color: "#6b6b6b", textAlign: "right" }}>
-                      {goal.remainingAmount} kr kvar
+                      {formatMoney(goal.remainingAmount, currency)} kvar
                     </p>
                   </div>
                 ))
@@ -310,7 +313,7 @@ export function WalletDetailView({ onNavigate }: WalletDetailViewProps) {
                 <div>
                   <h3 style={{ margin: "0 0 4px", fontSize: "1rem", fontWeight: 600 }}>Fördela pengar</h3>
                   <p style={{ margin: 0, fontSize: "0.875rem", color: "#6b6b6b" }}>
-                    Du har {balance.balance} kr på kontot
+                    Du har {formatMoney(balance.balance, currency)} på kontot
                   </p>
                 </div>
                 <button
@@ -402,7 +405,7 @@ export function WalletDetailView({ onNavigate }: WalletDetailViewProps) {
                         )}
                       </div>
                       <p style={{ margin: "4px 0", fontSize: "0.875rem", color: "#6b6b6b" }}>
-                        {goal.currentAmount} / {goal.targetAmount} kr ({goal.progressPercentage}%)
+                        {goal.currentAmount} / {formatMoney(goal.targetAmount, currency)} ({goal.progressPercentage}%)
                       </p>
                     </div>
                     {!goal.isPurchased && (
@@ -504,7 +507,7 @@ export function WalletDetailView({ onNavigate }: WalletDetailViewProps) {
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                             <span style={{ fontSize: "1.25rem", fontWeight: 700, color: textColor }}>
                               {isSavingsAllocation ? "🎯" : isExpense ? "-" : "+"}
-                              {Math.abs(transaction.amount)} kr
+                              {formatMoney(Math.abs(transaction.amount), currency)}
                             </span>
                             {categoryName && <span style={{ fontSize: "0.875rem", color: "#6b6b6b" }}>{categoryName}</span>}
                           </div>

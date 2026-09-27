@@ -1,5 +1,7 @@
 package se.kidquest.app
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -53,7 +55,7 @@ fun WelcomeScreen(
         // sees is already the app they are about to be in.
         SeasonHeaderBar(
             title = "KidQuest",
-            subtitle = "Gör tråkiga sysslor till roliga uppdrag",
+            subtitle = tr(R.string.welcome_subtitle),
         )
 
         Column(
@@ -79,16 +81,16 @@ fun WelcomeScreen(
             // line to itself and the block costs less height than the cards did.
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 ValueBullet(
-                    title = "Hemligt ägg varje månad",
-                    body = "Barnen får ett nytt djur — de vet inte vilket.",
+                    title = tr(R.string.welcome_f1_title),
+                    body = tr(R.string.welcome_f1_body),
                 )
                 ValueBullet(
-                    title = "Uppdrag matar djuret",
-                    body = "Vardagssysslor ger XP, och XP får djuret att växa.",
+                    title = tr(R.string.welcome_f2_title),
+                    body = tr(R.string.welcome_f2_body),
                 )
                 ValueBullet(
-                    title = "Belöningar som motiverar",
-                    body = "Koppla till veckopeng eller små mål, om du vill.",
+                    title = tr(R.string.welcome_f3_title),
+                    body = tr(R.string.welcome_f3_body),
                 )
             }
 
@@ -105,7 +107,7 @@ fun WelcomeScreen(
                     contentColor = palette.onAccent,
                 ),
             ) {
-                Text("Skapa en ny familj", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr(R.string.welcome_create_family), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
 
             OutlinedButton(
@@ -117,7 +119,7 @@ fun WelcomeScreen(
                 border = BorderStroke(1.5.dp, palette.accent),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
             ) {
-                Text("Jag har en inbjudningskod", fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr(R.string.welcome_have_invite), fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold)
             }
 
             TextButton(
@@ -125,7 +127,7 @@ fun WelcomeScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    text = "Logga in",
+                    text = tr(R.string.welcome_sign_in),
                     fontSize = 14.sp,
                     color = palette.accent,
                     textAlign = TextAlign.Center,

@@ -12,6 +12,8 @@ data class WalletBalanceResponse(
     val id: String?,
     val memberId: String,
     val balance: Int,
+    /** The family's ISO 4217 currency; null from servers older than the i18n release. */
+    val currency: String? = null,
 )
 
 data class WalletTransactionResponse(

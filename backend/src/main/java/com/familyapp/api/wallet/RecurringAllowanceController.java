@@ -1,5 +1,6 @@
 package com.familyapp.api.wallet;
 
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.application.allowance.RecurringAllowanceService;
 import com.familyapp.application.allowance.RecurringAllowanceService.AllowanceSpec;
 import com.familyapp.application.familymember.FamilyMemberService;
@@ -85,12 +86,12 @@ public class RecurringAllowanceController {
 
     private AllowanceKind parseKind(String raw) {
         if (raw == null || raw.isBlank()) {
-            throw new IllegalArgumentException("Välj vecko- eller månadspeng");
+            throw new LocalizedException("allowance.chooseKind");
         }
         try {
             return AllowanceKind.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException unknown) {
-            throw new IllegalArgumentException("Okänd typ av peng: " + raw);
+            throw new LocalizedException("allowance.unknownKind", raw);
         }
     }
 

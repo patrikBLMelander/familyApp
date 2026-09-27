@@ -1,7 +1,11 @@
 package se.kidquest.app
 
+import se.kidquest.app.i18n.AppLanguage
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
@@ -110,7 +114,7 @@ private sealed class AppScreen {
     data object Paywall : AppScreen()
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         TokenStore.init(applicationContext)
@@ -123,6 +127,8 @@ class MainActivity : ComponentActivity() {
         //   adb shell am start -n se.kidquest.app/.MainActivity --es kq_screen welcome
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         val forcedScreen = if (debuggable) intent?.getStringExtra("kq_screen") else null
+        // Store screenshots in another currency:  --es kq_currency EUR
+        if (debuggable) Money.remember(intent?.getStringExtra("kq_currency"))
 
         setContent {
             // Hoisted above the theme because the theme is what consumes it. Null until
@@ -148,7 +154,7 @@ class MainActivity : ComponentActivity() {
                     // Namnet går att byta för butiksbilder, som inte bör visa ett
                     // riktigt barns namn:  --es kq_name Ella
                     ChildDashboardScreen(
-                        childName = intent?.getStringExtra("kq_name") ?: "Signe",
+                        childName = intent?.getStringExtra("kq_name") ?: "Ella",
                         childId = "child-1",
                         onBack = {},
                         onOpenTasks = {},
@@ -222,7 +228,7 @@ class MainActivity : ComponentActivity() {
                         }
                         session.isChild -> AppScreen.ChildDashboard(
                             childId = session.memberId!!,
-                            childName = session.memberName ?: "Barn",
+                            childName = session.memberName ?: tr(R.string.member_child),
                         )
                         else -> AppScreen.Home
                     }
@@ -518,7 +524,7 @@ fun AuthScreen(
 
     val emailState = remember { mutableStateOf("") }
     val passwordState = remember { mutableStateOf("") }
-    val statusState = remember { mutableStateOf("Inte inloggad") }
+    val statusState = remember { mutableStateOf(tr(R.string.login_not_signed_in)) }
     val showForgotPassword = remember { mutableStateOf(false) }
     val loadingState = remember { mutableStateOf(false) }
 
@@ -530,8 +536,8 @@ fun AuthScreen(
             .background(palette.pageBg),
     ) {
         SeasonHeaderBar(
-            title = "Logga in",
-            subtitle = "Förälder eller vårdnadshavare",
+            title = tr(R.string.welcome_sign_in),
+            subtitle = tr(R.string.login_subtitle),
             onBack = onBack,
         )
 
@@ -544,13 +550,13 @@ fun AuthScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             EntryTextField(
-                label = "E-post",
+                label = tr(R.string.login_email),
                 value = emailState.value,
                 onValueChange = { emailState.value = it },
-                placeholder = "namn@exempel.se",
+                placeholder = tr(R.string.login_email_placeholder),
             )
             EntryTextField(
-                label = "Lösenord",
+                label = tr(R.string.login_password),
                 value = passwordState.value,
                 onValueChange = { passwordState.value = it },
                 isPassword = true,
@@ -560,7 +566,7 @@ fun AuthScreen(
                 onClick = {
                     scope.launch {
                         loadingState.value = true
-                        statusState.value = "Loggar in..."
+                        statusState.value = tr(R.string.login_signing_in)
                         try {
                             val api = ApiClient.authApi
                             val response = api.loginByEmail(
@@ -578,8 +584,10 @@ fun AuthScreen(
                             )
                             Billing.identify(response.member.familyId)
                             onLoginSuccess()
+                            // Last: a saved language recreates the activity.
+                            AppLanguage.syncFrom(response.member)
                         } catch (e: Exception) {
-                            statusState.value = ApiErrors.message(e, "Kunde inte logga in.")
+                            statusState.value = ApiErrors.message(e, tr(R.string.login_failed))
                         } finally {
                             loadingState.value = false
                         }
@@ -596,7 +604,7 @@ fun AuthScreen(
                 ),
             ) {
                 Text(
-                    text = if (loadingState.value) "Loggar in..." else "Logga in",
+                    text = if (loadingState.value) tr(R.string.login_signing_in) else tr(R.string.welcome_sign_in),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -610,7 +618,7 @@ fun AuthScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    text = "Glömt lösenordet?",
+                    text = tr(R.string.login_forgot),
                     fontSize = 14.sp,
                     color = palette.accent,
                 )
@@ -619,7 +627,7 @@ fun AuthScreen(
             if (showForgotPassword.value) {
                 ForgotPasswordDialog(onDismiss = { showForgotPassword.value = false })
             }
-            if (statusState.value != "Loggar in..." && statusState.value != "Inte inloggad") {
+            if (statusState.value != tr(R.string.login_signing_in) && statusState.value != tr(R.string.login_not_signed_in)) {
                 Text(
                     text = statusState.value,
                     modifier = Modifier.fillMaxWidth(),
@@ -646,7 +654,7 @@ fun AuthScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Barn i familjen?",
+                text = tr(R.string.login_kids_q),
                 modifier = Modifier.fillMaxWidth(),
                 fontSize = 13.5.sp,
                 color = palette.inkSoft,
@@ -663,7 +671,7 @@ fun AuthScreen(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
             ) {
                 Text(
-                    text = "Jag är barn och har en kod",
+                    text = tr(R.string.login_kid_code),
                     fontSize = 15.5.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -697,8 +705,8 @@ fun RegisterScreen(
             .background(palette.pageBg),
     ) {
         SeasonHeaderBar(
-            title = "Skapa familj",
-            subtitle = "Registrera dig som förälder och bjud in dina barn",
+            title = tr(R.string.register_title),
+            subtitle = tr(R.string.register_subtitle),
             onBack = onBack,
         )
 
@@ -713,33 +721,33 @@ fun RegisterScreen(
             // Four unlabelled boxes in a column were four identical boxes: a parent who
             // put their own name where the family's belongs had nothing to notice it by.
             EntryTextField(
-                label = "Familjens namn",
+                label = tr(R.string.register_family_name),
                 value = familyNameState.value,
                 onValueChange = { familyNameState.value = it },
             )
             EntryTextField(
-                label = "Ditt namn",
+                label = tr(R.string.register_your_name),
                 value = parentNameState.value,
                 onValueChange = { parentNameState.value = it },
             )
             EntryTextField(
-                label = "E-post",
+                label = tr(R.string.login_email),
                 value = emailState.value,
                 onValueChange = { emailState.value = it },
-                placeholder = "namn@exempel.se",
+                placeholder = tr(R.string.login_email_placeholder),
             )
             EntryTextField(
-                label = "Lösenord",
+                label = tr(R.string.login_password),
                 value = passwordState.value,
                 onValueChange = { passwordState.value = it },
-                placeholder = "minst 6 tecken",
+                placeholder = tr(R.string.register_password_placeholder),
                 isPassword = true,
             )
 
             Button(
                 onClick = {
                     if (familyNameState.value.isBlank() || parentNameState.value.isBlank() || emailState.value.isBlank() || passwordState.value.isBlank()) {
-                        statusState.value = "Fyll i alla fält."
+                        statusState.value = tr(R.string.register_fill_all)
                         return@Button
                     }
                     scope.launch {
@@ -765,7 +773,7 @@ fun RegisterScreen(
                             Billing.identify(response.family.id)
                             onRegisterSuccess()
                         } catch (e: Exception) {
-                            statusState.value = ApiErrors.message(e, "Kunde inte skapa kontot.")
+                            statusState.value = ApiErrors.message(e, tr(R.string.register_failed))
                         } finally {
                             loadingState.value = false
                         }
@@ -782,7 +790,7 @@ fun RegisterScreen(
                 ),
             ) {
                 Text(
-                    text = if (loadingState.value) "Skapar familj..." else "Skapa familj",
+                    text = if (loadingState.value) tr(R.string.register_creating) else tr(R.string.register_title),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -807,9 +815,9 @@ fun RegisterScreen(
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, bottom = 22.dp),
         ) {
-            Text(text = "Har redan konto? ", fontSize = 13.5.sp, color = palette.inkSoft)
+            Text(text = tr(R.string.register_have_account), fontSize = 13.5.sp, color = palette.inkSoft)
             Text(
-                text = "Logga in",
+                text = tr(R.string.welcome_sign_in),
                 fontSize = 13.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = palette.accent,
@@ -895,10 +903,10 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        Text(text = "Välkommen till KidQuest!")
+        Text(text = tr(R.string.home_welcome))
         Spacer(modifier = Modifier.height(24.dp))
         Button(onClick = onLogout) {
-            Text("Logga ut")
+            Text(tr(R.string.sign_out))
         }
     }
 }
@@ -927,21 +935,20 @@ private fun ForgotPasswordDialog(onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!sending) onDismiss() },
-        title = { Text(if (sent) "Kolla din mejl" else "Glömt lösenordet?") },
+        title = { Text(if (sent) tr(R.string.reset_check_mail) else tr(R.string.login_forgot)) },
         text = {
             if (sent) {
                 Text(
-                    "Om adressen finns hos oss har vi skickat en länk dit. Den gäller i " +
-                        "en timme. Titta i skräpposten om den inte dyker upp.",
+                    tr(R.string.reset_sent_body),
                 )
             } else {
                 Column {
-                    Text("Skriv din e-postadress så skickar vi en länk för att välja ett nytt lösenord.")
+                    Text(tr(R.string.reset_prompt))
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("E-post") },
+                        label = { Text(tr(R.string.login_email)) },
                         singleLine = true,
                         enabled = !sending,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -955,7 +962,7 @@ private fun ForgotPasswordDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             if (sent) {
-                TextButton(onClick = onDismiss) { Text("Klart") }
+                TextButton(onClick = onDismiss) { Text(tr(R.string.common_done)) }
             } else {
                 TextButton(
                     enabled = email.isNotBlank() && !sending,
@@ -974,20 +981,20 @@ private fun ForgotPasswordDialog(onDismiss: () -> Unit) {
                                 // becomes an account-enumeration tool.
                                 sent = true
                             } catch (e: Exception) {
-                                error = ApiErrors.message(e, "Kunde inte skicka just nu.")
+                                error = ApiErrors.message(e, tr(R.string.reset_send_failed))
                             } finally {
                                 sending = false
                             }
                         }
                     },
                 ) {
-                    Text(if (sending) "Skickar…" else "Skicka länk")
+                    Text(if (sending) tr(R.string.common_sending) else tr(R.string.reset_send_link))
                 }
             }
         },
         dismissButton = {
             if (!sent) {
-                TextButton(onClick = onDismiss, enabled = !sending) { Text("Avbryt") }
+                TextButton(onClick = onDismiss, enabled = !sending) { Text(tr(R.string.common_cancel)) }
             }
         },
     )

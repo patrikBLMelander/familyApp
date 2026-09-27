@@ -363,7 +363,7 @@ struct ContentView: View {
             // borta från en force unwrap.
             currentScreen = .childDashboard(
                 childId: session.memberId ?? "",
-                childName: session.memberName ?? "Barn"
+                childName: session.memberName ?? String(localized: "Barn")
             )
         } else {
             currentScreen = .home
@@ -389,7 +389,7 @@ struct WelcomeView: View {
             // control, and the band is what carries the season on every other screen.
             SeasonHeaderBar(
                 title: "KidQuest",
-                subtitle: "Gör tråkiga sysslor till roliga uppdrag"
+                subtitle: String(localized: "Gör tråkiga sysslor till roliga uppdrag")
             )
 
             ScrollView {
@@ -436,16 +436,16 @@ struct WelcomeView: View {
     private var points: some View {
         VStack(alignment: .leading, spacing: 14) {
             point(
-                title: "Hemligt ägg varje månad",
-                detail: "Barnen får ett nytt djur — de vet inte vilket."
+                title: String(localized: "Hemligt ägg varje månad"),
+                detail: String(localized: "Barnen får ett nytt djur — de vet inte vilket.")
             )
             point(
-                title: "Uppdrag matar djuret",
-                detail: "Vardagssysslor ger XP, och XP får djuret att växa."
+                title: String(localized: "Uppdrag matar djuret"),
+                detail: String(localized: "Vardagssysslor ger XP, och XP får djuret att växa.")
             )
             point(
-                title: "Belöningar som motiverar",
-                detail: "Koppla till veckopeng eller små mål, om du vill."
+                title: String(localized: "Belöningar som motiverar"),
+                detail: String(localized: "Koppla till veckopeng eller små mål, om du vill.")
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -481,9 +481,9 @@ struct WelcomeView: View {
     /// an account that already exists is the rare case.
     private var actions: some View {
         VStack(spacing: 12) {
-            FilledActionButton(title: "Skapa en ny familj", action: onParentTap)
-            OutlinedActionButton(title: "Jag har en inbjudningskod", action: onChildInviteTap)
-            QuietActionButton(title: "Logga in", action: onLoginTap)
+            FilledActionButton(title: String(localized: "Skapa en ny familj"), action: onParentTap)
+            OutlinedActionButton(title: String(localized: "Jag har en inbjudningskod"), action: onChildInviteTap)
+            QuietActionButton(title: String(localized: "Logga in"), action: onLoginTap)
         }
         .padding(.top, 2)
     }
@@ -511,7 +511,7 @@ struct AuthView: View {
 
     @State private var email: String = ""
     @State private var password: String = ""
-    @State private var status: String = "Inte inloggad"
+    @State private var status: String = String(localized: "Inte inloggad")
     @State private var isLoading: Bool = false
     @State private var isShowingForgotPassword: Bool = false
 
@@ -520,28 +520,28 @@ struct AuthView: View {
     var body: some View {
         VStack(spacing: 0) {
             SeasonHeaderBar(
-                title: "Logga in",
-                subtitle: "Förälder eller vårdnadshavare",
+                title: String(localized: "Logga in"),
+                subtitle: String(localized: "Förälder eller vårdnadshavare"),
                 onBack: onBack
             )
 
             ScrollView {
                 VStack(spacing: 16) {
                     LabeledField(
-                        label: "E‑post",
+                        label: String(localized: "E‑post"),
                         placeholder: "namn@exempel.se",
                         text: $email
                     )
 
                     LabeledField(
-                        label: "Lösenord",
+                        label: String(localized: "Lösenord"),
                         placeholder: "••••••••",
                         text: $password,
                         isSecure: true
                     )
 
                     FilledActionButton(
-                        title: isLoading ? "Loggar in..." : "Logga in",
+                        title: isLoading ? String(localized: "Loggar in...") : String(localized: "Logga in"),
                         isEnabled: !isLoading
                     ) {
                         Task { await performLogin() }
@@ -551,7 +551,7 @@ struct AuthView: View {
                     // Utan den här var en förälder som glömt sitt lösenord utelåst för
                     // gott: en annan förälder kunde sätta ett nytt, vilket inte hjälper
                     // en familj med bara en vuxen.
-                    QuietActionButton(title: "Glömt lösenordet?") {
+                    QuietActionButton(title: String(localized: "Glömt lösenordet?")) {
                         isShowingForgotPassword = true
                     }
 
@@ -605,7 +605,7 @@ struct AuthView: View {
                 .padding(.bottom, 10)
 
             OutlinedActionButton(
-                title: "Jag är barn och har en kod",
+                title: String(localized: "Jag är barn och har en kod"),
                 action: onChildInviteLogin
             )
         }
@@ -618,7 +618,7 @@ struct AuthView: View {
     /// Same predicate the screen has always used, moved out of the body so the row it
     /// feeds is one view rather than an inline condition.
     private var statusMessage: String? {
-        guard status != "Loggar in..." && status != "Inte inloggad" else { return nil }
+        guard status != String(localized: "Loggar in...") && status != String(localized: "Inte inloggad") else { return nil }
         return status
     }
 
@@ -626,12 +626,12 @@ struct AuthView: View {
         guard !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !password.isEmpty
         else {
-            status = "Fyll i e‑post och lösenord."
+            status = String(localized: "Fyll i e‑post och lösenord.")
             return
         }
 
         isLoading = true
-        status = "Loggar in..."
+        status = String(localized: "Loggar in...")
 
         do {
             _ = try await AuthService.loginByEmail(
@@ -639,11 +639,11 @@ struct AuthView: View {
                 password: password
             )
             isLoading = false
-            status = "Inloggad"
+            status = String(localized: "Inloggad")
             onLoginSuccess()
         } catch {
             isLoading = false
-            status = "Fel: \(error.localizedDescription)"
+            status = String(localized: "Fel: \(error.localizedDescription)")
         }
     }
 }
@@ -680,40 +680,40 @@ struct RegisterView: View {
     var body: some View {
         VStack(spacing: 0) {
             SeasonHeaderBar(
-                title: "Skapa familj",
-                subtitle: "Registrera dig som förälder och bjud in dina barn",
+                title: String(localized: "Skapa familj"),
+                subtitle: String(localized: "Registrera dig som förälder och bjud in dina barn"),
                 onBack: onBack
             )
 
             ScrollView {
                 VStack(spacing: 14) {
                     LabeledField(
-                        label: "Familjens namn",
-                        placeholder: "T.ex. Melander",
+                        label: String(localized: "Familjens namn"),
+                        placeholder: String(localized: "T.ex. Berg"),
                         text: $familyName
                     )
 
                     LabeledField(
-                        label: "Ditt namn",
-                        placeholder: "T.ex. Patrik",
+                        label: String(localized: "Ditt namn"),
+                        placeholder: String(localized: "T.ex. Anna"),
                         text: $parentName
                     )
 
                     LabeledField(
-                        label: "E‑post",
+                        label: String(localized: "E‑post"),
                         placeholder: "namn@exempel.se",
                         text: $email
                     )
 
                     LabeledField(
-                        label: "Lösenord",
-                        placeholder: "minst 6 tecken",
+                        label: String(localized: "Lösenord"),
+                        placeholder: String(localized: "minst 6 tecken"),
                         text: $password,
                         isSecure: true
                     )
 
                     FilledActionButton(
-                        title: isLoading ? "Skapar familj..." : "Skapa familj",
+                        title: isLoading ? String(localized: "Skapar familj...") : String(localized: "Skapa familj"),
                         isEnabled: !isLoading
                     ) {
                         Task { await performRegister() }
@@ -770,7 +770,7 @@ struct RegisterView: View {
               !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !password.isEmpty
         else {
-            status = "Fyll i alla fält."
+            status = String(localized: "Fyll i alla fält.")
             return
         }
 
@@ -788,7 +788,7 @@ struct RegisterView: View {
             onRegisterSuccess()
         } catch {
             isLoading = false
-            status = "Fel: \(error.localizedDescription)"
+            status = String(localized: "Fel: \(error.localizedDescription)")
         }
     }
 }
@@ -968,7 +968,7 @@ private struct ForgotPasswordSheet: View {
         VStack(spacing: 0) {
             // The sheet keeps its own title bar and rewrites it in place, rather than
             // closing and leaving the parent to guess whether anything was sent.
-            SeasonHeaderBar(title: didSend ? "Kolla din mejl" : "Glömt lösenordet?")
+            SeasonHeaderBar(title: didSend ? String(localized: "Kolla din mejl") : String(localized: "Glömt lösenordet?"))
 
             ScrollView {
                 VStack(spacing: 16) {
@@ -993,10 +993,10 @@ private struct ForgotPasswordSheet: View {
 
     private var form: some View {
         VStack(spacing: 16) {
-            explanation("Skriv din e‑postadress så skickar vi en länk för att välja ett nytt lösenord.")
+            explanation(String(localized: "Skriv din e‑postadress så skickar vi en länk för att välja ett nytt lösenord."))
 
             LabeledField(
-                label: "E‑post",
+                label: String(localized: "E‑post"),
                 placeholder: "namn@exempel.se",
                 text: $email
             )
@@ -1005,14 +1005,14 @@ private struct ForgotPasswordSheet: View {
             .autocorrectionDisabled()
 
             FilledActionButton(
-                title: isSending ? "Skickar…" : "Skicka länk",
+                title: isSending ? String(localized: "Skickar…") : String(localized: "Skicka länk"),
                 isEnabled: canSend
             ) {
                 Task { await submit() }
             }
             .padding(.top, 2)
 
-            QuietActionButton(title: "Avbryt") {
+            QuietActionButton(title: String(localized: "Avbryt")) {
                 guard !isSending else { return }
                 dismiss()
             }
@@ -1027,11 +1027,10 @@ private struct ForgotPasswordSheet: View {
     private var confirmation: some View {
         VStack(spacing: 16) {
             explanation(
-                "Om adressen finns hos oss har vi skickat en länk dit. Den gäller i en timme. "
-                + "Titta i skräpposten om den inte dyker upp."
+                String(localized: "Om adressen finns hos oss har vi skickat en länk dit. Den gäller i en timme. Titta i skräpposten om den inte dyker upp.")
             )
 
-            FilledActionButton(title: "Klart") {
+            FilledActionButton(title: String(localized: "Klart")) {
                 dismiss()
             }
             .padding(.top, 2)
@@ -1064,7 +1063,7 @@ private struct ForgotPasswordSheet: View {
             // så ett "skickat" ser likadant ut för varje adress.
             didSend = true
         } catch {
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte skicka just nu.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte skicka just nu."))
         }
 
         isSending = false
@@ -1104,14 +1103,14 @@ struct ChildInviteLoginView: View {
     var body: some View {
         VStack(spacing: 0) {
             SeasonHeaderBar(
-                title: "Koppla din enhet",
-                subtitle: "Be någon i familjen visa koden eller QR‑koden",
+                title: String(localized: "Koppla din enhet"),
+                subtitle: String(localized: "Be någon i familjen visa koden eller QR‑koden"),
                 onBack: onBack
             )
 
             ScrollView {
                 VStack(spacing: 16) {
-                    OutlinedActionButton(title: "Skanna QR‑kod", isEnabled: !isLoading) {
+                    OutlinedActionButton(title: String(localized: "Skanna QR‑kod"), isEnabled: !isLoading) {
                         isScannerPresented = true
                     }
 
@@ -1120,13 +1119,13 @@ struct ChildInviteLoginView: View {
                         .foregroundStyle(palette.inkSoft)
 
                     LabeledField(
-                        label: "Inbjudningskod",
-                        placeholder: "Koden du fått",
+                        label: String(localized: "Inbjudningskod"),
+                        placeholder: String(localized: "Koden du fått"),
                         text: $inviteCode
                     )
 
                     FilledActionButton(
-                        title: isLoading ? "Kopplar…" : "Koppla denna enhet",
+                        title: isLoading ? String(localized: "Kopplar…") : String(localized: "Koppla denna enhet"),
                         isEnabled: !isLoading
                     ) {
                         Task { await performLink() }
@@ -1162,7 +1161,7 @@ struct ChildInviteLoginView: View {
     private func performLink(token: String? = nil) async {
         let trimmed = (token ?? inviteCode).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            status = "Ange en kod"
+            status = String(localized: "Ange en kod")
             return
         }
 
@@ -1182,7 +1181,7 @@ struct ChildInviteLoginView: View {
             }
         } catch {
             isLoading = false
-            status = "Kunde inte koppla enheten. Kontrollera koden."
+            status = String(localized: "Kunde inte koppla enheten. Kontrollera koden.")
         }
     }
 }
@@ -1223,9 +1222,9 @@ extension RegisterView {
         RegisterView(
             onBack: {},
             prefill: Prefill(
-                familyName: "Melander",
-                parentName: "Patrik",
-                email: "patrik@exempel.se",
+                familyName: "Berg",
+                parentName: "Jonas",
+                email: "jonas@exempel.se",
                 password: "hemligt123"
             )
         )

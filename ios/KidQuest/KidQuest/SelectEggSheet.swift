@@ -25,6 +25,7 @@ struct SelectEggSheet: View {
     @State private var errorMessage: String?
     @State private var phase: Phase = .board
     @State private var hatchStage: Int = 1
+    @State private var monthEndMessage: String?
 
     private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
 
@@ -67,25 +68,36 @@ struct SelectEggSheet: View {
                     case .hatching:
                         EmptyView()
                     case .naming:
-                        Button(saving ? "Sparar…" : "Spara") { Task { await save() } }
+                        Button(saving ? String(localized: "Sparar…") : String(localized: "Spara")) { Task { await save() } }
                             .disabled(saving)
                     }
                 }
             }
         }
         .task { await loadEggTypes() }
+        .task { await loadMonthInfo() }
     }
 
     private var phaseTitle: String {
         switch phase {
-        case .board: return "Välj ägg"
-        case .hatching: return "Ägget kläcks"
-        case .naming: return "Namnge ditt djur"
+        case .board: return String(localized: "Välj ägg")
+        case .hatching: return String(localized: "Ägget kläcks")
+        case .naming: return String(localized: "Namnge ditt djur")
         }
     }
 
     private var boardContent: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let monthEndMessage {
+                Text(monthEndMessage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(palette.tipInk)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous).fill(palette.pageBg)
+                    )
+            }
             ScrollView {
                 EggCollectionBoard(
                     eggs: eggs,
@@ -99,7 +111,7 @@ struct SelectEggSheet: View {
             // Hinten i en fast rad. Namnet frågas INTE här -- först efter kläckningen, när
             // djuret syns.
             Text(selectedEgg.map { EggNames.hint(for: $0) }
-                 ?? "Tryck på ett ägg för att höra vad som viskar därinne.")
+                 ?? String(localized: "Tryck på ett ägg för att höra vad som viskar därinne."))
                 .font(.footnote)
                 .italic(selectedEgg != nil)
                 .foregroundStyle(selectedEgg != nil ? palette.tipInk : palette.inkFaint)
@@ -128,7 +140,7 @@ struct SelectEggSheet: View {
                let img = UIImage(named: name) {
                 Image(uiImage: img).resizable().scaledToFit().frame(height: 180)
             }
-            Text(selectedPetType.map { "Det blev en \(PetNameUtilsIOS.getPetNameSwedish($0))! Vad ska den heta?" }
+            Text(selectedPetType.map { "Det blev en \(PetNameUtilsIOS.getPetName($0))! Vad ska den heta?" }
                  ?? "Vad ska ditt djur heta?")
                 .font(.body)
                 .multilineTextAlignment(.center)
@@ -166,13 +178,19 @@ struct SelectEggSheet: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte hämta äggtyper."
+                self.errorMessage = String(localized: "Kunde inte hämta äggtyper.")
                 self.loading = false
             }
         }
     }
 
-    private func save() async {
+    /// Bara en upplysning: misslyckas hämtningen visas ingen rad, äggen går att välja ändå.
+    private func loadMonthInfo() async {
+        guard let info = try? await AdventureRepository.monthInfo(memberId: memberId) else { return }
+        await MainActor.run { monthEndMessage = kqMonthEndMessage(info) }
+    }
+
+        private func save() async {
         guard let egg = selectedEgg else { return }
         saving = true
         let trimmedName = petName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -195,7 +213,7 @@ struct SelectEggSheet: View {
         } catch {
             await MainActor.run {
                 saving = false
-                errorMessage = ApiErrors.message(error, fallback: "Kunde inte välja ägg.")
+                errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte välja ägg."))
             }
         }
     }

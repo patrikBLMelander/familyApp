@@ -1,5 +1,6 @@
 package com.familyapp.domain.pet;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -20,5 +21,16 @@ public record ChildPet(
 ) {
     public static final int MIN_GROWTH_STAGE = 1;
     public static final int MAX_GROWTH_STAGE = 5;
+
+    /**
+     * A child's first pet that hatches in this many last days of a month follows them
+     * through the whole next month, so joining on the 29th doesn't mean two days of pet.
+     */
+    public static final int FIRST_PET_GRACE_DAYS = 10;
+
+    /** True when the date falls in the last {@link #FIRST_PET_GRACE_DAYS} days of its month. */
+    public static boolean inFirstPetGraceWindow(LocalDate date) {
+        return date.getDayOfMonth() > date.lengthOfMonth() - FIRST_PET_GRACE_DAYS;
+    }
 }
 

@@ -1,5 +1,12 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.settings.CurrencyDialog
+import se.kidquest.app.settings.LanguageDialog
+import se.kidquest.app.i18n.AppLanguage
+import se.kidquest.app.i18n.Dates
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -154,6 +161,8 @@ fun AdultDashboardScreen(
     var parentPin by remember { mutableStateOf<String?>(null) }
     var showPinDialog by remember { mutableStateOf(false) }
     var showReferralDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showCurrencyDialog by remember { mutableStateOf(false) }
     val pinScope = rememberCoroutineScope()
     LaunchedEffect(Unit) { parentPin = TokenStore.parentPin() }
     // The family already named itself at registration. Falling back to "Min familj"
@@ -179,6 +188,7 @@ fun AdultDashboardScreen(
             val all = ApiClient.familyMembersApi.getAllMembers()
             children = all.filter { it.role == "CHILD" || it.role == "ASSISTANT" }
             adults = all.filter { it.role == "PARENT" }
+            AppLanguage.syncFrom(all.firstOrNull { it.id == currentMemberId })
             anyChildHasChores = coroutineScope {
                 children.map { child ->
                     async { kotlin.runCatching { DailyChoreRepository.hasAnyChore(child.id) }.getOrDefault(false) }
@@ -222,7 +232,7 @@ fun AdultDashboardScreen(
                 }.mapNotNull { it.await() }.toMap()
             }
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte ladda familjemedlemmar")
+            error = ApiErrors.message(e, tr(R.string.dash_load_members_failed))
         } finally {
             loading = false
         }
@@ -236,7 +246,9 @@ fun AdultDashboardScreen(
 
         familyName = kotlin.runCatching {
             adults.firstOrNull()?.familyId?.let { id ->
-                ApiClient.familyApi.getFamily(id).takeIf { it.isSuccessful }?.body()?.name
+                ApiClient.familyApi.getFamily(id).takeIf { it.isSuccessful }?.body()
+                    ?.also { Money.remember(it.currency) }
+                    ?.name
             }
         }.getOrNull()?.takeIf { it.isNotBlank() }
     }
@@ -365,10 +377,10 @@ fun AdultDashboardScreen(
                                     // Pairing is last on purpose: it is the skippable step,
                                     // so it should never be what a parent is told to do next.
                                     nextLabel = when {
-                                        !hasChild -> "lägg till ett barn"
-                                        !anyChildHasChores -> "lägg till dagliga sysslor"
-                                        !hasPet -> "välj ett ägg"
-                                        !hasPairedDevice -> "koppla barnets telefon"
+                                        !hasChild -> tr(R.string.next_add_child)
+                                        !anyChildHasChores -> tr(R.string.next_add_chores)
+                                        !hasPet -> tr(R.string.next_pick_egg)
+                                        !hasPairedDevice -> tr(R.string.next_pair_phone)
                                         else -> null
                                     },
                                     cardPastel = cardPastel,
@@ -397,12 +409,12 @@ fun AdultDashboardScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     Text(
-                                        text = "Inga barn i familjen ännu",
+                                        text = tr(R.string.dash_no_children),
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = textPrimary,
                                     )
                                     Text(
-                                        text = "Lägg till ditt första barn nedan.",
+                                        text = tr(R.string.dash_add_first_below),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = textSecondary,
                                         modifier = Modifier.padding(top = 4.dp),
@@ -440,7 +452,7 @@ fun AdultDashboardScreen(
                     item {
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                             Text(
-                                text = "Vuxna",
+                                text = tr(R.string.dash_adults),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 color = textPrimary,
@@ -482,14 +494,14 @@ fun AdultDashboardScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     Text(
-                                        text = "Steg 1: Lägg till ditt första barn",
+                                        text = tr(R.string.dash_step1),
                                         style = MaterialTheme.typography.bodyLarge,
                                         fontWeight = FontWeight.SemiBold,
                                         color = textPrimary,
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Tryck på \"Lägg till familjemedlem\" här nedanför så hjälper vi dig komma igång.",
+                                        text = tr(R.string.dash_step1_body),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = textSecondary,
                                     )
@@ -519,7 +531,7 @@ fun AdultDashboardScreen(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.size(8.dp))
-                            Text("Lägg till familjemedlem", fontWeight = FontWeight.SemiBold)
+                            Text(tr(R.string.member_add_title), fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -577,7 +589,7 @@ fun AdultDashboardScreen(
         // behind it and the name and the menu never scroll out of reach. The menu is
         // the only way to Prenumeration and Logga ut.
         DashboardTopBar(
-            familyName = familyName ?: "Min familj",
+            familyName = familyName ?: tr(R.string.dash_my_family),
             palette = palette,
             // Fully faded in by the time the photograph's own title would have left.
             collapsed = collapseFraction(listState),
@@ -593,10 +605,27 @@ fun AdultDashboardScreen(
             onChangePin = { showPinDialog = true },
             onDeleteFamily = { confirmingFamilyDeletion = true },
             onEnterReferral = { showReferralDialog = true },
+            onChangeLanguage = { showLanguageDialog = true },
+            isParent = TokenStore.getSession()?.role?.uppercase() == "PARENT",
+            onChangeCurrency = { showCurrencyDialog = true },
         )
 
         if (showReferralDialog) {
             ReferralCodeDialog(season = palette, onDismiss = { showReferralDialog = false })
+        }
+        if (showLanguageDialog) {
+            LanguageDialog(memberId = currentMemberId, onDismiss = { showLanguageDialog = false })
+        }
+        if (showCurrencyDialog) {
+            CurrencyDialog(
+                familyId = TokenStore.getSession()?.familyId,
+                onDismiss = { showCurrencyDialog = false },
+                onSaved = {
+                    showCurrencyDialog = false
+                    // Summaries carry formatted amounts; rebuild them in the new currency.
+                    localRefresh++
+                },
+            )
         }
 
         if (showPinDialog) {
@@ -687,7 +716,7 @@ private fun SeasonHeader(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "IDAG I FAMILJEN",
+                    text = tr(R.string.dash_today_family),
                     modifier = Modifier.weight(1f),
                     fontSize = 10.5.sp,
                     lineHeight = 14.sp,
@@ -696,7 +725,7 @@ private fun SeasonHeader(
                     color = Color.White.copy(alpha = 0.84f),
                 )
                 Text(
-                    text = "Alla uppgifter",
+                    text = tr(R.string.dash_all_chores),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
@@ -719,7 +748,7 @@ private fun SeasonHeader(
                 )
                 Spacer(modifier = Modifier.size(7.dp))
                 Text(
-                    text = if (total > 0) "av $total uppgifter" else "inga uppgifter planerade",
+                    text = if (total > 0) se.kidquest.app.i18n.trp(R.plurals.dash_of_chores, total) else tr(R.string.dash_no_chores_planned),
                     modifier = Modifier.padding(bottom = 5.dp),
                     style = MaterialTheme.typography.titleSmall,
                     color = Color.White.copy(alpha = 0.9f),
@@ -772,6 +801,9 @@ private fun DashboardTopBar(
     hasParentPin: Boolean,
     onChangePin: () -> Unit,
     onEnterReferral: () -> Unit,
+    onChangeLanguage: () -> Unit,
+    isParent: Boolean,
+    onChangeCurrency: () -> Unit,
 ) {
     // White on the photograph, the season's ink once the bar is solid.
     val titleColour = lerp(Color.White, palette.ink, collapsed)
@@ -799,7 +831,7 @@ private fun DashboardTopBar(
             IconButton(onClick = { onMenuOpenChange(true) }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "Fler val",
+                    contentDescription = tr(R.string.menu_more),
                     tint = iconColour,
                 )
             }
@@ -811,7 +843,7 @@ private fun DashboardTopBar(
                 // reads this in bed wants it dark whatever the phone is doing, and until
                 // they touch it the phone still decides.
                 DropdownMenuItem(
-                    text = { Text("Mörkt läge") },
+                    text = { Text(tr(R.string.menu_dark)) },
                     trailingIcon = {
                         Switch(
                             checked = darkMode ?: systemDark,
@@ -826,7 +858,7 @@ private fun DashboardTopBar(
                 // the only route to the paywall for anyone testing a purchase.
                 if (showSubscription) {
                     DropdownMenuItem(
-                        text = { Text("Prenumeration") },
+                        text = { Text(tr(R.string.menu_subscription)) },
                         onClick = {
                             onMenuOpenChange(false)
                             onOpenPaywall()
@@ -839,7 +871,7 @@ private fun DashboardTopBar(
                 // redan att koden existerar.
                 if (hasParentPin) {
                     DropdownMenuItem(
-                        text = { Text("Barnlåsets kod") },
+                        text = { Text(tr(R.string.menu_pin)) },
                         onClick = {
                             onMenuOpenChange(false)
                             onChangePin()
@@ -850,14 +882,32 @@ private fun DashboardTopBar(
                 // tipsade dem. First-touch på servern, så det är ofarligt att den syns
                 // alltid -- en redan kopplad familj påverkas inte.
                 DropdownMenuItem(
-                    text = { Text("Värvningskod") },
+                    text = { Text(tr(R.string.menu_referral)) },
                     onClick = {
                         onMenuOpenChange(false)
                         onEnterReferral()
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("Logga ut") },
+                    text = { Text(tr(R.string.menu_language)) },
+                    onClick = {
+                        onMenuOpenChange(false)
+                        onChangeLanguage()
+                    },
+                )
+                // Parents only: the server refuses anyone else, so the entry would only
+                // lead to an error.
+                if (isParent) {
+                    DropdownMenuItem(
+                        text = { Text(tr(R.string.menu_currency)) },
+                        onClick = {
+                            onMenuOpenChange(false)
+                            onChangeCurrency()
+                        },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text(tr(R.string.sign_out)) },
                     onClick = {
                         onMenuOpenChange(false)
                         onLogout()
@@ -868,7 +918,7 @@ private fun DashboardTopBar(
                 // enforces it. Last in the menu and in red, because it is the one
                 // entry here that cannot be undone.
                 DropdownMenuItem(
-                    text = { Text("Ta bort familjen", color = palette.danger) },
+                    text = { Text(tr(R.string.menu_delete_family), color = palette.danger) },
                     onClick = {
                         onMenuOpenChange(false)
                         onDeleteFamily()
@@ -978,17 +1028,15 @@ private data class ChildSummary(
  */
 private fun describeAllowance(schedule: RecurringAllowanceResponse): String {
     val day = schedule.dayOfMonth ?: 1
-    val ordinal = if (day % 10 in 1..2 && day != 11 && day != 12) "$day:a" else "$day:e"
+    val ordinal = Dates.dayOrdinal(day)
     return when (schedule.kind) {
-        "WEEKLY" -> {
-            val weekday = when (schedule.weekday) {
-                1 -> "måndag"; 2 -> "tisdag"; 3 -> "onsdag"; 4 -> "torsdag"
-                5 -> "fredag"; 6 -> "lördag"; else -> "söndag"
-            }
-            "${schedule.amount ?: 0} kr varje $weekday"
-        }
-        "MONTHLY" -> "${schedule.amount ?: 0} kr den $ordinal"
-        else -> "Efter nivå den $ordinal"
+        "WEEKLY" -> tr(
+            R.string.allow_weekly_desc,
+            Money.format(schedule.amount ?: 0),
+            Dates.weekdayFull((schedule.weekday ?: 7).coerceIn(1, 7)),
+        )
+        "MONTHLY" -> tr(R.string.allow_monthly_desc, Money.format(schedule.amount ?: 0), ordinal)
+        else -> tr(R.string.allow_level_desc, ordinal)
     }
 }
 // A streakDays field used to live here, hardcoded to 0, behind a `> 0` check in the
@@ -1113,7 +1161,7 @@ private fun ChildPetPortrait(
                 modifier = Modifier
                     .size(PORTRAIT_PET_SIZE)
                     .align(Alignment.Center),
-                contentDescription = "${possessive(childName)} djur",
+                contentDescription = tr(R.string.pet_of, possessiveName(childName)),
                 // Half the diameter, so the frame is a circle rather than a rounded square.
                 cornerRadius = 36,
                 alignment = Alignment.BottomCenter,
@@ -1243,9 +1291,9 @@ private fun ChildCard(
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = when {
-                            summary == null -> "Kunde inte läsa dagens sysslor"
-                            speciesName != null -> "$speciesName · nivå ${summary.growthStage}"
-                            else -> "Inget djur valt ännu"
+                            summary == null -> tr(R.string.dash_read_failed)
+                            speciesName != null -> tr(R.string.dash_species_level, speciesName, summary.growthStage)
+                            else -> tr(R.string.dash_no_pet)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = textSecondary,
@@ -1265,18 +1313,18 @@ private fun ChildCard(
                         when {
                             allDoneToday -> StatusChip(
                                 icon = Icons.Default.Check,
-                                text = "Allt klart idag",
+                                text = tr(R.string.dash_all_done_today),
                                 background = season.goodBg,
                                 ink = season.goodInk,
                             )
                             summary.todaysTotal == 0 -> Text(
-                                text = "Inga sysslor planerade idag",
+                                text = tr(R.string.dash_no_chores_today),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = textSecondary,
                             )
                             else -> StatusChip(
                                 icon = Icons.Default.Schedule,
-                                text = "${summary.todaysTotal - summary.todaysDone} kvar idag",
+                                text = tr(R.string.dash_left_today, summary.todaysTotal - summary.todaysDone),
                                 background = season.warnBg,
                                 ink = season.warnStrong,
                             )
@@ -1303,7 +1351,7 @@ private fun ChildCard(
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Fler val för $name",
+                            contentDescription = tr(R.string.menu_more_for, name),
                             tint = textSecondary,
                         )
                     }
@@ -1312,28 +1360,28 @@ private fun ChildCard(
                         onDismissRequest = { menuOpen = false },
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Visa som barn") },
+                            text = { Text(tr(R.string.menu_view_as_child)) },
                             onClick = {
                                 menuOpen = false
                                 onChildViewClick()
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Bjud in till appen") },
+                            text = { Text(tr(R.string.menu_invite)) },
                             onClick = {
                                 menuOpen = false
                                 onInviteClick()
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Byt namn") },
+                            text = { Text(tr(R.string.menu_rename)) },
                             onClick = {
                                 menuOpen = false
                                 onRenameClick()
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Ta bort", color = season.danger) },
+                            text = { Text(tr(R.string.common_delete), color = season.danger) },
                             onClick = {
                                 menuOpen = false
                                 onDeleteClick()
@@ -1359,13 +1407,13 @@ private fun ChildCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Ingen telefon kopplad ännu",
+                        text = tr(R.string.dash_no_phone),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall,
                         color = season.warnInk,
                     )
                     Text(
-                        text = "Bjud in",
+                        text = tr(R.string.dash_invite),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = season.warnStrong,
@@ -1391,7 +1439,7 @@ private fun ChildCard(
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.size(9.dp))
-                Text("${possessive(name)} sysslor", fontWeight = FontWeight.SemiBold)
+                Text(tr(R.string.dash_chores_of, possessiveName(name)), fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1420,7 +1468,7 @@ private fun ChildCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.size(7.dp))
-                    Text("Djur", style = MaterialTheme.typography.labelLarge)
+                    Text(tr(R.string.dash_pet), style = MaterialTheme.typography.labelLarge)
                 }
                 OutlinedButton(
                     onClick = onWalletClick,
@@ -1441,7 +1489,7 @@ private fun ChildCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.size(7.dp))
-                    Text("Plånbok", style = MaterialTheme.typography.labelLarge)
+                    Text(tr(R.string.dash_wallet), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -1462,13 +1510,13 @@ private fun RenameMemberDialog(
 
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
-        title = { Text("Byt namn") },
+        title = { Text(tr(R.string.menu_rename)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Namn") },
+                    label = { Text(tr(R.string.member_name)) },
                     singleLine = true,
                     enabled = !saving,
                 )
@@ -1494,18 +1542,18 @@ private fun RenameMemberDialog(
                             }
                             onRenamed()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte byta namn.")
+                            error = ApiErrors.message(e, tr(R.string.rename_failed))
                         } finally {
                             saving = false
                         }
                     }
                 },
             ) {
-                Text(if (saving) "Sparar…" else "Spara")
+                Text(if (saving) tr(R.string.common_saving) else tr(R.string.common_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !saving) { Text("Avbryt") }
+            TextButton(onClick = onDismiss, enabled = !saving) { Text(tr(R.string.common_cancel)) }
         },
     )
 }
@@ -1531,16 +1579,15 @@ private fun DeleteMemberDialog(
 
     AlertDialog(
         onDismissRequest = { if (!deleting) onDismiss() },
-        title = { Text("Ta bort ${member.name}?") },
+        title = { Text(tr(R.string.delete_member_title, member.name)) },
         text = {
             Column {
                 Text(
-                    "Det här tar bort ${member.name} ur familjen, tillsammans med alla " +
-                        "sysslor, XP, djur och plånbokshistorik. Det går inte att ångra.",
+                    tr(R.string.delete_member_body, member.name),
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Skriv ${member.name} för att bekräfta:",
+                    text = tr(R.string.delete_type_to_confirm, member.name),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -1572,7 +1619,7 @@ private fun DeleteMemberDialog(
                             }
                             onDeleted()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte ta bort medlemmen.")
+                            error = ApiErrors.message(e, tr(R.string.delete_member_failed))
                         } finally {
                             deleting = false
                         }
@@ -1580,13 +1627,13 @@ private fun DeleteMemberDialog(
                 },
             ) {
                 Text(
-                    text = if (deleting) "Tar bort…" else "Ta bort",
+                    text = if (deleting) tr(R.string.deleting) else tr(R.string.common_delete),
                     color = if (confirmed) season.danger else season.inkFaint,
                 )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !deleting) { Text("Avbryt") }
+            TextButton(onClick = onDismiss, enabled = !deleting) { Text(tr(R.string.common_cancel)) }
         },
     )
 }
@@ -1659,7 +1706,7 @@ private fun AdultRow(
                     color = textPrimary,
                 )
                 Text(
-                    text = if (hasPairedDevice) "Förälder" else "Förälder · ingen telefon kopplad",
+                    text = if (hasPairedDevice) tr(R.string.member_parent) else tr(R.string.parent_no_phone),
                     style = MaterialTheme.typography.bodySmall,
                     color = textSecondary,
                 )
@@ -1674,7 +1721,7 @@ private fun AdultRow(
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 ) {
                     Text(
-                        text = "Du",
+                        text = tr(R.string.you_badge),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = buttonOnPastel,
@@ -1685,7 +1732,7 @@ private fun AdultRow(
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Fler val för $name",
+                        contentDescription = tr(R.string.menu_more_for, name),
                         tint = textSecondary,
                     )
                 }
@@ -1694,14 +1741,14 @@ private fun AdultRow(
                     onDismissRequest = { menuOpen = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Byt namn") },
+                        text = { Text(tr(R.string.menu_rename)) },
                         onClick = {
                             menuOpen = false
                             onRenameClick()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (isCurrentUser) "Byt lösenord" else "Sätt nytt lösenord") },
+                        text = { Text(if (isCurrentUser) tr(R.string.change_password) else tr(R.string.set_new_password)) },
                         onClick = {
                             menuOpen = false
                             onPasswordClick()
@@ -1709,14 +1756,14 @@ private fun AdultRow(
                     )
                     if (!isCurrentUser) {
                         DropdownMenuItem(
-                            text = { Text("Koppla telefon") },
+                            text = { Text(tr(R.string.link_phone)) },
                             onClick = {
                                 menuOpen = false
                                 onInviteClick()
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Ta bort", color = season.danger) },
+                            text = { Text(tr(R.string.common_delete), color = season.danger) },
                             onClick = {
                                 menuOpen = false
                                 onDeleteClick()
@@ -1762,14 +1809,14 @@ private fun GetStartedStrip(
         Spacer(modifier = Modifier.size(11.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Kom igång — $doneCount av 4 klara",
+                text = tr(R.string.getstarted_progress, doneCount),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
                 color = textPrimary,
             )
             nextLabel?.let {
                 Text(
-                    text = "Nästa: $it",
+                    text = tr(R.string.getstarted_next, it),
                     style = MaterialTheme.typography.labelSmall,
                     color = textSecondary,
                 )
@@ -1777,7 +1824,7 @@ private fun GetStartedStrip(
         }
         Icon(
             imageVector = Icons.Default.ChevronRight,
-            contentDescription = "Visa alla steg",
+            contentDescription = tr(R.string.getstarted_show_all),
             tint = season.inkFaint,
             modifier = Modifier.size(18.dp),
         )
@@ -1818,13 +1865,12 @@ private fun ChangePasswordDialog(
 
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
-        title = { Text(if (isSelf) "Byt ditt lösenord" else "Nytt lösenord för ${member.name}") },
+        title = { Text(if (isSelf) tr(R.string.pw_change_own) else tr(R.string.pw_new_for, member.name)) },
         text = {
             Column {
                 if (!isSelf) {
                     Text(
-                        text = "${member.name} kan logga in med det nya lösenordet direkt. " +
-                            "Kom överens om vad det ska vara och låt hen byta det sedan.",
+                        text = tr(R.string.pw_other_body, member.name),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -1832,7 +1878,7 @@ private fun ChangePasswordDialog(
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it; error = null },
-                    label = { Text("Nytt lösenord") },
+                    label = { Text(tr(R.string.pw_new)) },
                     singleLine = true,
                     enabled = !saving,
                     visualTransformation = PasswordVisualTransformation(),
@@ -1842,7 +1888,7 @@ private fun ChangePasswordDialog(
                 OutlinedTextField(
                     value = confirm,
                     onValueChange = { confirm = it; error = null },
-                    label = { Text("Upprepa lösenordet") },
+                    label = { Text(tr(R.string.pw_repeat)) },
                     singleLine = true,
                     enabled = !saving,
                     isError = mismatch,
@@ -1851,8 +1897,8 @@ private fun ChangePasswordDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 val hint = when {
-                    mismatch -> "Lösenorden är inte lika."
-                    password.isNotEmpty() && tooShort -> "Minst 6 tecken."
+                    mismatch -> tr(R.string.pw_mismatch)
+                    password.isNotEmpty() && tooShort -> tr(R.string.pw_min6)
                     else -> null
                 }
                 hint?.let {
@@ -1880,18 +1926,18 @@ private fun ChangePasswordDialog(
                             }
                             onChanged()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte spara lösenordet.")
+                            error = ApiErrors.message(e, tr(R.string.pw_save_failed))
                         } finally {
                             saving = false
                         }
                     }
                 },
             ) {
-                Text(if (saving) "Sparar…" else "Spara")
+                Text(if (saving) tr(R.string.common_saving) else tr(R.string.common_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !saving) { Text("Avbryt") }
+            TextButton(onClick = onDismiss, enabled = !saving) { Text(tr(R.string.common_cancel)) }
         },
     )
 }
@@ -1950,27 +1996,27 @@ private fun GetStartedCard(
                         .clickable(onClick = onCollapse),
                 ) {
                     Text(
-                        text = "Kom igång",
+                        text = tr(R.string.getstarted_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = textPrimary,
                     )
                     Text(
-                        text = "$doneCount av 4 klara",
+                        text = tr(R.string.getstarted_count, doneCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = textSecondary,
                     )
                 }
-                TextButton(onClick = onDismiss) { Text("Dölj") }
+                TextButton(onClick = onDismiss) { Text(tr(R.string.hide)) }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             GetStartedRow(
                 done = hasChild,
-                title = "Lägg till ett barn",
-                subtitle = "Inget fungerar förrän det finns ett barn i familjen.",
-                actionLabel = "Lägg till",
+                title = tr(R.string.gs_child_title),
+                subtitle = tr(R.string.gs_child_sub),
+                actionLabel = tr(R.string.member_add),
                 onClick = onAddChild,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
@@ -1979,9 +2025,9 @@ private fun GetStartedCard(
                 done = hasChores,
                 // Enabled only once a child exists, since the chores belong to one.
                 enabled = hasChild,
-                title = "Lägg till dagliga sysslor",
-                subtitle = "Välj ålder när du lägger till barnet och du får förslag direkt.",
-                actionLabel = "Lägg till",
+                title = tr(R.string.gs_chores_title),
+                subtitle = tr(R.string.gs_chores_sub),
+                actionLabel = tr(R.string.member_add),
                 onClick = onAddChores,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
@@ -1989,9 +2035,9 @@ private fun GetStartedCard(
             GetStartedRow(
                 done = hasPairedDevice,
                 enabled = hasChild,
-                title = "Koppla barnets telefon",
-                subtitle = "Hoppa över det här om barnet inte har någon egen telefon — du kan visa barnets vy från ditt eget konto.",
-                actionLabel = "Visa kod",
+                title = tr(R.string.gs_pair_title),
+                subtitle = tr(R.string.gs_pair_sub),
+                actionLabel = tr(R.string.gs_show_code),
                 onClick = onPairDevice,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
@@ -1999,9 +2045,9 @@ private fun GetStartedCard(
             GetStartedRow(
                 done = hasPet,
                 enabled = hasChild,
-                title = "Välj ett ägg",
-                subtitle = "Barnet får ett djur att ta hand om — det är hela poängen.",
-                actionLabel = "Öppna",
+                title = tr(R.string.gs_egg_title),
+                subtitle = tr(R.string.gs_egg_sub),
+                actionLabel = tr(R.string.gs_open),
                 onClick = onSeePet,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
@@ -2156,14 +2202,14 @@ private fun AdultDashboardPreview() {
             onInviteClick = {},
         )
         Text(
-            text = "Vuxna",
+            text = tr(R.string.dash_adults),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = textPrimary,
             modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
         )
         AdultRow(
-            name = "Patrik",
+            name = "Jonas",
             isCurrentUser = true,
             hasPairedDevice = true,
             cardPastel = cardPastel,
@@ -2176,7 +2222,7 @@ private fun AdultDashboardPreview() {
             onInviteClick = {},
         )
         AdultRow(
-            name = "Jessica",
+            name = "Anna",
             isCurrentUser = false,
             hasPairedDevice = false,
             cardPastel = cardPastel,
@@ -2221,20 +2267,19 @@ private fun SubscriptionBanner(
 
     when {
         status.status == "EXPIRED" -> {
-            headline = "Provperioden har gått ut"
-            detail = "Förnya för att lägga till sysslor och familjemedlemmar igen. Barnens sysslor och djur fungerar som vanligt."
+            headline = tr(R.string.sub_expired_title)
+            detail = tr(R.string.sub_expired_body)
         }
         status.status == "GRACE" -> {
-            headline = "Betalningen gick inte igenom"
-            detail = "Google försöker igen. Appen fungerar som vanligt under tiden."
+            headline = tr(R.string.sub_grace_title)
+            detail = tr(R.string.sub_grace_body)
         }
         status.inTrial && status.trialDaysRemaining <= TRIAL_NAG_DAYS -> {
             headline = when (status.trialDaysRemaining) {
-                0L -> "Provperioden slutar idag"
-                1L -> "1 dag kvar av provperioden"
-                else -> "${status.trialDaysRemaining} dagar kvar av provperioden"
+                0L -> tr(R.string.sub_trial_ends_today)
+                else -> se.kidquest.app.i18n.trp(R.plurals.sub_trial_days_left, status.trialDaysRemaining.toInt())
             }
-            detail = "Sedan kostar KidQuest 29 kr per månad för hela familjen."
+            detail = tr(R.string.sub_trial_after)
         }
         else -> return
     }
@@ -2320,7 +2365,7 @@ private fun SubscriptionBannerPreview() {
 }
 
 /** What a parent has to type to confirm. Deliberately not the family's own name. */
-private const val DELETE_FAMILY_CONFIRMATION = "TA BORT"
+private val DELETE_FAMILY_CONFIRMATION: String get() = tr(R.string.delete_family_word)
 
 /**
  * Deletes the family and everything in it.
@@ -2330,7 +2375,7 @@ private const val DELETE_FAMILY_CONFIRMATION = "TA BORT"
  * and asks for a typed word rather than a tap — the same bar as removing a single
  * member, for something far larger.
  *
- * The word is fixed rather than the family's name: a family called "Melander" is easy
+ * The word is fixed rather than the family's name: a family called "Berg" is easy
  * to type by reflex while reading something else, and the point of the friction is to
  * interrupt exactly that.
  *
@@ -2351,28 +2396,25 @@ private fun DeleteFamilyDialog(
 
     AlertDialog(
         onDismissRequest = { if (!deleting) onDismiss() },
-        title = { Text("Ta bort familjen?") },
+        title = { Text(tr(R.string.delete_family_title)) },
         text = {
             Column {
                 Text(
-                    "Det här tar bort hela familjen och allt som hör till den: alla barn " +
-                        "och vuxna, sysslor, XP, djur, plånböcker och sparmål. Även för de " +
-                        "andra i familjen.",
+                    tr(R.string.delete_family_body1),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Det går inte att ångra, och ingenting sparas.",
+                    tr(R.string.delete_family_body2),
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Har du en prenumeration behöver du avsluta den separat i Google Play " +
-                        "— den försvinner inte med kontot.",
+                    tr(R.string.delete_family_body3),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Skriv $DELETE_FAMILY_CONFIRMATION för att bekräfta:",
+                    text = tr(R.string.delete_type_to_confirm, DELETE_FAMILY_CONFIRMATION),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -2405,7 +2447,7 @@ private fun DeleteFamilyDialog(
                             }
                             onDeleted()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte ta bort familjen.")
+                            error = ApiErrors.message(e, tr(R.string.delete_family_failed))
                         } finally {
                             deleting = false
                         }
@@ -2413,13 +2455,13 @@ private fun DeleteFamilyDialog(
                 },
             ) {
                 Text(
-                    text = if (deleting) "Tar bort…" else "Ta bort allt",
+                    text = if (deleting) tr(R.string.deleting) else tr(R.string.delete_all),
                     color = if (confirmed) season.danger else season.inkFaint,
                 )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !deleting) { Text("Avbryt") }
+            TextButton(onClick = onDismiss, enabled = !deleting) { Text(tr(R.string.common_cancel)) }
         },
     )
 }

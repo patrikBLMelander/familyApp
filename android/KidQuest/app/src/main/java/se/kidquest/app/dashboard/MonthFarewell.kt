@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -187,13 +189,13 @@ fun MonthFarewell(
             }
 
             Text(
-                text = "${monthLabelOf(data.entry.month)} är slut".uppercase(),
+                text = tr(R.string.farewell_month_over, monthLabelOf(data.entry.month)).uppercase(),
                 style = MaterialTheme.typography.labelSmall.copy(shadow = labelShadow),
                 fontWeight = FontWeight.Bold,
                 color = Color.White.copy(alpha = 0.82f),
             )
             Text(
-                text = "${data.petName} blev ${stageWord(data.entry.finalGrowthStage)}",
+                text = stageSentence(data.petName, data.entry.finalGrowthStage),
                 style = MaterialTheme.typography.headlineSmall.copy(shadow = labelShadow),
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -231,8 +233,8 @@ fun MonthFarewell(
 
             Text(
                 text = buildString {
-                    append("Nivå ${data.entry.finalGrowthStage} av 5")
-                    if (data.tasks > 0) append(" · ${data.tasks} sysslor avbockade")
+                    append(tr(R.string.farewell_level, data.entry.finalGrowthStage))
+                    if (data.tasks > 0) append(se.kidquest.app.i18n.trp(R.plurals.farewell_chores_done, data.tasks))
                 },
                 style = MaterialTheme.typography.bodyMedium.copy(shadow = labelShadow),
                 color = Color.White.copy(alpha = 0.9f),
@@ -254,13 +256,13 @@ fun MonthFarewell(
                 ),
             ) {
                 Text(
-                    text = "Spara ${data.petName} i samlingen",
+                    text = tr(R.string.farewell_save, data.petName),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                 )
             }
             Text(
-                text = "Du kan alltid titta på den igen",
+                text = tr(R.string.farewell_look_again),
                 style = MaterialTheme.typography.labelMedium.copy(shadow = labelShadow),
                 color = Color.White.copy(alpha = 0.72f),
                 modifier = Modifier.padding(top = 2.dp),
@@ -280,13 +282,16 @@ fun MonthFarewell(
 }
 
 /** "Fullvuxen" när det nådde toppen, annars något mildare. */
-private fun stageWord(stage: Int): String = when (stage) {
-    5 -> "fullvuxen"
-    4 -> "nästan fullvuxen"
-    3 -> "stor"
-    2 -> "lite större"
-    else -> "en liten unge"
-}
+private fun stageSentence(petName: String, stage: Int): String = tr(
+    when (stage) {
+        5 -> R.string.farewell_became_5
+        4 -> R.string.farewell_became_4
+        3 -> R.string.farewell_became_3
+        2 -> R.string.farewell_became_2
+        else -> R.string.farewell_became_1
+    },
+    petName,
+)
 
 private fun monthLabelOf(month: Int): String =
     collectionMonthName(month).replaceFirstChar { it.uppercase() }

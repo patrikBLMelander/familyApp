@@ -1,5 +1,11 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.AppLanguage
+import se.kidquest.app.i18n.trp
+import se.kidquest.app.i18n.Dates
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -80,6 +86,7 @@ import se.kidquest.app.network.ApiErrors
 import se.kidquest.app.network.DailyChoreResponse
 import se.kidquest.app.network.DailyChoreWithCompletionResponse
 import se.kidquest.app.network.EggOption
+import se.kidquest.app.network.MonthInfo
 import se.kidquest.app.network.FamilyMemberResponse
 import se.kidquest.app.network.FeedPetRequest
 import se.kidquest.app.network.PetResponse
@@ -274,6 +281,15 @@ fun ChildDashboardScreen(
         parentPin = TokenStore.parentPin()
     }
 
+    // The child's own phone: pick up a language saved for them elsewhere. Not when a
+    // parent is looking in, or the parent's phone would switch to the child's language.
+    LaunchedEffect(actingAsParent) {
+        if (fixture != null || actingAsParent) return@LaunchedEffect
+        runCatching {
+            AppLanguage.syncFrom(ApiClient.familyMembersApi.getAllMembers().firstOrNull { it.id == childId })
+        }
+    }
+
     LaunchedEffect(actingAsParent, onSwitchChild != null) {
         if (fixture != null || !actingAsParent || onSwitchChild == null) return@LaunchedEffect
         siblings = runCatching {
@@ -387,15 +403,16 @@ fun ChildDashboardScreen(
                 if (petLoadFailed) {
                     val reason = petResult.exceptionOrNull()?.message
                         ?: petResp?.let { "HTTP ${it.code()}" }
-                        ?: "okänt fel"
+                        ?: "unknown"
                     Log.w("ChildDashboard", "Kunde inte hämta djur för $childId: $reason")
                 }
                 xp = if (xpResp?.isSuccessful == true) xpResp.body() else null
                 balance = walletResp
+                Money.remember(walletResp?.currency)
                 collectedFoodCount = foodResp?.totalCount ?: 0
             }
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte ladda barnvyn")
+            error = ApiErrors.message(e, tr(R.string.child_load_failed))
         } finally {
             if (isInitialLoad) {
                 loading = false
@@ -559,8 +576,8 @@ fun ChildDashboardScreen(
                     xp = xpBefore
                     pet = petBefore
                     error = ApiErrors.message(
-                        result.exceptionOrNull() ?: Exception("okänt fel"),
-                        "Kunde inte ge maten",
+                        result.exceptionOrNull() ?: Exception(tr(R.string.unknown_error)),
+                        tr(R.string.food_give_failed2),
                     )
                 }
                 isFeeding = false
@@ -627,8 +644,8 @@ fun ChildDashboardScreen(
                     // samtidigt går det inte att veta vad som ska läggas tillbaka --
                     // servern är sanningen, så vi hämtar den.
                     error = ApiErrors.message(
-                        result.exceptionOrNull() ?: Exception("okänt fel"),
-                        "Kunde inte ge maten",
+                        result.exceptionOrNull() ?: Exception(tr(R.string.unknown_error)),
+                        tr(R.string.food_give_failed2),
                     )
                     refreshKey++
                 }
@@ -895,7 +912,7 @@ fun ChildDashboardScreen(
                                 modifier = Modifier.padding(end = 8.dp),
                             ) {
                                 Text(
-                                    text = "🗺️ Äventyr",
+                                    text = tr(R.string.band_adventures),
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = season.accent,
@@ -911,7 +928,7 @@ fun ChildDashboardScreen(
                             color = Color.White.copy(alpha = 0.92f),
                         ) {
                             Text(
-                                text = balance?.let { "${it.balance} kr ›" } ?: "Plånbok ›",
+                                text = balance?.let { tr(R.string.band_wallet_amount, Money.format(it.balance, it.currency ?: Money.familyCurrency)) } ?: tr(R.string.band_wallet),
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = season.accent,
@@ -950,7 +967,7 @@ fun ChildDashboardScreen(
                             val displayName = pet!!.name?.takeIf { it.isNotBlank() }
                                 ?: PetNameUtils.getPetNameSwedish(pet!!.petType)
                             Text(
-                                text = "$displayName · NIVÅ ${xp?.currentLevel ?: 1}".uppercase(),
+                                text = tr(R.string.band_name_level, displayName, xp?.currentLevel ?: 1).uppercase(),
                                 style = MaterialTheme.typography.labelSmall.copy(shadow = labelShadow),
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White.copy(alpha = 0.92f),
@@ -969,9 +986,21 @@ fun ChildDashboardScreen(
                                     xpToNextStar = xp0.xpToNextStar,
                                 )
                             }
+                            if (pet!!.followsIntoNextMonth) {
+                                Text(
+                                    text = tr(R.string.pet_follows_next_month, collectionMonthName(pet!!.month % 12 + 1)),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
+                                    modifier = Modifier
+                                        .padding(top = 6.dp)
+                                        .background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(50))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                                )
+                            }
                             if (allDone) {
                                 Text(
-                                    text = "Allt klart idag!",
+                                    text = tr(R.string.all_done_today_excl),
                                     style = MaterialTheme.typography.headlineSmall.copy(shadow = labelShadow),
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -1110,7 +1139,7 @@ fun ChildDashboardScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
-                                text = "Logga ut $childName",
+                                text = tr(R.string.sign_out_child, childName),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = season.inkFaint,
                             )
@@ -1228,7 +1257,7 @@ fun ChildDashboardScreen(
                     style = MaterialTheme.typography.displayLarge,
                 )
                 Text(
-                    text = "Grattis! Ditt nya djur är här!",
+                    text = tr(R.string.new_pet_congrats),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimary,
@@ -1261,11 +1290,11 @@ private fun SwitchChildDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Byt barn") },
+        title = { Text(tr(R.string.switch_child)) },
         text = {
             if (siblings.isEmpty()) {
                 Text(
-                    text = "Inga andra barn i familjen.",
+                    text = tr(R.string.no_other_children),
                     style = MaterialTheme.typography.bodyMedium,
                     color = season.inkFaint,
                 )
@@ -1294,7 +1323,7 @@ private fun SwitchChildDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Avbryt") }
+            TextButton(onClick = onDismiss) { Text(tr(R.string.common_cancel)) }
         },
     )
 }
@@ -1312,6 +1341,7 @@ private fun SelectEggDialog(
 ) {
     val season = LocalSeasonPalette.current
     var eggs by remember { mutableStateOf<List<EggOption>>(emptyList()) }
+    var monthInfo by remember { mutableStateOf<MonthInfo?>(null) }
     var selectedEgg by remember { mutableStateOf<String?>(null) }
     var name by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -1341,9 +1371,21 @@ private fun SelectEggDialog(
             // mystery + samlade, med vägen vidare via äventyr.
             selectedEgg = eggs.firstOrNull { it.unlocked && !it.collected }?.eggType
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte hämta äggtyper")
+            error = ApiErrors.message(e, tr(R.string.egg_types_failed))
         } finally {
             loading = false
+        }
+    }
+
+    // Månadsraden är en bonus: går den inte att hämta visas bara ingen rad.
+    LaunchedEffect(Unit) {
+        monthInfo = try {
+            withContext(Dispatchers.IO) {
+                if (actingAsParent) ApiClient.petsApi.getMonthInfoForMember(childId)
+                else ApiClient.petsApi.getMonthInfo()
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -1367,9 +1409,9 @@ private fun SelectEggDialog(
         title = {
             Text(
                 when {
-                    isHatching -> "Ägget kläcks"
-                    isNaming -> "Namnge ditt djur"
-                    else -> "Välj ägg"
+                    isHatching -> tr(R.string.egg_hatching)
+                    isNaming -> tr(R.string.name_your_pet)
+                    else -> tr(R.string.pick_egg)
                 },
             )
         },
@@ -1380,17 +1422,17 @@ private fun SelectEggDialog(
                     .verticalScroll(rememberScrollState()),
             ) {
                 if (loading) {
-                    Text("Laddar äggtyper…")
+                    Text(tr(R.string.loading_egg_types))
                 } else if (error != null) {
                     Text(text = error!!, color = MaterialTheme.colorScheme.error)
                 } else if (isHatching) {
                     val eggStageDrawable = PetImages.eggDrawable(context, selectedEgg, hatchingStage)
-                    Text(text = "Ägget kläcks...", style = MaterialTheme.typography.bodyMedium)
+                    Text(text = tr(R.string.egg_hatching_dots), style = MaterialTheme.typography.bodyMedium)
                     Spacer(modifier = Modifier.height(12.dp))
                     if (eggStageDrawable != null) {
                         Image(
                             painter = painterResource(id = eggStageDrawable),
-                            contentDescription = "Kläckande ägg",
+                            contentDescription = tr(R.string.egg_hatching_cd),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(160.dp),
@@ -1398,6 +1440,18 @@ private fun SelectEggDialog(
                         )
                     }
                 } else if (!isNaming) {
+                    monthInfo?.let { info -> monthEndMessage(info) }?.let { message ->
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = season.tipInk,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(season.accent.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
                     EggCollectionBoard(
                         eggs = eggs,
                         history = history,
@@ -1411,7 +1465,7 @@ private fun SelectEggDialog(
                     // vilket gjorde att hälften av väljarens innehåll aldrig lästes.
                     Text(
                         text = selectedEgg?.let { EggNames.hint(it) }
-                            ?: "Tryck på ett ägg för att höra vad som viskar därinne.",
+                            ?: tr(R.string.egg_tap_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (selectedEgg != null) season.tipInk else season.inkFaint,
                         fontStyle = if (selectedEgg != null) FontStyle.Italic else FontStyle.Normal,
@@ -1422,7 +1476,7 @@ private fun SelectEggDialog(
                     if (animalDrawable != null) {
                         Image(
                             painter = painterResource(id = animalDrawable),
-                            contentDescription = "Ditt djur",
+                            contentDescription = tr(R.string.your_pet_cd),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(160.dp),
@@ -1432,15 +1486,15 @@ private fun SelectEggDialog(
                     }
                     Text(
                         text = selectedPetType?.let {
-                            "Det blev en ${PetNameUtils.getPetNameSwedish(it)}! Vad ska den heta?"
-                        } ?: "Vad ska ditt djur heta?",
+                            tr(R.string.pet_is_a, PetNameUtils.getPetNameSwedish(it))
+                        } ?: tr(R.string.pet_name_q),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     androidx.compose.material3.OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("Namn på djuret (valfritt)") },
+                        label = { Text(tr(R.string.pet_name_optional)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -1475,7 +1529,7 @@ private fun SelectEggDialog(
                             }
                             onEggSelected(pet)
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte välja ägg")
+                            error = ApiErrors.message(e, tr(R.string.egg_pick_failed))
                         } finally {
                             saving = false
                         }
@@ -1485,10 +1539,10 @@ private fun SelectEggDialog(
             ) {
                 Text(
                     when {
-                        saving -> "Sparar…"
-                        isHatching -> "Ägget kläcks…"
-                        !isNaming -> "Välj"
-                        else -> "Spara"
+                        saving -> tr(R.string.common_saving)
+                        isHatching -> tr(R.string.egg_hatching_ellipsis)
+                        !isNaming -> tr(R.string.pick)
+                        else -> tr(R.string.common_save)
                     },
                 )
             }
@@ -1496,7 +1550,7 @@ private fun SelectEggDialog(
         dismissButton = {
             if (!isHatching && !saving) {
                 TextButton(onClick = onDismiss) {
-                    Text("Välj senare")
+                    Text(tr(R.string.pick_later))
                 }
             }
         },
@@ -1572,7 +1626,7 @@ private fun TasksSection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Dagens uppgifter",
+                text = tr(R.string.todays_chores),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = season.ink,
@@ -1602,36 +1656,36 @@ private fun TasksSection(
                     when {
                         petLoadFailed -> {
                             Text(
-                                "Kunde inte läsa djuret",
+                                tr(R.string.pet_read_failed),
                                 fontWeight = FontWeight.SemiBold,
                                 color = season.ink,
                             )
                             Text(
-                                "Försök igen om en stund. Inget har gått förlorat.",
+                                tr(R.string.pet_read_failed_body),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = season.inkSoft,
                             )
                         }
                         !hasPet -> {
                             Text(
-                                "Välj ett ägg först",
+                                tr(R.string.pick_egg_first),
                                 fontWeight = FontWeight.SemiBold,
                                 color = season.ink,
                             )
                             Text(
-                                "Knappen ligger i remsan ovanför.",
+                                tr(R.string.pick_egg_first_body),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = season.inkSoft,
                             )
                         }
                         else -> {
                             Text(
-                                "Inga uppgifter idag",
+                                tr(R.string.tasks_none_today),
                                 fontWeight = FontWeight.SemiBold,
                                 color = season.ink,
                             )
                             Text(
-                                "Njut av dagen!",
+                                tr(R.string.enjoy_day),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = season.inkSoft,
                             )
@@ -1691,7 +1745,7 @@ private fun TasksSection(
                             )
                             if (task.chore.xpPoints > 0) {
                                 Text(
-                                    text = "+${task.chore.xpPoints} mat",
+                                    text = tr(R.string.task_food_reward, task.chore.xpPoints),
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = if (task.completed) season.inkFaint else season.tipStrong,
@@ -1722,12 +1776,12 @@ private fun BackToNowCard(season: SeasonPalette, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                "Det här djuret är färdigväxt",
+                tr(R.string.pet_fully_grown_past),
                 fontWeight = FontWeight.SemiBold,
                 color = season.ink,
             )
             Text(
-                "Du kan inte mata det längre, men det stannar i din samling.",
+                tr(R.string.pet_fully_grown_past_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = season.inkSoft,
             )
@@ -1738,7 +1792,7 @@ private fun BackToNowCard(season: SeasonPalette, onBack: () -> Unit) {
                     contentColor = season.onAccent,
                 ),
             ) {
-                Text("Tillbaka till nu", fontWeight = FontWeight.Bold)
+                Text(tr(R.string.back_to_now), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -1763,7 +1817,7 @@ private fun ErrorCard(message: String, season: SeasonPalette, onRetry: () -> Uni
                     contentColor = season.onAccent,
                 ),
             ) {
-                Text("Försök igen")
+                Text(tr(R.string.common_retry))
             }
         }
     }
@@ -1800,7 +1854,7 @@ private fun ActingAsParentBanner(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
-            text = "Du ser ${possessiveSwedish(childName)} vy",
+            text = tr(R.string.viewing_child, possessiveName(childName)),
             style = MaterialTheme.typography.labelMedium,
             color = palette.inkFaint,
             maxLines = 1,
@@ -1808,20 +1862,20 @@ private fun ActingAsParentBanner(
             modifier = Modifier.weight(1f),
         )
         if (onSwitchChild != null) {
-            BarAction(text = "Byt barn", tint = palette.accent, onClick = onSwitchChild)
+            BarAction(text = tr(R.string.switch_child), tint = palette.accent, onClick = onSwitchChild)
         }
         if (hasPin) {
             // Stängt lås: bara en markör att barnlåset är på. Att ändra eller ta bort
             // koden görs från förälderns egen meny, inte härifrån.
             Text(
-                text = "🔒 Barnlås",
+                text = tr(R.string.kid_lock_on),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = palette.inkFaint,
                 modifier = Modifier.padding(horizontal = 8.dp),
             )
         } else {
-            BarAction(text = "🔓 Barnlås", tint = palette.accent, onClick = onSetPin)
+            BarAction(text = tr(R.string.kid_lock_off), tint = palette.accent, onClick = onSetPin)
         }
         if (onExit != null) {
             Text(
@@ -1873,8 +1927,8 @@ private fun AdventureClockBadge(
     ) {
         Text(if (ready) "🎁" else "⏳", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = if (ready) "Hemma! Tryck för att hämta"
-            else "På äventyr · ${formatBandRemaining(remainingSecs)}",
+            text = if (ready) tr(R.string.adv_ready_tap)
+            else tr(R.string.adv_on_trip, formatBandRemaining(remainingSecs)),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = Color.White,
@@ -1885,27 +1939,49 @@ private fun AdventureClockBadge(
 private fun formatBandRemaining(secs: Long): String {
     val m = secs / 60
     val s = secs % 60
-    return if (m >= 3) "$m min kvar" else "%d:%02d kvar".format(m, s)
+    return if (m >= 3) tr(R.string.adv_minutes_left, m.toInt()) else tr(R.string.adv_time_left, "%d:%02d".format(m, s))
 }
 
-/** Svensk genitiv: "Signes vy", men "Lukas vy" -- namn på s, x eller z får inget extra s. */
+/** Svensk genitiv: "Ellas vy", men "Lukas vy" -- namn på s, x eller z får inget extra s. */
 internal fun possessiveSwedish(name: String): String {
     val last = name.lowercase().lastOrNull() ?: return name
     return if (last in "sxz") name else name + "s"
 }
 
+/**
+ * The name as the "%1$s" of a possessive string: Swedish and English inflect the name
+ * itself ("Evas vy", "Eva's view"), German and Spanish say "von Eva" / "de Eva".
+ */
+internal fun possessiveName(name: String): String = when (se.kidquest.app.i18n.L10n.language()) {
+    "sv" -> possessiveSwedish(name)
+    "en" -> if (name.endsWith("s")) "$name’" else "$name’s"
+    else -> name
+}
+
+/**
+ * Raden ovanför äggen de sista tio dagarna i månaden, eller null tidigare i månaden.
+ * Ett första ägg följer med nästa månad; annars väntar ett nytt ägg den första.
+ */
+private fun monthEndMessage(info: MonthInfo): String? {
+    if (info.daysLeftInMonth > 10) return null
+    val ends = if (info.daysLeftInMonth == 0) {
+        tr(R.string.month_ends_today)
+    } else {
+        trp(R.plurals.month_ends_in, info.daysLeftInMonth)
+    }
+    val next = collectionMonthName(info.nextMonth)
+    return if (info.firstPetGrace) tr(R.string.month_end_first_egg, ends, next)
+    else tr(R.string.month_end_new_egg, ends, next)
+}
+
 private fun monthLabel(year: Int, month: Int): String {
-    val names = listOf(
-        "januari", "februari", "mars", "april", "maj", "juni",
-        "juli", "augusti", "september", "oktober", "november", "december",
-    )
-    return "${names[month.coerceIn(1, 12) - 1]} $year"
+    return tr(R.string.month_year, Dates.month(month.coerceIn(1, 12)), year)
 }
 
 /**
  * Provvärden för [ChildDashboardScreen], så att skärmen går att fotografera.
  *
- * Samma siffror som iOS-fixturen: Signe en vardag i september, med uppgifterna ur den
+ * Samma siffror som iOS-fixturen: Ella en vardag i september, med uppgifterna ur den
  * färdiga listan för 7-9 år. Poängen är att de två plattformarna går att jämföra sida
  * vid sida -- skiljer de sig ska det bero på layouten, inte på olika data.
  */
@@ -1977,11 +2053,12 @@ data class ChildDashboardFixture(
                 ),
                 balance = WalletBalanceResponse(id = "w1", memberId = "child-1", balance = 85),
                 tasks = listOf(
-                    chore("1", "Bädda sängen", 1, true),
-                    chore("2", "Packa skolväskan", 1, true),
-                    chore("3", "Plocka undan efter mellis", 1, allDone),
-                    chore("4", "Kvällsrutin utan tjat", 2, allDone),
-                    chore("5", "Hjälpa till med disken", 1, allDone),
+                    // Preset chores, so store screenshots show them in the app's language.
+                    chore("1", tr(R.string.preset_chore_7), 1, true),
+                    chore("2", tr(R.string.preset_chore_6), 1, true),
+                    chore("3", tr(R.string.preset_chore_8), 1, allDone),
+                    chore("4", tr(R.string.preset_chore_9), 2, allDone),
+                    chore("5", tr(R.string.preset_chore_10), 1, allDone),
                 ),
                 foodCount = if (nearLevelUp) 5 else if (allDone) 5 else 2,
                 showFarewell = showFarewell,

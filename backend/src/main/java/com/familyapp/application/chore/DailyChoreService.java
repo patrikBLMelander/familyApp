@@ -1,5 +1,6 @@
 package com.familyapp.application.chore;
 
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.application.pet.CollectedFoodService;
 import com.familyapp.domain.chore.DailyChore;
 import com.familyapp.domain.chore.DailyChoreCompletion;
@@ -171,11 +172,7 @@ public class DailyChoreService {
             if (chore.getXpPoints() > 0) {
                 int unfedCount = foodService.getUnfedFoodCount(chore.getMember().getId());
                 if (unfedCount < chore.getXpPoints()) {
-                    throw new IllegalArgumentException(
-                            String.format("Kan inte avmarkera syssla: Du har inte tillräckligt med omatad mat. " +
-                                    "Du behöver %d omatad mat, men har bara %d omatad mat totalt.",
-                                    chore.getXpPoints(), unfedCount)
-                    );
+                    throw new LocalizedException("chore.uncheck.notEnoughFood", chore.getXpPoints(), unfedCount);
                 }
                 foodService.removeFood(chore.getMember().getId(), chore.getXpPoints());
             }

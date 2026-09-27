@@ -1,5 +1,6 @@
 package com.familyapp.application.allowance;
 
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.application.allowance.RecurringAllowanceService.AllowanceSpec;
 import com.familyapp.application.subscription.SubscriptionService;
 import com.familyapp.application.wallet.WalletService;
@@ -123,7 +124,7 @@ class RecurringAllowanceServiceTest {
 
         assertThatThrownBy(() -> service.get(CHILD, CHILD))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Endast en förälder");
+                .hasMessage("allowance.parentOnly");
     }
 
     @Test
@@ -150,11 +151,11 @@ class RecurringAllowanceServiceTest {
 
         assertThatThrownBy(() -> service.save(CHILD, PARENT,
                 new AllowanceSpec(AllowanceKind.WEEKLY, null, 5, null, null, null, null, null, null)))
-                .hasMessageContaining("större än 0");
+                .hasMessage("amount.positive");
 
         assertThatThrownBy(() -> service.save(CHILD, PARENT,
                 new AllowanceSpec(AllowanceKind.WEEKLY, 50, null, null, null, null, null, null, null)))
-                .hasMessageContaining("veckodag");
+                .hasMessage("allowance.chooseWeekday");
     }
 
     @Test
@@ -164,7 +165,10 @@ class RecurringAllowanceServiceTest {
 
         assertThatThrownBy(() -> service.save(CHILD, PARENT,
                 new AllowanceSpec(AllowanceKind.MONTHLY, 150, null, 31, null, null, null, null, null)))
-                .hasMessageContaining("mellan 1 och 28");
+                .isInstanceOfSatisfying(LocalizedException.class, e -> {
+                    assertThat(e.code()).isEqualTo("allowance.chooseDay");
+                    assertThat(e.args()).containsExactly(28);
+                });
     }
 
     @Test
@@ -174,7 +178,10 @@ class RecurringAllowanceServiceTest {
 
         assertThatThrownBy(() -> service.save(CHILD, PARENT,
                 new AllowanceSpec(AllowanceKind.LEVEL, null, null, 1, 20, 30, null, 60, 100)))
-                .hasMessageContaining("nivå 3");
+                .isInstanceOfSatisfying(LocalizedException.class, e -> {
+                    assertThat(e.code()).isEqualTo("allowance.levelAmountRequired");
+                    assertThat(e.args()).containsExactly(3);
+                });
     }
 
     @Test

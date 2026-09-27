@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,11 +53,11 @@ fun GiveFoodDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Ge mat till $childName", fontWeight = FontWeight.Bold) },
+        title = { Text(tr(R.string.food_give_title, childName), fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Maten läggs i barnets pott. Barnet kan sedan mata sitt djur.",
+                    text = tr(R.string.food_give_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -103,7 +105,7 @@ fun GiveFoodDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = "Mängd:",
+                        text = tr(R.string.food_amount),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
@@ -146,7 +148,7 @@ fun GiveFoodDialog(
                             }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte ge mat")
+                            error = ApiErrors.message(e, tr(R.string.food_give_failed))
                         } finally {
                             loading = false
                         }
@@ -154,12 +156,12 @@ fun GiveFoodDialog(
                 },
                 enabled = !loading,
             ) {
-                Text(if (loading) "Ger mat…" else "Ge $amount XP mat")
+                Text(if (loading) tr(R.string.food_giving) else tr(R.string.food_give_button, amount))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Avbryt")
+                Text(tr(R.string.common_cancel))
             }
         },
     )

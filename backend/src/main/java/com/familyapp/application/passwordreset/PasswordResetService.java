@@ -1,5 +1,7 @@
 package com.familyapp.application.passwordreset;
 
+import com.familyapp.domain.i18n.AppLanguages;
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.domain.familymember.FamilyMember.Role;
 import com.familyapp.infrastructure.email.ResendEmailSender;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
@@ -85,6 +87,15 @@ public class PasswordResetService {
      */
     @Transactional
     public void request(String email) {
+        request(email, "sv");
+    }
+
+    /**
+     * As {@link #request(String)}, with the mail in the member's saved language, or in
+     * {@code fallbackLanguage} (from the request) when they have none.
+     */
+    @Transactional
+    public void request(String email, String fallbackLanguage) {
         if (email == null || email.isBlank()) {
             return;
         }
@@ -119,7 +130,9 @@ public class PasswordResetService {
         tokenRepository.save(entity);
 
         var link = resetUrlBase + "?token=" + rawToken;
-        emailSender.send(normalized, "Återställ ditt lösenord i KidQuest", emailBody(member.getName(), link));
+        var language = AppLanguages.isSupported(member.getLanguage()) ? member.getLanguage() : fallbackLanguage;
+        var texts = PasswordResetEmail.forLanguage(language);
+        emailSender.send(normalized, texts.subject(), emailBody(texts, member.getName(), link));
         log.info("Password reset token issued for member {}", member.getId());
     }
 
@@ -133,22 +146,22 @@ public class PasswordResetService {
     @Transactional
     public void confirm(String rawToken, String newPassword) {
         if (rawToken == null || rawToken.isBlank()) {
-            throw new IllegalArgumentException("Reset link is invalid or has expired");
+            throw new LocalizedException("passwordReset.invalidLink");
         }
         if (newPassword == null || newPassword.trim().length() < MIN_PASSWORD_LENGTH) {
-            throw new IllegalArgumentException("Password must be at least 6 characters long");
+            throw new LocalizedException("password.tooShort", MIN_PASSWORD_LENGTH);
         }
 
         var token = tokenRepository.findByTokenHash(sha256(rawToken))
-                .orElseThrow(() -> new IllegalArgumentException("Reset link is invalid or has expired"));
+                .orElseThrow(() -> new LocalizedException("passwordReset.invalidLink"));
 
         var now = OffsetDateTime.now();
         if (token.getUsedAt() != null || token.getExpiresAt().isBefore(now)) {
-            throw new IllegalArgumentException("Reset link is invalid or has expired");
+            throw new LocalizedException("passwordReset.invalidLink");
         }
 
         var member = memberRepository.findById(token.getMemberId())
-                .orElseThrow(() -> new IllegalArgumentException("Reset link is invalid or has expired"));
+                .orElseThrow(() -> new LocalizedException("passwordReset.invalidLink"));
 
         // Trimmed before hashing, matching registration and login. A password stored
         // untrimmed while login compares the trimmed one is exactly the defect that
@@ -179,19 +192,20 @@ public class PasswordResetService {
         }
     }
 
-    private static String emailBody(String name, String link) {
+    private static String emailBody(PasswordResetEmail.Texts texts, String name, String link) {
         return """
                 <div style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #1C1917; max-width: 480px;">
-                  <h2 style="font-size: 20px; margin-bottom: 8px;">Återställ ditt lösenord</h2>
-                  <p>Hej %s,</p>
-                  <p>Någon har begärt ett nytt lösenord till ditt KidQuest-konto. Klicka på knappen nedan för att välja ett nytt. Länken gäller i en timme.</p>
+                  <h2 style="font-size: 20px; margin-bottom: 8px;">%s</h2>
+                  <p>%s</p>
+                  <p>%s</p>
                   <p style="margin: 24px 0;">
-                    <a href="%s" style="background: #0C4A6E; color: #ffffff; padding: 12px 20px; border-radius: 10px; text-decoration: none; font-weight: 600;">Välj nytt lösenord</a>
+                    <a href="%s" style="background: #0C4A6E; color: #ffffff; padding: 12px 20px; border-radius: 10px; text-decoration: none; font-weight: 600;">%s</a>
                   </p>
-                  <p style="font-size: 13px; color: #57534E;">Var det inte du? Då behöver du inte göra någonting — ditt nuvarande lösenord fortsätter att gälla.</p>
-                  <p style="font-size: 13px; color: #78716C;">Fungerar inte knappen? Kopiera den här länken:<br>%s</p>
+                  <p style="font-size: 13px; color: #57534E;">%s</p>
+                  <p style="font-size: 13px; color: #78716C;">%s<br>%s</p>
                 </div>
-                """.formatted(escape(name), link, link);
+                """.formatted(texts.heading(), texts.greeting().formatted(escape(name)), texts.body(),
+                        link, texts.button(), texts.notYou(), texts.copyLink(), link);
     }
 
     /** The name comes from a text field a parent typed, so it does not go into HTML raw. */

@@ -4,6 +4,8 @@ export type WalletBalanceResponse = {
   id: string;
   memberId: string;
   balance: number;
+  /** The family's ISO 4217 currency. Absent from older backends (= SEK). */
+  currency?: string;
 };
 
 export type ExpenseCategoryResponse = {

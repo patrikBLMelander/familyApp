@@ -1,5 +1,6 @@
 package com.familyapp.application.pet;
 
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.domain.pet.CollectedFood;
 import com.familyapp.infrastructure.calendar.CalendarEventJpaRepository;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
@@ -109,11 +110,7 @@ public class CollectedFoodService {
         int totalUnfedFood = foodRepository.countUnfedFoodXpByMemberId(memberId);
         
         if (totalUnfedFood < xpPoints) {
-            throw new IllegalArgumentException(
-                    String.format("Kan inte avmarkera syssla: Du har inte tillräckligt med omatad mat. " +
-                            "Du behöver %d omatad mat, men har bara %d omatad mat totalt.", 
-                            xpPoints, totalUnfedFood)
-            );
+            throw new LocalizedException("chore.uncheck.notEnoughFood", xpPoints, totalUnfedFood);
         }
 
         // Get all unfed food (from any task) ordered by oldest first

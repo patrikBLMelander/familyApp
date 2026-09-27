@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -121,7 +123,7 @@ fun ChildPetScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Tillbaka",
+                            contentDescription = tr(R.string.common_back),
                             tint = Color.White,
                         )
                     }
@@ -233,7 +235,7 @@ private fun PetCard(
                     }
                 }
                 Text(
-                    text = if (stars >= 5) "Mästare! · $totalXp XP totalt" else "Fullvuxen · $totalXp XP totalt",
+                    text = if (stars >= 5) tr(R.string.pet_master_total, totalXp) else tr(R.string.pet_grown_total, totalXp),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF1C1917),
@@ -254,7 +256,7 @@ private fun PetCard(
                         strokeCap = StrokeCap.Round,
                     )
                     Text(
-                        text = "$xpToNextStar XP till nästa ⭐ – varje stjärna ger en äventyrsbiljett",
+                        text = tr(R.string.pet_to_next_star, xpToNextStar),
                         fontSize = 12.sp,
                         color = Color(0xFF57534E),
                     )
@@ -272,7 +274,7 @@ private fun PetCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
-                        text = "Nivå $level",
+                        text = tr(R.string.pet_level, level),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF1C1917),
@@ -282,7 +284,7 @@ private fun PetCard(
                         color = Color(0xFF57534E),
                     )
                     Text(
-                        text = "$totalXp XP totalt",
+                        text = tr(R.string.pet_xp_total, totalXp),
                         fontSize = 15.sp,
                         color = Color(0xFF57534E),
                     )
@@ -307,7 +309,7 @@ private fun PetCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            text = "$xpInLevel / $range XP till nästa nivå",
+                            text = tr(R.string.pet_xp_to_next_level, xpInLevel, range),
                             fontSize = 12.sp,
                             color = Color(0xFF57534E),
                         )
@@ -344,7 +346,7 @@ private fun GiveFoodButton(onClick: () -> Unit, petType: String) {
         colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
     ) {
         Text(
-            text = "Ge extra mat",
+            text = tr(R.string.pet_give_extra_food),
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
@@ -369,13 +371,13 @@ private fun NoPetCard(cardColor: Color) {
         ) {
             Text(text = "🥚", fontSize = 52.sp)
             Text(
-                text = "Inget djur denna månad",
+                text = tr(R.string.pet_none_this_month),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF1C1917),
             )
             Text(
-                text = "Barnet har inte valt ett ägg än.",
+                text = tr(R.string.pet_child_no_egg),
                 fontSize = 14.sp,
                 color = Color(0xFF57534E),
             )

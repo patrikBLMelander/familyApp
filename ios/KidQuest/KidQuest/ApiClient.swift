@@ -39,6 +39,8 @@ final class ApiClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // Servern skriver felmeddelanden och e-post på det här språket.
+        request.setValue(AppLanguage.current, forHTTPHeaderField: "Accept-Language")
 
         if let token = TokenStoreIOS.shared.getToken() {
             request.setValue(token, forHTTPHeaderField: "X-Device-Token")
@@ -72,7 +74,13 @@ final class ApiClient {
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .useDefaultKeys
-        return try decoder.decode(T.self, from: data)
+        let decoded = try decoder.decode(T.self, from: data)
+        // Familjens valuta följer med familje- och saldosvar; spara den så att alla
+        // belopp i appen skrivs med rätt valuta.
+        if let carrier = decoded as? CurrencyCarrying {
+            Money.remember(carrier.currency)
+        }
+        return decoded
     }
 
     func sendWithoutResponse(

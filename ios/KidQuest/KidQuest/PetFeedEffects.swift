@@ -95,13 +95,13 @@ struct XpMeter: View {
 
     private var label: String {
         if maxed {
-            return stars >= 5 ? "Mästare! · \(xpToNextStar) xp till nästa ⭐"
-                              : "\(xpToNextStar) xp till nästa ⭐"
+            return stars >= 5 ? String(localized: "Mästare! · \(xpToNextStar) xp till nästa ⭐")
+                              : String(localized: "\(xpToNextStar) xp till nästa ⭐")
         }
         // Full mätare betyder att tröskeln just passerats. Nivån är då redan uppräknad,
         // och "35 / 35 xp till nivå 5" hade varit fel i båda leden.
-        if xpInLevel >= span { return "Nivå \(level) nådd!" }
-        return "\(xpInLevel) / \(span) xp till nivå \(level + 1)"
+        if xpInLevel >= span { return String(localized: "Nivå \(level) nådd!") }
+        return String(localized: "\(xpInLevel) / \(span) xp till nivå \(level + 1)")
     }
 }
 
@@ -244,11 +244,11 @@ struct LevelUpOverlay: View {
             }
 
             VStack(spacing: 1) {
-                Text(isStar ? (stars >= 5 ? "Mästare! ⭐" : "Ny stjärna! ⭐") : "Nivå \(level)!")
+                Text(isStar ? (stars >= 5 ? String(localized: "Mästare! ⭐") : String(localized: "Ny stjärna! ⭐")) : String(localized: "Nivå \(level)!"))
                     .font(.system(size: 17, weight: .bold))
                 Text(isStar
-                     ? (stars >= 5 ? "\(petName) fick sin femte stjärna" : "\(petName) fick stjärna \(stars) av 5 · +1 biljett")
-                     : "\(petName) växte")
+                     ? (stars >= 5 ? String(localized: "\(petName) fick sin femte stjärna") : String(localized: "\(petName) fick stjärna \(stars) av 5 · +1 biljett"))
+                     : String(localized: "\(petName) växte"))
                     .font(.system(size: 12, weight: .medium))
                     .opacity(0.92)
             }

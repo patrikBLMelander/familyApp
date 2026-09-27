@@ -80,7 +80,7 @@ struct ChildInviteSheet: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte generera inbjudningskod."
+                self.errorMessage = String(localized: "Kunde inte generera inbjudningskod.")
             }
         }
     }

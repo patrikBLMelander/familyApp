@@ -112,15 +112,11 @@ enum AllowanceDates {
     /// that sometimes silently skips.
     static let maxDayOfMonth = 28
 
-    static let swedish = Locale(identifier: "sv_SE")
-
     /// Gregorian rather than `Calendar.current`: the schedule is defined in ordinary
     /// calendar days on the server, and a phone set to another calendar would otherwise
     /// preview a different date than the one that will actually pay out.
     private static var calendar: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.locale = swedish
-        return calendar
+        AppLanguage.calendar
     }
 
     /// Foundation counts weekdays from Sunday, java.time from Monday. Everything the
@@ -168,18 +164,14 @@ enum AllowanceDates {
         return parser.date(from: iso)
     }
 
-    static func format(_ date: Date, _ pattern: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = swedish
-        formatter.calendar = calendar
-        formatter.dateFormat = pattern
-        return formatter.string(from: date)
+    /// `template` är en datummall ("dMMMM", "EEEEdMMMM"); ordningen följer appens språk.
+    static func format(_ date: Date, _ template: String) -> String {
+        kqFormatDate(date, template: template)
     }
 
-    /// Swedish ordinals: 1:a, 2:a, 3:e ... 11:e, 12:e ... 21:a, 22:a, 23:e.
+    /// Ordningstal i appens språk: 1:a / 1st / 1. / 1.
     static func ordinal(_ day: Int) -> String {
-        let suffix = (day % 10 == 1 || day % 10 == 2) && day != 11 && day != 12 ? ":a" : ":e"
-        return "\(day)\(suffix)"
+        kqOrdinal(day)
     }
 
     /// The wallet's one-line summary: "Månadspeng · nästa 1 september".
@@ -188,14 +180,14 @@ enum AllowanceDates {
     /// is on needs to know when; a parent who wants to change the amount is tapping
     /// through anyway.
     static func describe(_ schedule: RecurringAllowanceDetailDTO?) -> String {
-        guard let schedule, schedule.active else { return "Inte inställt" }
+        guard let schedule, schedule.active else { return String(localized: "Inte inställt") }
         let kind: String
         switch schedule.kind {
-        case "WEEKLY": kind = "Veckopeng"
-        case "MONTHLY": kind = "Månadspeng"
-        default: kind = "Efter nivå"
+        case "WEEKLY": kind = String(localized: "Veckopeng")
+        case "MONTHLY": kind = String(localized: "Månadspeng")
+        default: kind = String(localized: "Efter nivå")
         }
         guard let due = parseIsoDate(schedule.nextDueOn) else { return kind }
-        return "\(kind) · nästa \(format(due, "d MMMM"))"
+        return String(localized: "\(kind) · nästa \(format(due, "dMMMM"))")
     }
 }

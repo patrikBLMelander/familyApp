@@ -25,6 +25,10 @@ public class FamilyEntity {
     @Column(nullable = false)
     private String name;
 
+    /** ISO 4217 code for the kids' wallets. */
+    @Column(name = "currency", nullable = false, length = 3)
+    private String currency = "SEK";
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -62,5 +66,12 @@ public class FamilyEntity {
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
-}
 
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+}

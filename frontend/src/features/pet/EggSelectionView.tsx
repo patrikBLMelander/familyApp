@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { selectEgg, getAvailableEggTypes, fetchPetHistory, PetResponse } from "../../shared/api/pets";
+import { selectEgg, getAvailableEggTypes, fetchPetHistory, fetchMonthInfo, PetResponse } from "../../shared/api/pets";
+import { monthEndNotice } from "./monthGrace";
 import { EggImage } from "./EggImage";
 
 type EggSelectionViewProps = {
@@ -106,6 +107,14 @@ export function EggSelectionView({ onEggSelected }: EggSelectionViewProps) {
   const [selectedEggType, setSelectedEggType] = useState<string | null>(null);
   const [petName, setPetName] = useState("");
   const [hatchingStage, setHatchingStage] = useState<HatchingStage>("idle");
+  const [monthNotice, setMonthNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Nice-to-have: if it fails the picker just shows no banner.
+    fetchMonthInfo()
+      .then(info => setMonthNotice(monthEndNotice(info)))
+      .catch(() => setMonthNotice(null));
+  }, []);
 
   useEffect(() => {
     const loadEggs = async () => {
@@ -441,6 +450,19 @@ export function EggSelectionView({ onEggSelected }: EggSelectionViewProps) {
             }}>
               Välj ett ägg för denna månaden. Det kommer att kläckas och bli ett djur som växer medan du gör dina sysslor!
             </p>
+            {monthNotice && (
+              <p style={{
+                margin: "16px 0 0",
+                padding: "10px 16px",
+                borderRadius: "12px",
+                background: "#fff8e1",
+                color: "#7a5b00",
+                fontSize: "1rem",
+                fontWeight: 600,
+              }}>
+                {monthNotice}
+              </p>
+            )}
           </div>
 
           {error && (

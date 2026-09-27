@@ -1,5 +1,8 @@
 package se.kidquest.app.pet
 
+import se.kidquest.app.R
+import se.kidquest.app.i18n.tr
+
 /**
  * Vad äggen viskar innan de kläcks.
  *
@@ -15,36 +18,38 @@ package se.kidquest.app.pet
 object EggNames {
 
     fun hint(eggType: String): String =
-        when (eggType.lowercase()) {
-            "blue_egg" -> "Jag älskar att flyga högt bland molnen."
-            "green_egg" -> "Jag spinner nöjt när jag får ligga i solen."
-            "red_egg" -> "Jag hämtar gärna bollen om du kastar den."
-            "yellow_egg" -> "Jag kvittrar gärna när dagen börjar."
-            "purple_egg" -> "Jag hoppar fram och gnager gärna på morötter."
-            "orange_egg" -> "Jag tar gärna en lång vintersömn med magen full."
-            "brown_egg" -> "Jag gillar att slingra mig på varma stenar."
-            "black_egg" -> "Jag tycker om att smyga runt i skuggan."
-            "gray_egg" -> "Jag rör mig långsamt men kramas gärna länge."
-            "teal_egg" -> "Jag trivs där det finns mycket vatten och mystik."
-            "pink_egg" -> "Jag gillar glitter, regnbågar och magi."
-            "cyan_egg" -> "Jag älskar att plaska runt med kompisar."
-            "golden_egg" -> "Jag ryter så att alla hör att jag vaknat."
-            "white_egg" -> "Jag simmar snabbast av alla där det är djupt."
-            "silver_egg" -> "Jag sover gärna högt uppe bland eukalyptuslöven."
-            "sand_egg" -> "Jag står på bakbenen och spanar efter faror."
-            "ice_egg" -> "Jag vaggar fram på isen och dyker gärna efter fisk."
-            "amber_egg" -> "Jag spinner nät och fångar flugor på morgonen."
-            "clay_egg" -> "Jag hoppar långt och bär min unge i fickan."
-            "ember_egg" -> "Jag har en stark svans och gömmer mig gärna bland stenar."
-            "indigo_egg" -> "Jag har åtta armar och gömmer mig gärna bland koraller."
-            "frost_egg" -> "Jag smyger tyst över snöiga berg och gömmer mig i dimman."
-            "tiger_egg" -> "Jag har ränder och smyger tyst genom den höga gräsdjungeln."
-            "snow_egg" -> "Jag är vit som snö och trivs bäst där det är riktigt kallt."
-            "savanna_egg" -> "Jag är lång i halsen och når löven högst upp i träden."
-            "ivory_egg" -> "Jag har en lång snabel och glömmer aldrig en vän."
-            "swamp_egg" -> "Jag ligger stilla i vattnet och visar bara ögonen."
-            "onyx_egg" -> "Jag smyger i mörkret på helt tysta tassar."
-            "moon_egg" -> "Jag ylar mot månen och springer i flock."
-            else -> "Jag längtar efter att få träffa dig."
-    }
+        tr(
+            when (eggType.lowercase()) {
+                "blue_egg" -> R.string.egg_hint_blue_egg
+                "green_egg" -> R.string.egg_hint_green_egg
+                "red_egg" -> R.string.egg_hint_red_egg
+                "yellow_egg" -> R.string.egg_hint_yellow_egg
+                "purple_egg" -> R.string.egg_hint_purple_egg
+                "orange_egg" -> R.string.egg_hint_orange_egg
+                "brown_egg" -> R.string.egg_hint_brown_egg
+                "black_egg" -> R.string.egg_hint_black_egg
+                "gray_egg" -> R.string.egg_hint_gray_egg
+                "teal_egg" -> R.string.egg_hint_teal_egg
+                "pink_egg" -> R.string.egg_hint_pink_egg
+                "cyan_egg" -> R.string.egg_hint_cyan_egg
+                "golden_egg" -> R.string.egg_hint_golden_egg
+                "white_egg" -> R.string.egg_hint_white_egg
+                "silver_egg" -> R.string.egg_hint_silver_egg
+                "sand_egg" -> R.string.egg_hint_sand_egg
+                "ice_egg" -> R.string.egg_hint_ice_egg
+                "amber_egg" -> R.string.egg_hint_amber_egg
+                "clay_egg" -> R.string.egg_hint_clay_egg
+                "ember_egg" -> R.string.egg_hint_ember_egg
+                "indigo_egg" -> R.string.egg_hint_indigo_egg
+                "frost_egg" -> R.string.egg_hint_frost_egg
+                "tiger_egg" -> R.string.egg_hint_tiger_egg
+                "snow_egg" -> R.string.egg_hint_snow_egg
+                "savanna_egg" -> R.string.egg_hint_savanna_egg
+                "ivory_egg" -> R.string.egg_hint_ivory_egg
+                "swamp_egg" -> R.string.egg_hint_swamp_egg
+                "onyx_egg" -> R.string.egg_hint_onyx_egg
+                "moon_egg" -> R.string.egg_hint_moon_egg
+                else -> R.string.egg_hint_default
+            }
+        )
 }

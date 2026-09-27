@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,18 +43,18 @@ fun AddSingleTaskDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Ny uppgift idag – $childName") },
+        title = { Text(tr(R.string.task_new_today_title, childName)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it; error = null },
-                    label = { Text("Titel") },
+                    label = { Text(tr(R.string.common_title)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = "XP (mat)", style = MaterialTheme.typography.bodyMedium)
+                Text(text = tr(R.string.common_xp_food), style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -71,7 +73,7 @@ fun AddSingleTaskDialog(
             TextButton(
                 onClick = {
                     if (title.isBlank()) {
-                        error = "Titel krävs"
+                        error = tr(R.string.common_title_required)
                         return@TextButton
                     }
                     loading = true
@@ -87,19 +89,19 @@ fun AddSingleTaskDialog(
                             )
                             onSuccess()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte skapa uppgiften")
+                            error = ApiErrors.message(e, tr(R.string.task_create_failed))
                         } finally {
                             loading = false
                         }
                     }
                 },
             ) {
-                Text(if (loading) "Sparar…" else "Skapa uppgift")
+                Text(if (loading) tr(R.string.common_saving) else tr(R.string.task_create))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Avbryt")
+                Text(tr(R.string.common_cancel))
             }
         },
     )

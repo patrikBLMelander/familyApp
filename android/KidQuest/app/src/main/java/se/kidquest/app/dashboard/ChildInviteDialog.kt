@@ -1,5 +1,7 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
@@ -48,13 +50,13 @@ fun ChildInviteDialog(
             val response = ApiClient.familyMembersApi.generateInviteToken(child.id)
             inviteToken = response.token
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte generera inbjudningskod")
+            error = ApiErrors.message(e, tr(R.string.invite_failed))
         }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Bjud in ${child.name}") },
+        title = { Text(tr(R.string.invite_title, child.name)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 when {
@@ -65,11 +67,11 @@ fun ChildInviteDialog(
                         )
                     }
                     inviteToken == null -> {
-                        Text("Genererar inbjudningskod…")
+                        Text(tr(R.string.invite_generating))
                     }
                     else -> {
                         Text(
-                            text = "Låt ${child.name} skanna QR-koden eller ange koden i appen för att koppla sin telefon:",
+                            text = tr(R.string.invite_instructions, child.name),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -91,7 +93,7 @@ fun ChildInviteDialog(
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(if (copied) "Kopierad!" else "Kopiera kod")
+                            Text(if (copied) tr(R.string.invite_copied) else tr(R.string.invite_copy))
                         }
                     }
                 }
@@ -99,7 +101,7 @@ fun ChildInviteDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Stäng")
+                Text(tr(R.string.common_close))
             }
         },
     )
@@ -127,7 +129,7 @@ private fun QrCodeImage(
     bitmap?.asImageBitmap()?.let { imageBitmap ->
         Image(
             bitmap = imageBitmap,
-            contentDescription = "QR-kod för inbjudan",
+            contentDescription = tr(R.string.invite_qr_cd),
             modifier = Modifier.size(sizeDp.dp),
         )
     }

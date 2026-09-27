@@ -80,7 +80,7 @@ struct ChoreEditorSheet: View {
                     Button("Avbryt") { onDismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isLoading ? "Sparar…" : "Spara") { save() }
+                    Button(isLoading ? String(localized: "Sparar…") : String(localized: "Spara")) { save() }
                         .disabled(isLoading)
                 }
             }
@@ -89,10 +89,10 @@ struct ChoreEditorSheet: View {
 
     private func save() {
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
-            error = "Titel krävs"; return
+            error = String(localized: "Titel krävs"); return
         }
         guard !selectedWeekdays.isEmpty else {
-            error = "Välj minst en veckodag"; return
+            error = String(localized: "Välj minst en veckodag"); return
         }
         isLoading = true
         error = nil
@@ -109,7 +109,7 @@ struct ChoreEditorSheet: View {
                 }
                 onSuccess()
             } catch {
-                self.error = editing ? "Kunde inte spara ändringarna." : "Kunde inte skapa sysslan."
+                self.error = editing ? String(localized: "Kunde inte spara ändringarna.") : String(localized: "Kunde inte skapa sysslan.")
             }
             isLoading = false
         }

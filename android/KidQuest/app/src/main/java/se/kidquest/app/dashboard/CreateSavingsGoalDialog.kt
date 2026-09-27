@@ -1,5 +1,8 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,13 +41,13 @@ fun CreateSavingsGoalDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Skapa sparmål") },
+        title = { Text(tr(R.string.goal_create_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it; error = null },
-                    label = { Text("Namn på målet *") },
+                    label = { Text(tr(R.string.goal_name_label)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -52,7 +55,7 @@ fun CreateSavingsGoalDialog(
                 OutlinedTextField(
                     value = targetAmount,
                     onValueChange = { targetAmount = it.filter { c -> c.isDigit() }; error = null },
-                    label = { Text("Målbelopp (kr) *") },
+                    label = { Text(tr(R.string.goal_amount_label, Money.symbol())) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -60,7 +63,7 @@ fun CreateSavingsGoalDialog(
                 OutlinedTextField(
                     value = emoji,
                     onValueChange = { emoji = it; error = null },
-                    label = { Text("Emoji (valfritt, t.ex. 🎮)") },
+                    label = { Text(tr(R.string.goal_emoji_label)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -78,12 +81,12 @@ fun CreateSavingsGoalDialog(
             TextButton(
                 onClick = {
                     if (name.isBlank()) {
-                        error = "Ange ett namn"
+                        error = tr(R.string.goal_name_missing)
                         return@TextButton
                     }
                     val amount = targetAmount.toIntOrNull() ?: 0
                     if (amount <= 0) {
-                        error = "Målbeloppet måste vara större än 0"
+                        error = tr(R.string.goal_amount_positive)
                         return@TextButton
                     }
                     loading = true
@@ -101,19 +104,19 @@ fun CreateSavingsGoalDialog(
                             }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte skapa sparmål")
+                            error = ApiErrors.message(e, tr(R.string.goal_create_failed))
                         } finally {
                             loading = false
                         }
                     }
                 },
             ) {
-                Text(if (loading) "Skapar…" else "Spara")
+                Text(if (loading) tr(R.string.common_creating) else tr(R.string.common_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Avbryt")
+                Text(tr(R.string.common_cancel))
             }
         },
     )

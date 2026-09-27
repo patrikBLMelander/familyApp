@@ -11,6 +11,8 @@ data class FamilyResponse(
     val name: String,
     val createdAt: String,
     val updatedAt: String,
+    /** ISO 4217, e.g. "SEK" or "EUR". Null from servers older than the i18n release. */
+    val currency: String? = null,
 )
 
 data class FamilyMemberResponse(
@@ -23,6 +25,8 @@ data class FamilyMemberResponse(
     val familyId: String? = null,
     /** Whether a device is paired, without exposing the token that would let you be them. */
     val hasPairedDevice: Boolean = false,
+    /** sv / en / de / es, or null to follow the phone's language. */
+    val language: String? = null,
 )
 
 data class FamilyRegistrationResponse(

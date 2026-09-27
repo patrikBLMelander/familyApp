@@ -9,6 +9,13 @@ import SwiftUI
 
 @main
 struct KidQuestApp: App {
+    @ObservedObject private var language = LanguageState.shared
+
+    init() {
+        // Före första vyn, så att ett eget språkval gäller redan på startskärmen.
+        AppLanguage.activateAtLaunch()
+    }
+
     var body: some Scene {
         WindowGroup {
             #if DEBUG
@@ -25,6 +32,11 @@ struct KidQuestApp: App {
 
     private var root: some View {
         ContentView()
+            // Ett språkbyte bygger om hela gränssnittet, som när Android återskapar sin
+            // aktivitet: varje vy slår upp sina texter på nytt. Locale följer med för
+            // datum och belopp som SwiftUI formaterar själv.
+            .id(language.revision)
+            .environment(\.locale, AppLanguage.locale)
             .onAppear {
                 // Före sessionen: load() identifierar familjen mot RevenueCat, och
                 // det kräver att SDK:n är konfigurerad.
@@ -257,9 +269,9 @@ enum ScreenHarness {
             let target: MemberSettingsTarget
             switch name {
             case "membersettings-child":
-                target = MemberSettingsTarget(id: "1", name: "Signe", role: "CHILD", isCurrentUser: false)
+                target = MemberSettingsTarget(id: "1", name: "Ella", role: "CHILD", isCurrentUser: false)
             case "membersettings-self":
-                target = MemberSettingsTarget(id: "2", name: "Patrik", role: "PARENT", isCurrentUser: true)
+                target = MemberSettingsTarget(id: "2", name: "Jonas", role: "PARENT", isCurrentUser: true)
             default:
                 target = MemberSettingsTarget(id: "3", name: "Anna", role: "PARENT", isCurrentUser: false)
             }

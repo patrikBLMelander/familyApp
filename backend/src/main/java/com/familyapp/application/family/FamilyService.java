@@ -2,6 +2,8 @@ package com.familyapp.application.family;
 
 import com.familyapp.application.cache.CacheService;
 import com.familyapp.domain.family.Family;
+import com.familyapp.domain.family.FamilyCurrencies;
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.domain.familymember.FamilyMember;
 import com.familyapp.domain.familymember.FamilyMember.Role;
 import com.familyapp.infrastructure.family.FamilyEntity;
@@ -186,6 +188,18 @@ public class FamilyService {
         return toDomain(saved);
     }
 
+    /** Sets the currency the family's wallets are shown in. Amounts are not converted. */
+    public Family updateCurrency(UUID familyId, String currency) {
+        if (!FamilyCurrencies.isSupported(currency)) {
+            throw new LocalizedException("family.currency.unsupported", String.valueOf(currency));
+        }
+        var entity = familyRepository.findById(familyId)
+                .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
+        entity.setCurrency(currency);
+        entity.setUpdatedAt(OffsetDateTime.now());
+        return toDomain(familyRepository.save(entity));
+    }
+
     /**
      * Logs in a user with email and password.
      * 
@@ -312,7 +326,8 @@ public class FamilyService {
                 entity.getId(),
                 entity.getName(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                FamilyCurrencies.orDefault(entity.getCurrency())
         );
     }
 
@@ -335,7 +350,8 @@ public class FamilyService {
                 entity.getFamily() != null ? entity.getFamily().getId() : null,
                 entity.getPetEnabled() != null ? entity.getPetEnabled() : false,
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                entity.getLanguage()
         );
     }
 

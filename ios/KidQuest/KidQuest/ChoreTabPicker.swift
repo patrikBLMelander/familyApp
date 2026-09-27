@@ -22,8 +22,8 @@ struct ChoreTabPicker: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            button(.today, title: "Idag", icon: "checklist")
-            button(.week, title: "Vecka", icon: "calendar")
+            button(.today, title: String(localized: "Idag"), icon: "checklist")
+            button(.week, title: String(localized: "Vecka"), icon: "calendar")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

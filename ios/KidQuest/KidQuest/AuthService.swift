@@ -20,6 +20,7 @@ enum AuthService {
             role: response.member.role,
             familyId: response.member.familyId
         )
+        AppLanguage.adoptFromServer(response.member.language)
         return response.member
     }
 

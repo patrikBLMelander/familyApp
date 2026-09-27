@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -190,6 +191,51 @@ public class PetService {
         return historyRepository.findByMemberIdOrderByYearDescMonthDesc(memberId).stream()
                 .map(this::toHistoryDomain)
                 .toList();
+    }
+
+    /**
+     * Whether this pet follows its child into the next month instead of going to history.
+     *
+     * Only a child's very first pet (no pet history yet), and only when it hatched in the
+     * last {@link ChildPet#FIRST_PET_GRACE_DAYS} days of the pet's own month. That makes it
+     * a one-off: at the next reset the hatch date lies in an earlier month and no longer counts.
+     */
+    @Transactional(readOnly = true)
+    public boolean followsIntoNextMonth(UUID memberId, int year, int month, OffsetDateTime hatchedAt) {
+        if (hatchedAt == null) {
+            return false;
+        }
+        // Same zone as LocalDate.now(), which decides the month everywhere else.
+        var hatchDate = hatchedAt.atZoneSameInstant(ZoneId.systemDefault()).toLocalDate();
+        if (hatchDate.getYear() != year || hatchDate.getMonthValue() != month) {
+            return false;
+        }
+        return ChildPet.inFirstPetGraceWindow(hatchDate)
+                && historyRepository.findByMemberIdOrderByYearDescMonthDesc(memberId).isEmpty();
+    }
+
+    /** {@link #followsIntoNextMonth(UUID, int, int, OffsetDateTime)} for a pet. */
+    public boolean followsIntoNextMonth(ChildPet pet) {
+        return followsIntoNextMonth(pet.memberId(), pet.year(), pet.month(), pet.hatchedAt());
+    }
+
+    /**
+     * What the egg picker tells the child about the month: how many days are left after
+     * today, and whether an egg picked now would be a first pet that follows into next month.
+     */
+    @Transactional(readOnly = true)
+    public MonthInfo monthInfo(UUID memberId) {
+        var today = LocalDate.now();
+        boolean firstPetGrace = ChildPet.inFirstPetGraceWindow(today)
+                && historyRepository.findByMemberIdOrderByYearDescMonthDesc(memberId).isEmpty();
+        return new MonthInfo(
+                today.lengthOfMonth() - today.getDayOfMonth(),
+                today.plusMonths(1).getMonthValue(),
+                firstPetGrace);
+    }
+
+    /** daysLeftInMonth is 0 on the last day; nextMonth is 1-12. */
+    public record MonthInfo(int daysLeftInMonth, int nextMonth, boolean firstPetGrace) {
     }
 
     /**

@@ -12,9 +12,9 @@ import SwiftUI
 /// leaves most weekday cards empty on any day that is not Monday.
 ///
 /// A child never arrives here — the route is offered by the parent's overview, which
-/// children are kept out of at startup. There is nothing parent-only to gate inside
-/// the screen either: it offers no way to add or delete a chore, only to tick one off,
-/// and ticking is open to whoever holds the phone on the server as well as here.
+/// children are kept out of at startup. Editing and deleting are gated anyway, the same
+/// way as on the child's own list (`viewerIsAdult`): swipe on today's rows, long-press
+/// in the week, which is cards rather than a List and so has no swipe.
 struct FamilyTasksView: View {
     var onBack: () -> Void = {}
 
@@ -36,13 +36,19 @@ struct FamilyTasksView: View {
     /// `errorMessage`: the list is still good, one action on it was not.
     @State private var notice: String?
     @State private var chosenTab: ChoreTab?
+    @State private var editTarget: EditTarget?
+    @State private var pendingDelete: DeleteTarget?
+
+    private var viewerIsAdult: Bool {
+        TokenStoreIOS.shared.getSession()?.isChild != true
+    }
 
     private var tab: ChoreTab { chosenTab ?? initialTab ?? .today }
 
     var body: some View {
         VStack(spacing: 0) {
             SeasonHeaderBar(
-                title: "Familjens uppgifter",
+                title: String(localized: "Familjens uppgifter"),
                 subtitle: subtitle,
                 onBack: onBack
             )
@@ -76,6 +82,51 @@ struct FamilyTasksView: View {
         .task {
             await loadIfNeeded()
         }
+        .sheet(item: $editTarget) { target in
+            ChoreEditorSheet(
+                childId: target.childId,
+                existing: target.chore,
+                onDismiss: { editTarget = nil },
+                onSuccess: {
+                    editTarget = nil
+                    Task { await load() }
+                }
+            )
+        }
+        .confirmationDialog(
+            "Ta bort sysslan?",
+            isPresented: deleteDialogIsPresented,
+            presenting: pendingDelete
+        ) { target in
+            Button("Ta bort", role: .destructive) {
+                pendingDelete = nil
+                Task { await delete(target) }
+            }
+            Button("Avbryt", role: .cancel) {
+                pendingDelete = nil
+            }
+        } message: { target in
+            Text("\"\(target.title)\" tas bort för \(target.childName), tillsammans med historiken över när den blivit gjord. Det går inte att ångra.")
+        }
+    }
+
+    /// `confirmationDialog` wants a Bool binding beside the value it presents; dismissing
+    /// it by any other route than the two buttons has to clear the value too.
+    private var deleteDialogIsPresented: Binding<Bool> {
+        Binding(
+            get: { pendingDelete != nil },
+            set: { presented in
+                if !presented { pendingDelete = nil }
+            }
+        )
+    }
+
+    private func askToEdit(_ chore: DailyChoreResponseDTO, child: FamilyTasksRepository.ChildChores) {
+        editTarget = EditTarget(childId: child.id, chore: chore)
+    }
+
+    private func askToDelete(_ chore: DailyChoreResponseDTO, child: FamilyTasksRepository.ChildChores) {
+        pendingDelete = DeleteTarget(id: chore.id, title: chore.title, childId: child.id, childName: child.name)
     }
 
     // MARK: - Header
@@ -86,14 +137,11 @@ struct FamilyTasksView: View {
     /// and the bar already has the line free. Per-child counts stay on the sections.
     private var subtitle: String {
         guard let family, family.totalToday > 0 else { return todayLabel }
-        return "\(todayLabel) · \(family.doneToday)/\(family.totalToday) gjorda"
+        return String(localized: "\(todayLabel) · \(family.doneToday)/\(family.totalToday) gjorda")
     }
 
     private var todayLabel: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateFormat = "EEEE d/M"
-        return formatter.string(from: Date())
+        return kqFormatDate(Date(), template: "EEEEdM")
     }
 
     // MARK: - Today
@@ -105,7 +153,7 @@ struct FamilyTasksView: View {
     private func todayList(_ family: FamilyTasksRepository.Family) -> some View {
         List {
             if family.children.isEmpty {
-                emptyCard("Inga barn i familjen än.")
+                emptyCard(String(localized: "Inga barn i familjen än."))
                     .plainChoreRow()
             } else {
                 ForEach(family.children) { child in
@@ -125,20 +173,33 @@ struct FamilyTasksView: View {
     @ViewBuilder
     private func childRows(_ child: FamilyTasksRepository.ChildChores) -> some View {
         if child.loadFailed {
-            emptyCard("Kunde inte läsa \(child.name)s sysslor.")
+            emptyCard(String(localized: "Kunde inte läsa \(kqPossessive(child.name)) sysslor."))
                 .plainChoreRow()
         } else if child.today.isEmpty {
-            emptyCard("Inga sysslor idag.")
+            emptyCard(String(localized: "Inga sysslor idag."))
                 .plainChoreRow()
         } else {
             ForEach(child.today, id: \.chore.id) { item in
-                // The same row as the child's own screen, not a copy of it. Deleting is
-                // not offered here, so there is no swipe action: a chore is removed on
-                // the child's own list, where the parent can see the whole schedule.
+                // The same row, and the same swipe, as the child's own screen.
                 ChoreRow(item: item) {
                     Task { await toggle(item, childId: child.id) }
                 }
                 .plainChoreRow()
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if viewerIsAdult {
+                        Button(role: .destructive) {
+                            askToDelete(item.chore, child: child)
+                        } label: {
+                            Label("Ta bort", systemImage: "trash")
+                        }
+                        Button {
+                            askToEdit(item.chore, child: child)
+                        } label: {
+                            Label("Ändra", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
+                }
             }
         }
     }
@@ -180,22 +241,27 @@ struct FamilyTasksView: View {
     }
 
     private func countLabel(_ child: FamilyTasksRepository.ChildChores) -> String {
-        if child.loadFailed { return "Kunde inte läsas" }
-        if child.total == 0 { return "Inga sysslor idag" }
-        if child.allDone { return "Allt klart (\(child.total))" }
-        return "\(child.done) / \(child.total) gjorda"
+        if child.loadFailed { return String(localized: "Kunde inte läsas") }
+        if child.total == 0 { return String(localized: "Inga sysslor idag") }
+        if child.allDone { return String(localized: "Allt klart (\(child.total))") }
+        return String(localized: "\(child.done) / \(child.total) gjorda")
     }
 
     // MARK: - Week
 
     private func weekList(_ family: FamilyTasksRepository.Family) -> some View {
-        // Built from every chore each child has, not from today's list. Android filters
-        // the week out of the day, so Monday's card can only ever show chores that also
-        // happen to fall today — which on a Sunday leaves most of the week empty.
+        // Built from every chore each child has, not from today's list -- otherwise
+        // Monday's card could only show chores that also happen to fall today.
         ScrollView {
             LazyVStack(spacing: 10) {
                 ForEach(ChoreWeekday.currentWeekDates(), id: \.self) { day in
-                    FamilyWeekDayCard(day: day, children: family.children)
+                    FamilyWeekDayCard(
+                        day: day,
+                        children: family.children,
+                        canEdit: viewerIsAdult,
+                        onEdit: askToEdit,
+                        onDelete: askToDelete
+                    )
                 }
             }
             .padding(.horizontal, 16)
@@ -278,7 +344,7 @@ struct FamilyTasksView: View {
         do {
             family = try await FamilyTasksRepository.fetchFamilyChores()
         } catch {
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda uppgifter.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ladda uppgifter."))
         }
         isLoading = false
     }
@@ -304,8 +370,31 @@ struct FamilyTasksView: View {
                 // The one refusal the backend makes here that is not a fault: the XP
                 // this chore earned has already been fed to the pet, so it cannot be
                 // taken back. Worth saying plainly rather than as an HTTP failure.
-                ? "Kan inte avmarkera – all mat har redan matats till husdjuret."
-                : ApiErrors.message(error, fallback: "Kunde inte markera sysslan.")
+                ? String(localized: "Kan inte avmarkera – all mat har redan matats till husdjuret.")
+                : ApiErrors.message(error, fallback: String(localized: "Kunde inte markera sysslan."))
+        }
+    }
+
+    private func delete(_ target: DeleteTarget) async {
+        guard let previous = family else { return }
+
+        // Optimistic, as on the child's own list: the chore leaves today and the week at
+        // once, and comes back if the call fails.
+        var current = previous
+        current.children = previous.children.map { child in
+            guard child.id == target.childId else { return child }
+            var updated = child
+            updated.today = child.today.filter { $0.chore.id != target.id }
+            updated.all = child.all.filter { $0.id != target.id }
+            return updated
+        }
+        family = current
+        do {
+            try await DailyChoreRepositoryIOS.deleteChore(choreId: target.id)
+            notice = nil
+        } catch {
+            family = previous
+            notice = ApiErrors.message(error, fallback: String(localized: "Kunde inte ta bort sysslan."))
         }
     }
 
@@ -331,6 +420,21 @@ struct FamilyTasksView: View {
     }
 }
 
+/// The chore a parent asked to edit, and whose it is.
+private struct EditTarget: Identifiable {
+    let childId: String
+    let chore: DailyChoreResponseDTO
+    var id: String { chore.id }
+}
+
+/// The chore a confirmation dialog is asking about, with the child it is removed for.
+private struct DeleteTarget: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let childId: String
+    let childName: String
+}
+
 // MARK: - Week
 
 /// One day of the current week, and what every child has scheduled on it.
@@ -348,6 +452,9 @@ private struct FamilyWeekDayCard: View {
 
     let day: Date
     let children: [FamilyTasksRepository.ChildChores]
+    var canEdit = false
+    var onEdit: (DailyChoreResponseDTO, FamilyTasksRepository.ChildChores) -> Void = { _, _ in }
+    var onDelete: (DailyChoreResponseDTO, FamilyTasksRepository.ChildChores) -> Void = { _, _ in }
 
     /// One child's share of this day. Empty shares are dropped before this is built, so
     /// a day only names the children who actually have something on it.
@@ -399,7 +506,7 @@ private struct FamilyWeekDayCard: View {
     private func countLabel(total: Int, done: Int) -> String {
         if total == 0 { return "–" }
         if isToday { return "\(done)/\(total)" }
-        return total == 1 ? "1 syssla" : "\(total) sysslor"
+        return total == 1 ? String(localized: "1 syssla") : String(localized: "\(total) sysslor")
     }
 
     var body: some View {
@@ -469,7 +576,25 @@ private struct FamilyWeekDayCard: View {
                             .foregroundStyle(palette.inkSoft)
 
                         ForEach(share.chores, id: \.id) { chore in
-                            row(chore, done: isToday && share.completed.contains(chore.id))
+                            let row = row(chore, done: isToday && share.completed.contains(chore.id))
+                            if canEdit, let child = children.first(where: { $0.id == share.id }) {
+                                row
+                                    .contentShape(Rectangle())
+                                    .contextMenu {
+                                        Button {
+                                            onEdit(chore, child)
+                                        } label: {
+                                            Label("Ändra", systemImage: "pencil")
+                                        }
+                                        Button(role: .destructive) {
+                                            onDelete(chore, child)
+                                        } label: {
+                                            Label("Ta bort", systemImage: "trash")
+                                        }
+                                    }
+                            } else {
+                                row
+                            }
                         }
                     }
                 }
@@ -524,28 +649,28 @@ extension FamilyTasksView {
             preloaded: FamilyTasksRepository.Family(children: [
                 child(
                     id: "child-1",
-                    name: "Signe",
+                    name: "Ella",
                     completed: ["c1", "c3"],
                     chores: [
-                        (id: "c1", title: "Borsta håret", weekdays: everyDay, xp: 1),
-                        (id: "c2", title: "Klippa naglar", weekdays: ["SUN"], xp: 1),
-                        (id: "c3", title: "Städa lekrum", weekdays: everyDay, xp: 1),
-                        (id: "c4", title: "Borsta tänderna morgon och kväll", weekdays: everyDay, xp: 2),
-                        (id: "c5", title: "Häng upp ytterkläder", weekdays: everyDay, xp: 1),
-                        (id: "c6", title: "Städa sovrum", weekdays: ["MON", "WED", "FRI"], xp: 1),
+                        (id: "c1", title: String(localized: "Borsta håret"), weekdays: everyDay, xp: 1),
+                        (id: "c2", title: String(localized: "Klippa naglar"), weekdays: ["SUN"], xp: 1),
+                        (id: "c3", title: String(localized: "Städa lekrum"), weekdays: everyDay, xp: 1),
+                        (id: "c4", title: String(localized: "Borsta tänderna morgon och kväll"), weekdays: everyDay, xp: 2),
+                        (id: "c5", title: String(localized: "Häng upp ytterkläder"), weekdays: everyDay, xp: 1),
+                        (id: "c6", title: String(localized: "Städa sovrum"), weekdays: ["MON", "WED", "FRI"], xp: 1),
                     ]
                 ),
                 child(
                     id: "child-2",
-                    name: "Walter",
-                    // Every one of Walter's ticked, so the "Allt klart" badge and the
+                    name: "Leo",
+                    // Every one of Leo's ticked, so the "Allt klart" badge and the
                     // struck-through row are both in the picture.
                     completed: ["w1", "w2", "w3", "w4"],
                     chores: [
-                        (id: "w1", title: "Inga leksaker på övervåningen", weekdays: everyDay, xp: 1),
-                        (id: "w2", title: "Städa sovrum", weekdays: everyDay, xp: 1),
-                        (id: "w3", title: "Borsta tänderna morgon/kväll", weekdays: everyDay, xp: 1),
-                        (id: "w4", title: "Städa lekrummet", weekdays: ["SAT", "SUN"], xp: 2),
+                        (id: "w1", title: String(localized: "Inga leksaker på övervåningen"), weekdays: everyDay, xp: 1),
+                        (id: "w2", title: String(localized: "Städa sovrum"), weekdays: everyDay, xp: 1),
+                        (id: "w3", title: String(localized: "Borsta tänderna morgon/kväll"), weekdays: everyDay, xp: 1),
+                        (id: "w4", title: String(localized: "Städa lekrummet"), weekdays: ["SAT", "SUN"], xp: 2),
                     ]
                 ),
                 // No chores at all: the third state the header has to hold.

@@ -118,7 +118,7 @@ struct ChildWalletView: View {
                 // keeps its own header inside the scroll: the bar's gradient is the
                 // season, and it would sit on the animal's colours as a foreign band.
                 if isParentAdmin {
-                    SeasonHeaderBar(title: "\(childName) – Plånbok", onBack: onBack)
+                    SeasonHeaderBar(title: String(localized: "\(childName) – Plånbok"), onBack: onBack)
                 }
 
                 if isLoading {
@@ -252,7 +252,7 @@ struct ChildWalletView: View {
             Text("Saldo")
                 .font(.subheadline)
                 .foregroundStyle(skin.inkSoft)
-            Text("\(balance.balance) kr")
+            Text(verbatim: Money.format(balance.balance))
                 .font(.system(size: 34, weight: .bold))
                 .foregroundStyle(skin.ink)
 
@@ -262,14 +262,14 @@ struct ChildWalletView: View {
             // so it appears only when administering. Recording a purchase is something
             // you do standing next to the child, so it belongs on every route in.
             if isParentAdmin {
-                walletButton("Ge pengar", fill: giveMoneyGreen) {
+                walletButton(String(localized: "Ge pengar"), fill: giveMoneyGreen) {
                     showGiveMoneySheet = true
                 }
                 Spacer().frame(height: 8)
             }
 
             walletButton(
-                "Registrera köp",
+                String(localized: "Registrera köp"),
                 fill: isParentAdmin ? recordPurchaseBlue : giveMoneyGreen,
                 enabled: balance.balance > 0
             ) {
@@ -411,7 +411,7 @@ struct ChildWalletView: View {
                 } else if goal.isCompleted {
                     Text("✓ Klar").font(.caption).foregroundStyle(skin.moneyIn)
                 } else {
-                    Text("\(goal.currentAmount) / \(goal.targetAmount) kr")
+                    Text(verbatim: "\(goal.currentAmount) / \(Money.format(goal.targetAmount))")
                         .font(.caption)
                         .foregroundStyle(skin.inkSoft)
                 }
@@ -426,7 +426,7 @@ struct ChildWalletView: View {
                     }
                 }
                 .frame(height: 10)
-                Text("\(goal.remainingAmount) kr kvar")
+                Text("\(Money.format(goal.remainingAmount)) kvar")
                     .font(.caption2)
                     .foregroundStyle(skin.inkSoft)
             }
@@ -482,7 +482,7 @@ struct ChildWalletView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             Spacer()
-            Text("\(sign)\(transaction.amount) kr")
+            Text(verbatim: "\(sign)\(Money.format(transaction.amount))")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(accentColor)
                 .padding(.trailing, 12)
@@ -531,23 +531,20 @@ struct ChildWalletView: View {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
         guard let date else { return iso }
-        let out = DateFormatter()
-        out.locale = AllowanceDates.swedish
-        out.dateFormat = "d MMM, HH:mm"
-        return out.string(from: date)
+        return kqFormatDate(date, template: "dMMMHHmm")
     }
 
     private func localizedType(_ type: String) -> String {
         switch type {
-        case "ALLOWANCE": return "Fickpengar"
-        case "EXPENSE": return "Köp"
-        case "SAVINGS_ALLOCATION": return "Sparmål"
+        case "ALLOWANCE": return String(localized: "Fickpengar")
+        case "EXPENSE": return String(localized: "Köp")
+        case "SAVINGS_ALLOCATION": return String(localized: "Sparmål")
         // TransactionType har fem värden, inte tre. De två sista syntes aldrig här, så
         // MANUAL_ADJUSTMENT stod med versaler och understreck i barnets egen plånbok.
-        case "MANUAL_ADJUSTMENT": return "Justering"
-        case "DELETION": return "Borttagen"
+        case "MANUAL_ADJUSTMENT": return String(localized: "Justering")
+        case "DELETION": return String(localized: "Borttagen")
         // Aldrig råvärdet. En okänd typ ska se tråkig ut, inte teknisk.
-        default: return "Övrigt"
+        default: return String(localized: "Övrigt")
         }
     }
 
@@ -591,7 +588,7 @@ struct ChildWalletView: View {
             pendingNotification = await notifResp.first
             isLoading = false
         } catch {
-            errorMessage = ApiErrors.message(error, fallback: "Kunde inte ladda plånboken.")
+            errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ladda plånboken."))
             isLoading = false
         }
     }
@@ -708,13 +705,13 @@ private struct RecordExpenseSheet: View {
             Form {
                 if let childName {
                     Section {
-                        Text("Dras från \(childName)s saldo: \(currentBalance) kr.")
+                        Text("Dras från \(kqPossessive(childName)) saldo: \(Money.format(currentBalance)).")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Section("Belopp") {
-                    TextField("Belopp (kr)", text: $amount)
+                    TextField(String(localized: "Belopp (\(Money.symbol))"), text: $amount)
                         .keyboardType(.numberPad)
                 }
                 Section("Beskrivning (valfritt)") {
@@ -746,7 +743,7 @@ private struct RecordExpenseSheet: View {
                     Button("Avbryt", action: onDismiss)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Sparar…" : "Betala") {
+                    Button(isSaving ? String(localized: "Sparar…") : String(localized: "Betala")) {
                         Task { await submit() }
                     }
                     .disabled(isSaving)
@@ -759,9 +756,9 @@ private struct RecordExpenseSheet: View {
     }
 
     private func submit() async {
-        guard let amt = Int(amount), amt > 0 else { error = "Ange ett belopp"; return }
+        guard let amt = Int(amount), amt > 0 else { error = String(localized: "Ange ett belopp"); return }
         guard amt <= currentBalance else {
-            error = childName.map { "\($0) har bara \(currentBalance) kr" } ?? "Du har bara \(currentBalance) kr"
+            error = childName.map { String(localized: "\($0) har bara \(Money.format(currentBalance))") } ?? String(localized: "Du har bara \(Money.format(currentBalance))")
             return
         }
         isSaving = true
@@ -783,7 +780,7 @@ private struct RecordExpenseSheet: View {
             }
             onSuccess()
         } catch {
-            self.error = ApiErrors.message(error, fallback: "Kunde inte registrera köpet.")
+            self.error = ApiErrors.message(error, fallback: String(localized: "Kunde inte registrera köpet."))
         }
         isSaving = false
     }
@@ -807,7 +804,7 @@ private struct CreateSavingsGoalSheet: View {
                 Section("Namn") {
                     TextField("T.ex. Ny cykel", text: $name)
                 }
-                Section("Målbelopp (kr)") {
+                Section(String(localized: "Målbelopp (\(Money.symbol))")) {
                     TextField("500", text: $targetAmount)
                         .keyboardType(.numberPad)
                 }
@@ -839,7 +836,7 @@ private struct CreateSavingsGoalSheet: View {
                     Button("Avbryt", action: onDismiss)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Skapar…" : "Spara") {
+                    Button(isSaving ? String(localized: "Skapar…") : String(localized: "Spara")) {
                         Task { await submit() }
                     }
                     .disabled(isSaving)
@@ -849,8 +846,8 @@ private struct CreateSavingsGoalSheet: View {
     }
 
     private func submit() async {
-        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { error = "Ange ett namn"; return }
-        guard let amt = Int(targetAmount), amt > 0 else { error = "Målbeloppet måste vara större än 0"; return }
+        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { error = String(localized: "Ange ett namn"); return }
+        guard let amt = Int(targetAmount), amt > 0 else { error = String(localized: "Målbeloppet måste vara större än 0"); return }
         isSaving = true
         error = nil
         do {
@@ -861,7 +858,7 @@ private struct CreateSavingsGoalSheet: View {
             )
             onSuccess()
         } catch {
-            self.error = "Kunde inte skapa sparmålet."
+            self.error = String(localized: "Kunde inte skapa sparmålet.")
         }
         isSaving = false
     }
@@ -886,16 +883,16 @@ private struct AllocateToGoalsSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Du har \(currentBalance) kr. Fördela till dina sparmål.")
+                    Text("Du har \(Money.format(currentBalance)). Fördela till dina sparmål.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 Section("Sparmål") {
                     ForEach(activeGoals) { goal in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("\(goal.emoji ?? "🎯") \(goal.name) (max \(goal.remainingAmount) kr)")
+                            Text("\(goal.emoji ?? "🎯") \(goal.name) (max \(Money.format(goal.remainingAmount)))")
                                 .font(.subheadline)
-                            TextField("0 kr", text: Binding(
+                            TextField(Money.format(0), text: Binding(
                                 get: { amounts[goal.id] ?? "" },
                                 set: { amounts[goal.id] = $0.filter { $0.isNumber } }
                             ))
@@ -908,13 +905,13 @@ private struct AllocateToGoalsSheet: View {
                     HStack {
                         Text("Totalt att fördela")
                         Spacer()
-                        Text("\(totalAllocated) kr")
+                        Text(verbatim: Money.format(totalAllocated))
                             .foregroundColor(totalAllocated > currentBalance ? .red : .primary)
                     }
                     HStack {
                         Text("Kvar på kontot")
                         Spacer()
-                        Text("\(remaining) kr")
+                        Text(verbatim: Money.format(remaining))
                             .foregroundColor(remaining < 0 ? .red : .green)
                     }
                 }
@@ -929,7 +926,7 @@ private struct AllocateToGoalsSheet: View {
                     Button("Avbryt", action: onDismiss)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Sparar…" : "Fördela") {
+                    Button(isSaving ? String(localized: "Sparar…") : String(localized: "Fördela")) {
                         Task { await submit() }
                     }
                     .disabled(isSaving)
@@ -943,8 +940,8 @@ private struct AllocateToGoalsSheet: View {
             guard let amt = Int(amounts[goal.id] ?? ""), amt > 0 else { return nil }
             return (goalId: goal.id, amount: amt)
         }
-        guard !allocations.isEmpty else { error = "Fördela minst 1 kr till ett mål"; return }
-        guard totalAllocated <= currentBalance else { error = "Du kan inte fördela mer än du har"; return }
+        guard !allocations.isEmpty else { error = String(localized: "Fördela minst \(Money.format(1)) till ett mål"); return }
+        guard totalAllocated <= currentBalance else { error = String(localized: "Du kan inte fördela mer än du har"); return }
         isSaving = true
         error = nil
         do {
@@ -952,9 +949,9 @@ private struct AllocateToGoalsSheet: View {
             onSuccess()
         } catch ApiError.httpError(let status, let data) {
             let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            error = "Fel \(status)\(body.isEmpty ? "" : ": \(body)")"
+            error = String(localized: "Fel \(status)\(body.isEmpty ? "" : ": \(body)")")
         } catch {
-            self.error = "Kunde inte fördela pengar."
+            self.error = String(localized: "Kunde inte fördela pengar.")
         }
         isSaving = false
     }
@@ -974,10 +971,10 @@ private struct GiveMoneySheet: View {
     @State private var error: String?
 
     private let suggestions: [(label: String, amount: Int, description: String)] = [
-        ("Månadspeng",  120, "Månadspeng"),
-        ("Veckopeng",    30, "Veckopeng"),
-        ("Belöning",     50, "Belöning"),
-        ("Extra",        20, "Extra"),
+        (String(localized: "Månadspeng"),  120, String(localized: "Månadspeng")),
+        (String(localized: "Veckopeng"),    30, String(localized: "Veckopeng")),
+        (String(localized: "Belöning"),     50, String(localized: "Belöning")),
+        (String(localized: "Extra"),        20, String(localized: "Extra")),
     ]
 
     var body: some View {
@@ -995,7 +992,7 @@ private struct GiveMoneySheet: View {
                                 } label: {
                                     VStack(spacing: 2) {
                                         Text(s.label).font(.subheadline.weight(.medium))
-                                        Text("\(s.amount) kr").font(.caption).foregroundColor(.secondary)
+                                        Text(verbatim: Money.format(s.amount)).font(.caption).foregroundColor(.secondary)
                                     }
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
@@ -1013,7 +1010,7 @@ private struct GiveMoneySheet: View {
                     Text("Snabbval")
                 }
 
-                Section("Belopp (kr)") {
+                Section(String(localized: "Belopp (\(Money.symbol))")) {
                     TextField("120", text: $amount)
                         .keyboardType(.numberPad)
                 }
@@ -1033,7 +1030,7 @@ private struct GiveMoneySheet: View {
                     Button("Avbryt", action: onDismiss)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Skickar…" : "Ge pengar") {
+                    Button(isSaving ? String(localized: "Skickar…") : String(localized: "Ge pengar")) {
                         Task { await submit() }
                     }
                     .disabled(isSaving)
@@ -1043,19 +1040,19 @@ private struct GiveMoneySheet: View {
     }
 
     private func submit() async {
-        guard let amt = Int(amount), amt > 0 else { error = "Ange ett belopp"; return }
+        guard let amt = Int(amount), amt > 0 else { error = String(localized: "Ange ett belopp"); return }
         isSaving = true
         error = nil
         do {
             try await WalletRepository.giveAllowance(
                 childMemberId: childId,
                 amount: amt,
-                description: description.isEmpty ? "Pengar" : description
+                description: description.isEmpty ? String(localized: "Pengar") : description
             )
             onSuccess()
         } catch ApiError.httpError(let status, let data) {
             let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            self.error = "Fel \(status)\(body.isEmpty ? "" : ": \(body)")"
+            self.error = String(localized: "Fel \(status)\(body.isEmpty ? "" : ": \(body)")")
         } catch {
             self.error = error.localizedDescription
         }
@@ -1077,7 +1074,7 @@ private struct AllowanceNotificationOverlay: View {
                 Text("🎉").font(.system(size: 64))
                 Text("Du fick pengar!")
                     .font(.title2.weight(.bold))
-                Text("+\(notification.amount) kr")
+                Text(verbatim: "+" + Money.format(notification.amount))
                     .font(.system(size: 48, weight: .bold))
                     .foregroundColor(Color(red: 0x48/255, green: 0xBB/255, blue: 0x78/255))
                 if let desc = notification.description {
@@ -1123,21 +1120,21 @@ extension ChildWalletView {
     static func fixture(viewer: FixtureViewer = .parentAdmin) -> ChildWalletView {
         let transactions: [WalletTransactionResponseDTO] = [
             fixtureTransaction(id: "t1", amount: 120, type: "ALLOWANCE",
-                               text: "Månadspeng AUG", at: "2026-08-29T15:36:00Z"),
+                               text: String(localized: "Månadspeng AUG"), at: "2026-08-29T15:36:00Z"),
             fixtureTransaction(id: "t2", amount: -21, type: "EXPENSE",
-                               text: "godis", at: "2026-08-29T15:28:00Z"),
+                               text: String(localized: "godis"), at: "2026-08-29T15:28:00Z"),
             fixtureTransaction(id: "t3", amount: -200, type: "SAVINGS_ALLOCATION",
-                               text: "Till Ny cykel", at: "2026-08-28T18:02:00Z"),
+                               text: String(localized: "Till Ny cykel"), at: "2026-08-28T18:02:00Z"),
             fixtureTransaction(id: "t4", amount: 120, type: "ALLOWANCE",
-                               text: "Juli", at: "2026-08-28T06:42:00Z"),
+                               text: String(localized: "Juli"), at: "2026-08-28T06:42:00Z"),
             fixtureTransaction(id: "t5", amount: 10, type: "ALLOWANCE",
-                               text: "Tandfen", at: "2026-07-30T07:16:00Z"),
+                               text: String(localized: "Tandfen"), at: "2026-07-30T07:16:00Z"),
             fixtureTransaction(id: "t6", amount: 250, type: "ALLOWANCE",
-                               text: "Gammelmormor", at: "2026-07-19T13:26:00Z"),
+                               text: String(localized: "Gammelmormor"), at: "2026-07-19T13:26:00Z"),
         ]
 
         let goals: [SavingsGoalResponseDTO] = [
-            fixtureGoal(id: "g1", name: "Ny cykel", emoji: "🚲", target: 2500, current: 900),
+            fixtureGoal(id: "g1", name: String(localized: "Ny cykel"), emoji: "🚲", target: 2500, current: 900),
             fixtureGoal(id: "g2", name: "Nintendo-spel", emoji: "🎮", target: 600, current: 600),
         ]
 
@@ -1156,7 +1153,7 @@ extension ChildWalletView {
 
         let ownWallet = viewer == .child
         return ChildWalletView(
-            childName: "Signe",
+            childName: "Ella",
             childId: "child-1",
             isOwnWallet: ownWallet,
             fromChildView: viewer == .childPreview,

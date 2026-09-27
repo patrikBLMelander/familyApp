@@ -1,5 +1,8 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,13 +38,17 @@ import se.kidquest.app.network.AddAllowanceRequest
 import se.kidquest.app.network.ApiClient
 import se.kidquest.app.network.ApiErrors
 
-private data class Suggestion(val label: String, val amount: Int, val description: String)
+private data class Suggestion(val labelRes: Int, val amount: Int) {
+    val label: String get() = tr(labelRes)
+    /** Sent as the transaction's description, in the parent's language. */
+    val description: String get() = tr(labelRes)
+}
 
 private val suggestions = listOf(
-    Suggestion("Månadspeng", 120, "Månadspeng"),
-    Suggestion("Veckopeng",   30, "Veckopeng"),
-    Suggestion("Belöning",    50, "Belöning"),
-    Suggestion("Extra",       20, "Extra"),
+    Suggestion(R.string.money_monthly, 120),
+    Suggestion(R.string.money_weekly, 30),
+    Suggestion(R.string.money_reward, 50),
+    Suggestion(R.string.money_extra, 20),
 )
 
 @Composable
@@ -59,13 +66,13 @@ fun GiveMoneyDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Ge pengar till $childName", fontWeight = FontWeight.Bold) },
+        title = { Text(tr(R.string.money_give_title, childName), fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
 
                 // Quick-select chips
                 Text(
-                    text = "Snabbval",
+                    text = tr(R.string.money_quick),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -91,7 +98,7 @@ fun GiveMoneyDialog(
                             ) {
                                 Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                     Text(s.label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                                    Text("${s.amount} kr", fontSize = 11.sp)
+                                    Text(Money.format(s.amount), fontSize = 11.sp)
                                 }
                             }
                         } else {
@@ -105,7 +112,7 @@ fun GiveMoneyDialog(
                                 Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                     Text(s.label, fontSize = 13.sp)
                                     Text(
-                                        "${s.amount} kr",
+                                        Money.format(s.amount),
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -120,7 +127,7 @@ fun GiveMoneyDialog(
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it.filter { c -> c.isDigit() }; error = null },
-                    label = { Text("Belopp (kr)") },
+                    label = { Text(tr(R.string.amount_label, Money.symbol())) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -128,7 +135,7 @@ fun GiveMoneyDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it; error = null },
-                    label = { Text("Förklaring") },
+                    label = { Text(tr(R.string.money_explanation)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -147,7 +154,7 @@ fun GiveMoneyDialog(
             TextButton(
                 onClick = {
                     val amountKr = amount.toIntOrNull() ?: 0
-                    if (amountKr <= 0) { error = "Ange ett belopp"; return@TextButton }
+                    if (amountKr <= 0) { error = tr(R.string.common_enter_amount); return@TextButton }
                     loading = true
                     error = null
                     scope.launch {
@@ -157,15 +164,15 @@ fun GiveMoneyDialog(
                                     AddAllowanceRequest(
                                         childMemberId = childId,
                                         amount = amountKr,
-                                        description = description.ifBlank { "Pengar" },
+                                        description = description.ifBlank { tr(R.string.money_default_description) },
                                         savingsGoalAllocations = null,
                                     ),
                                 )
                             }
                             if (response.isSuccessful) onSuccess()
-                            else error = "Kunde inte ge pengar"
+                            else error = tr(R.string.money_give_failed)
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte ge pengar")
+                            error = ApiErrors.message(e, tr(R.string.money_give_failed))
                         } finally {
                             loading = false
                         }
@@ -173,11 +180,11 @@ fun GiveMoneyDialog(
                 },
                 enabled = !loading,
             ) {
-                Text(if (loading) "Skickar…" else "Ge pengar")
+                Text(if (loading) tr(R.string.common_sending) else tr(R.string.money_give))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Avbryt") }
+            TextButton(onClick = onDismiss) { Text(tr(R.string.common_cancel)) }
         },
     )
 }

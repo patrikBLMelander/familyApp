@@ -21,6 +21,11 @@ data class UpdatePasswordRequest(
     val password: String,
 )
 
+data class UpdateLanguageRequest(
+    /** sv / en / de / es, or null to follow the phone. */
+    val language: String?,
+)
+
 data class InviteTokenResponse(
     val token: String,
 )
@@ -74,6 +79,13 @@ interface FamilyMembersApi {
     suspend fun deleteMember(
         @Path("memberId") memberId: String,
     ): Response<Unit>
+
+    /** Saves the member's app language, so it follows them to other devices. */
+    @PATCH("family-members/{memberId}/language")
+    suspend fun updateLanguage(
+        @Path("memberId") memberId: String,
+        @Body body: UpdateLanguageRequest,
+    ): FamilyMemberResponse
 
     @POST("family-members/{memberId}/generate-invite")
     suspend fun generateInviteToken(

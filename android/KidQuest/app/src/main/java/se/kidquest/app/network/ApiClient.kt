@@ -1,6 +1,7 @@
 package se.kidquest.app.network
 
 import se.kidquest.app.BuildConfig
+import se.kidquest.app.i18n.L10n
 import se.kidquest.app.session.TokenStore
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -23,6 +24,15 @@ object ApiClient {
             request
         }
         chain.proceed(newRequest)
+    }
+
+    /** Tells the backend which language to answer in (errors, system texts). */
+    private val languageInterceptor = Interceptor { chain ->
+        chain.proceed(
+            chain.request().newBuilder()
+                .header("Accept-Language", L10n.language())
+                .build()
+        )
     }
 
     /**
@@ -53,6 +63,7 @@ object ApiClient {
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
+            .addInterceptor(languageInterceptor)
             .addInterceptor(loggingInterceptor)
             .build()
     }

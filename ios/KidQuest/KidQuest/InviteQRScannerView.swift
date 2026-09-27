@@ -42,8 +42,8 @@ struct InviteQRScannerView: View {
     var body: some View {
         VStack(spacing: 0) {
             SeasonHeaderBar(
-                title: "Skanna QR-kod",
-                subtitle: "Rikta kameran mot koden på förälderns skärm",
+                title: String(localized: "Skanna QR-kod"),
+                subtitle: String(localized: "Rikta kameran mot koden på förälderns skärm"),
                 onBack: { dismiss() }
             )
 
@@ -119,36 +119,36 @@ struct InviteQRScannerView: View {
         case .noCamera:
             Notice(
                 symbol: "camera.badge.ellipsis",
-                title: "Ingen kamera på den här enheten",
-                message: "Den här enheten har ingen kamera att skanna med. Skriv in koden för hand i stället — den står under QR-koden på förälderns skärm.",
-                primary: .init(title: "Skriv in koden") { dismiss() }
+                title: String(localized: "Ingen kamera på den här enheten"),
+                message: String(localized: "Den här enheten har ingen kamera att skanna med. Skriv in koden för hand i stället — den står under QR-koden på förälderns skärm."),
+                primary: .init(title: String(localized: "Skriv in koden")) { dismiss() }
             )
         case .permissionDenied:
             Notice(
                 symbol: "camera.fill",
-                title: "KidQuest får inte använda kameran",
+                title: String(localized: "KidQuest får inte använda kameran"),
                 // Nothing in the app can grant this — the system will not ask twice —
                 // so the only honest next step is the door out to Settings.
-                message: "Kameran är avstängd för KidQuest. Du kan slå på den i Inställningar, eller skriva in koden för hand i stället.",
-                primary: .init(title: "Öppna Inställningar") { openSettings() },
-                secondary: .init(title: "Skriv in koden") { dismiss() }
+                message: String(localized: "Kameran är avstängd för KidQuest. Du kan slå på den i Inställningar, eller skriva in koden för hand i stället."),
+                primary: .init(title: String(localized: "Öppna Inställningar")) { openSettings() },
+                secondary: .init(title: String(localized: "Skriv in koden")) { dismiss() }
             )
         case .permissionRestricted:
             Notice(
                 symbol: "lock.fill",
-                title: "Kameran är låst på den här enheten",
+                title: String(localized: "Kameran är låst på den här enheten"),
                 // Screen Time or a school MDM profile. A child tapping through to
                 // Settings would find the switch greyed out, so do not send them there.
-                message: "Kameran är avstängd av Skärmtid eller av enhetens inställningar, och kan bara låsas upp av den som satte begränsningen. Skriv in koden för hand så länge.",
-                primary: .init(title: "Skriv in koden") { dismiss() }
+                message: String(localized: "Kameran är avstängd av Skärmtid eller av enhetens inställningar, och kan bara låsas upp av den som satte begränsningen. Skriv in koden för hand så länge."),
+                primary: .init(title: String(localized: "Skriv in koden")) { dismiss() }
             )
         case .sessionFailed:
             Notice(
                 symbol: "exclamationmark.triangle.fill",
-                title: "Kameran gick inte att starta",
-                message: "Något annat använder kanske kameran just nu. Försök igen, eller skriv in koden för hand.",
-                primary: .init(title: "Försök igen") { model.restart() },
-                secondary: .init(title: "Skriv in koden") { dismiss() }
+                title: String(localized: "Kameran gick inte att starta"),
+                message: String(localized: "Något annat använder kanske kameran just nu. Försök igen, eller skriv in koden för hand."),
+                primary: .init(title: String(localized: "Försök igen")) { model.restart() },
+                secondary: .init(title: String(localized: "Skriv in koden")) { dismiss() }
             )
         }
     }
@@ -156,10 +156,10 @@ struct InviteQRScannerView: View {
     private var unreadable: some View {
         Notice(
             symbol: "questionmark.square.dashed",
-            title: "Det var ingen inbjudningskod",
-            message: "QR-koden gick att läsa, men den innehöll ingen kod till en familj. Kolla att det är rätt kod på skärmen och försök igen.",
-            primary: .init(title: "Skanna igen") { model.restart() },
-            secondary: .init(title: "Skriv in koden") { dismiss() }
+            title: String(localized: "Det var ingen inbjudningskod"),
+            message: String(localized: "QR-koden gick att läsa, men den innehöll ingen kod till en familj. Kolla att det är rätt kod på skärmen och försök igen."),
+            primary: .init(title: String(localized: "Skanna igen")) { model.restart() },
+            secondary: .init(title: String(localized: "Skriv in koden")) { dismiss() }
         )
     }
 

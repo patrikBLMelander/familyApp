@@ -1,5 +1,6 @@
 package com.familyapp.api.family;
 
+import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.application.family.FamilyService;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.domain.family.Family;
@@ -67,9 +68,23 @@ public class FamilyController {
     ) {
         var requester = requireMemberOf(familyId, deviceToken);
         if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
-            throw new IllegalArgumentException("Endast en förälder kan byta familjens namn");
+            throw new LocalizedException("family.rename.parentOnly");
         }
         return toResponse(service.updateFamilyName(familyId, request.name()));
+    }
+
+    /** The currency the family's wallets are shown in. Parents only. */
+    @PatchMapping("/{familyId}/currency")
+    public FamilyResponse updateCurrency(
+            @PathVariable("familyId") UUID familyId,
+            @RequestBody UpdateCurrencyRequest request,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
+    ) {
+        var requester = requireMemberOf(familyId, deviceToken);
+        if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
+            throw new LocalizedException("family.currency.parentOnly");
+        }
+        return toResponse(service.updateCurrency(familyId, request.currency()));
     }
 
     /**
@@ -114,7 +129,8 @@ public class FamilyController {
                 family.id(),
                 family.name(),
                 family.createdAt().toString(),
-                family.updatedAt().toString()
+                family.updatedAt().toString(),
+                family.currency()
         );
     }
 
@@ -127,7 +143,8 @@ public class FamilyController {
                 member.role(),
                 // Clients need this to identify the family to the purchase provider:
                 // entitlement is bought once per household, not per member.
-                member.familyId() != null ? member.familyId().toString() : null
+                member.familyId() != null ? member.familyId().toString() : null,
+                member.language()
         );
     }
 
@@ -157,11 +174,15 @@ public class FamilyController {
     ) {
     }
 
+    public record UpdateCurrencyRequest(String currency) {
+    }
+
     public record FamilyResponse(
             UUID id,
             String name,
             String createdAt,
-            String updatedAt
+            String updatedAt,
+            String currency
     ) {
     }
 
@@ -171,7 +192,8 @@ public class FamilyController {
             String deviceToken,
             String email,
             com.familyapp.domain.familymember.FamilyMember.Role role,
-            String familyId
+            String familyId,
+            String language
     ) {
     }
 

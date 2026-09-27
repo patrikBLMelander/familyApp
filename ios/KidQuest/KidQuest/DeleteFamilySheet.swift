@@ -24,7 +24,7 @@ struct DeleteFamilySheet: View {
 
     /// Samma ord som Android, så att en förälder som sett den ena skärmen känner igen
     /// den andra.
-    private static let confirmation = "TA BORT"
+    private static let confirmation = String(localized: "TA BORT")
 
     private var isConfirmed: Bool {
         typed.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -40,9 +40,7 @@ struct DeleteFamilySheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(
-                        "Det här tar bort hela familjen och allt som hör till den: alla barn "
-                        + "och vuxna, sysslor, XP, djur, plånböcker och sparmål. Även för de "
-                        + "andra i familjen."
+                        String(localized: "Det här tar bort hela familjen och allt som hör till den: alla barn och vuxna, sysslor, XP, djur, plånböcker och sparmål. Även för de andra i familjen.")
                     )
                     .foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -53,8 +51,7 @@ struct DeleteFamilySheet: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(
-                        "Har du en prenumeration behöver du avsluta den separat i App Store "
-                        + "— den försvinner inte med kontot."
+                        String(localized: "Har du en prenumeration behöver du avsluta den separat i App Store — den försvinner inte med kontot.")
                     )
                     .font(.footnote)
                     .foregroundStyle(palette.inkSoft)
@@ -116,7 +113,7 @@ struct DeleteFamilySheet: View {
         return Button {
             Task { await deleteFamily() }
         } label: {
-            Text(isDeleting ? "Tar bort…" : "Ta bort allt")
+            Text(isDeleting ? String(localized: "Tar bort…") : String(localized: "Ta bort allt"))
                 .font(.body.weight(.semibold))
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
@@ -151,7 +148,7 @@ struct DeleteFamilySheet: View {
         } catch {
             await MainActor.run {
                 isDeleting = false
-                errorMessage = ApiErrors.message(error, fallback: "Kunde inte ta bort familjen.")
+                errorMessage = ApiErrors.message(error, fallback: String(localized: "Kunde inte ta bort familjen."))
             }
         }
     }

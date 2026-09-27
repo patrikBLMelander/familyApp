@@ -23,10 +23,10 @@ struct GetStartedState {
     /// Koppling ligger sist med flit: det är steget som får hoppas över, så det ska
     /// aldrig vara det en förälder uppmanas göra härnäst.
     var nextLabel: String? {
-        if !hasChild { return "lägg till ett barn" }
-        if !hasChores { return "lägg till dagliga sysslor" }
-        if !hasPet { return "välj ett ägg" }
-        if !hasPairedDevice { return "koppla barnets telefon" }
+        if !hasChild { return String(localized: "lägg till ett barn") }
+        if !hasChores { return String(localized: "lägg till dagliga sysslor") }
+        if !hasPet { return String(localized: "välj ett ägg") }
+        if !hasPairedDevice { return String(localized: "koppla barnets telefon") }
         return nil
     }
 
@@ -51,35 +51,34 @@ struct GetStartedCard: View {
             Spacer().frame(height: 4)
             row(
                 done: state.hasChild,
-                title: "Lägg till ett barn",
-                subtitle: "Inget fungerar förrän det finns ett barn i familjen.",
-                action: "Lägg till",
+                title: String(localized: "Lägg till ett barn"),
+                subtitle: String(localized: "Inget fungerar förrän det finns ett barn i familjen."),
+                action: String(localized: "Lägg till"),
                 enabled: true,
                 onTap: onAddChild
             )
             row(
                 done: state.hasChores,
-                title: "Lägg till dagliga sysslor",
-                subtitle: "Välj ålder när du lägger till barnet och du får förslag direkt.",
-                action: "Lägg till",
+                title: String(localized: "Lägg till dagliga sysslor"),
+                subtitle: String(localized: "Välj ålder när du lägger till barnet och du får förslag direkt."),
+                action: String(localized: "Lägg till"),
                 // Bara meningsfullt när det finns ett barn -- sysslorna hör till ett.
                 enabled: state.hasChild,
                 onTap: onAddChores
             )
             row(
                 done: state.hasPet,
-                title: "Välj ett ägg",
-                subtitle: "Barnet får ett djur att ta hand om — det är hela poängen.",
-                action: "Öppna",
+                title: String(localized: "Välj ett ägg"),
+                subtitle: String(localized: "Barnet får ett djur att ta hand om — det är hela poängen."),
+                action: String(localized: "Öppna"),
                 enabled: state.hasChild,
                 onTap: onSeePet
             )
             row(
                 done: state.hasPairedDevice,
-                title: "Koppla barnets telefon",
-                subtitle: "Hoppa över det här om barnet inte har någon egen telefon — "
-                    + "du kan visa barnets vy från ditt eget konto.",
-                action: "Visa kod",
+                title: String(localized: "Koppla barnets telefon"),
+                subtitle: String(localized: "Hoppa över det här om barnet inte har någon egen telefon — du kan visa barnets vy från ditt eget konto."),
+                action: String(localized: "Visa kod"),
                 enabled: state.hasChild,
                 onTap: onPairDevice,
                 isLast: true

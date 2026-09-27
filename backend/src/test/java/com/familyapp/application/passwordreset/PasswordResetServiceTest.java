@@ -164,7 +164,7 @@ class PasswordResetServiceTest {
 
         assertThatThrownBy(() -> service.confirm("anything", "nyttlosen"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("invalid or has expired");
+                .hasMessage("passwordReset.invalidLink");
     }
 
     @Test
@@ -178,7 +178,7 @@ class PasswordResetServiceTest {
 
         assertThatThrownBy(() -> service.confirm("anything", "nyttlosen"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("invalid or has expired");
+                .hasMessage("passwordReset.invalidLink");
     }
 
     @Test
@@ -188,14 +188,14 @@ class PasswordResetServiceTest {
         when(tokens.findByTokenHash(anyString())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.confirm("made-up", "nyttlosen"))
-                .hasMessageContaining("invalid or has expired");
+                .hasMessage("passwordReset.invalidLink");
     }
 
     @Test
     void a_too_short_password_is_refused_before_the_token_is_spent() {
         assertThatThrownBy(() -> service.confirm("anything", "kort"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("at least 6");
+                .hasMessage("password.tooShort");
         verify(tokens, never()).findByTokenHash(anyString());
     }
 }

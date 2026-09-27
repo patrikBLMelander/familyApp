@@ -1,5 +1,8 @@
 package se.kidquest.app.dashboard
 
+import se.kidquest.app.i18n.Money
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,7 +54,7 @@ fun AllocateToGoalsDialog(
                     .filter { it.isActive && !it.isCompleted }
             }
         } catch (e: Exception) {
-            error = ApiErrors.message(e, "Kunde inte ladda sparmål")
+            error = ApiErrors.message(e, tr(R.string.allocate_load_failed))
         } finally {
             loadingData = false
         }
@@ -62,7 +65,7 @@ fun AllocateToGoalsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Fördela till mål") },
+        title = { Text(tr(R.string.allocate_title)) },
         text = {
             Column(
                 modifier = Modifier
@@ -70,7 +73,7 @@ fun AllocateToGoalsDialog(
                     .verticalScroll(rememberScrollState()),
             ) {
                 if (loadingData) {
-                    Text("Laddar sparmål…")
+                    Text(tr(R.string.allocate_loading))
                     return@Column
                 }
                 if (error != null) {
@@ -78,21 +81,21 @@ fun AllocateToGoalsDialog(
                     return@Column
                 }
                 Text(
-                    text = "Du har $currentBalance kr. Fördela till dina sparmål.",
+                    text = tr(R.string.allocate_intro, Money.format(currentBalance)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 if (goals.isEmpty()) {
                     Text(
-                        text = "Inga aktiva sparmål. Skapa ett sparmål först.",
+                        text = tr(R.string.allocate_no_goals),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     return@Column
                 }
                 goals.forEach { goal ->
-                    val label = "${goal.emoji?.let { "$it " } ?: ""}${goal.name} (max ${goal.remainingAmount} kr)"
+                    val label = tr(R.string.allocate_goal_max, "${goal.emoji?.let { "$it " } ?: ""}${goal.name}", Money.format(goal.remainingAmount))
                     OutlinedTextField(
                         value = allocations[goal.id] ?: "",
                         onValueChange = { v ->
@@ -106,7 +109,7 @@ fun AllocateToGoalsDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 Text(
-                    text = "Summa: $totalAllocated kr. Kvar på kontot: $remaining kr.",
+                    text = tr(R.string.allocate_summary, Money.format(totalAllocated), Money.format(remaining)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -132,11 +135,11 @@ fun AllocateToGoalsDialog(
                         if (amt > 0) SavingsGoalAllocationRequest(savingsGoalId = goalId, amount = amt) else null
                     }
                     if (list.isEmpty()) {
-                        error = "Fördela minst 1 kr"
+                        error = tr(R.string.allocate_min, Money.format(1))
                         return@TextButton
                     }
                     if (totalAllocated > currentBalance) {
-                        error = "Du kan inte fördela mer än du har"
+                        error = tr(R.string.allocate_too_much)
                         return@TextButton
                     }
                     loading = true
@@ -148,19 +151,19 @@ fun AllocateToGoalsDialog(
                             }
                             onSuccess()
                         } catch (e: Exception) {
-                            error = ApiErrors.message(e, "Kunde inte fördela pengar")
+                            error = ApiErrors.message(e, tr(R.string.allocate_failed))
                         } finally {
                             loading = false
                         }
                     }
                 },
             ) {
-                Text(if (loading) "Sparar…" else "Fördela")
+                Text(if (loading) tr(R.string.common_saving) else tr(R.string.allocate_button))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Avbryt")
+                Text(tr(R.string.common_cancel))
             }
         },
     )

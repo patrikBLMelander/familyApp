@@ -1,5 +1,7 @@
 package se.kidquest.app.paywall
 
+import se.kidquest.app.i18n.tr
+import se.kidquest.app.R
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -87,19 +89,19 @@ fun PaywallScreen(
     LaunchedEffect(Unit) {
         if (!BillingConfig.isConfigured || !Purchases.isConfigured) {
             loading = false
-            message = "Prenumerationen är inte tillgänglig just nu. Försök igen senare."
+            message = tr(R.string.paywall_unavailable_later)
             return@LaunchedEffect
         }
         Purchases.sharedInstance.getOfferingsWith(
             onError = {
                 loading = false
-                message = "Kunde inte hämta priset. Kontrollera din uppkoppling."
+                message = tr(R.string.paywall_price_failed)
             },
             onSuccess = { offerings ->
                 monthly = offerings.current?.monthly
                 loading = false
                 if (monthly == null) {
-                    message = "Prenumerationen är inte tillgänglig just nu."
+                    message = tr(R.string.paywall_unavailable)
                 }
             },
         )
@@ -113,7 +115,7 @@ fun PaywallScreen(
         delay(OFFERINGS_TIMEOUT_MS)
         if (loading) {
             loading = false
-            message = "Kunde inte hämta priset just nu. Försök igen senare."
+            message = tr(R.string.paywall_price_failed_later)
         }
     }
 
@@ -137,7 +139,7 @@ fun PaywallScreen(
             IconButton(onClick = onDismiss) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Stäng",
+                    contentDescription = tr(R.string.common_close),
                     tint = TEXT_SECONDARY,
                 )
             }
@@ -154,7 +156,7 @@ fun PaywallScreen(
             Spacer(modifier = Modifier.height(22.dp))
 
             Text(
-                text = "Tack för att ni använder KidQuest",
+                text = tr(R.string.paywall_thanks),
                 fontSize = 23.sp,
                 lineHeight = 30.sp,
                 fontWeight = FontWeight.Bold,
@@ -164,9 +166,7 @@ fun PaywallScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "Jag är en pappa som byggde KidQuest till mina egna barn. Det började " +
-                    "som ett sätt att slippa tjata om tandborstning varje morgon. Nu används " +
-                    "appen hemma hos er också, och det betyder mycket för mig.",
+                text = tr(R.string.paywall_story1),
                 fontSize = 14.sp,
                 lineHeight = 21.sp,
                 color = TEXT_SECONDARY,
@@ -175,9 +175,7 @@ fun PaywallScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "Jag utvecklar appen själv, på kvällar och helger. Servern och allt runt " +
-                    "omkring kostar pengar varje månad, och 29 kronor per familj är vad som gör " +
-                    "att jag kan fortsätta.",
+                text = tr(R.string.paywall_story2),
                 fontSize = 14.sp,
                 lineHeight = 21.sp,
                 color = TEXT_SECONDARY,
@@ -213,7 +211,7 @@ fun PaywallScreen(
                     )
                     Spacer(modifier = Modifier.size(6.dp))
                     Text(
-                        text = "per månad, för hela familjen",
+                        text = tr(R.string.paywall_per_month),
                         modifier = Modifier.padding(bottom = 2.dp),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
@@ -222,8 +220,7 @@ fun PaywallScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Förnyas automatiskt tills du avslutar. Du avslutar när du vill i " +
-                        "Google Play och behåller tiden du redan betalat för.",
+                    text = tr(R.string.paywall_renews),
                     fontSize = 11.5.sp,
                     lineHeight = 16.sp,
                     color = MUTED,
@@ -246,7 +243,7 @@ fun PaywallScreen(
                     val activity = context.findActivity()
                     val pkg = monthly
                     if (activity == null || pkg == null) {
-                        message = "Kunde inte starta köpet. Försök igen."
+                        message = tr(R.string.paywall_purchase_start_failed)
                         return@Button
                     }
                     working = true
@@ -257,7 +254,7 @@ fun PaywallScreen(
                             working = false
                             // A parent who backed out has not hit a problem, so say nothing.
                             if (!userCancelled) {
-                                message = "Köpet gick inte igenom: ${error.message}"
+                                message = tr(R.string.paywall_purchase_failed, error.message)
                             }
                         },
                         onSuccess = { _, _ ->
@@ -283,12 +280,12 @@ fun PaywallScreen(
                         strokeWidth = 2.dp,
                     )
                     price != null -> Text(
-                        text = "Fortsätt för $price/mån",
+                        text = tr(R.string.paywall_continue_for, price),
                         fontSize = 15.5.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                     else -> Text(
-                        text = "Fortsätt",
+                        text = tr(R.string.common_continue),
                         fontSize = 15.5.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -304,13 +301,13 @@ fun PaywallScreen(
             ) {
                 // Google requires a restore path: a parent who reinstalls, or switches
                 // phone, must be able to get back what they already paid for.
-                FooterLink("Återställ köp") {
+                FooterLink(tr(R.string.paywall_restore)) {
                     if (!Purchases.isConfigured) return@FooterLink
                     working = true
                     Purchases.sharedInstance.restorePurchasesWith(
                         onError = {
                             working = false
-                            message = "Kunde inte återställa köp: ${it.message}"
+                            message = tr(R.string.paywall_restore_failed, it.message)
                         },
                         onSuccess = {
                             working = false
@@ -319,9 +316,9 @@ fun PaywallScreen(
                     )
                 }
                 Dot()
-                FooterLink("Villkor") { context.open(LegalLinks.TERMS) }
+                FooterLink(tr(R.string.paywall_terms)) { context.open(LegalLinks.TERMS) }
                 Dot()
-                FooterLink("Integritetspolicy") { context.open(LegalLinks.PRIVACY) }
+                FooterLink(tr(R.string.paywall_privacy)) { context.open(LegalLinks.PRIVACY) }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -391,7 +388,7 @@ private fun ContinuesAsBefore() {
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Text(
-            text = "DET HÄR FORTSÄTTER SOM VANLIGT",
+            text = tr(R.string.paywall_continues),
             fontSize = 10.5.sp,
             lineHeight = 14.sp,
             fontWeight = FontWeight.Bold,
@@ -401,10 +398,10 @@ private fun ContinuesAsBefore() {
         Spacer(modifier = Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
             listOf(
-                "Obegränsat antal barn och sysslor",
-                "Ett nytt djur att ta hand om varje månad",
-                "Plånbok med sparmål",
-                "Hela familjen, på alla telefoner",
+                tr(R.string.paywall_b1),
+                tr(R.string.paywall_b2),
+                tr(R.string.paywall_b3),
+                tr(R.string.paywall_b4),
             ).forEach { line ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
