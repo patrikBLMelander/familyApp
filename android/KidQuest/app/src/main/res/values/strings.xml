@@ -673,4 +673,14 @@
         <item quantity="one">%d chore</item>
         <item quantity="other">%d chores</item>
     </plurals>
+
+    <!-- Store-screenshot fixtures (debug harness only). -->
+    <string name="fixture_tx_allowance_aug">Monthly allowance AUG</string>
+    <string name="fixture_tx_sweets">sweets</string>
+    <string name="fixture_tx_to_goal">To %1$s</string>
+    <string name="fixture_tx_july">July</string>
+    <string name="fixture_tx_tooth_fairy">Tooth fairy</string>
+    <string name="fixture_tx_great_grandma">Great-grandma</string>
+    <string name="fixture_goal_bike">New bike</string>
+    <string name="fixture_goal_game">Nintendo game</string>
 </resources>

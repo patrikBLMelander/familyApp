@@ -12,6 +12,10 @@ struct SelectEggSheet: View {
     var history: [PetHistoryResponseDTO] = []
     var onDismiss: () -> Void = {}
     var onEggSelected: (PetResponseDTO) -> Void = { _ in }
+    /// Non-nil skips the network: the debug harness hands in eggs and the month, since the
+    /// simulator has no session to fetch them with.
+    var preloadedEggs: [EggCollectionItemDTO]?
+    var preloadedMonthInfo: MonthInfoDTO?
 
     /// Tre steg: välj ägg -> ägget kläcks -> namnge djuret (nu syns djuret). Namnet väljs
     /// efter kläckningen, för ett barn kan inte döpa något det inte sett än.
@@ -167,6 +171,12 @@ struct SelectEggSheet: View {
     }
 
     private func loadEggTypes() async {
+        if let preloadedEggs {
+            eggs = preloadedEggs
+            selectedEgg = preloadedEggs.first(where: { $0.unlocked && !$0.collected })?.eggType
+            loading = false
+            return
+        }
         loading = true
         errorMessage = nil
         do {
@@ -186,6 +196,10 @@ struct SelectEggSheet: View {
 
     /// Bara en upplysning: misslyckas hämtningen visas ingen rad, äggen går att välja ändå.
     private func loadMonthInfo() async {
+        if let preloadedMonthInfo {
+            monthEndMessage = kqMonthEndMessage(preloadedMonthInfo)
+            return
+        }
         guard let info = try? await AdventureRepository.monthInfo(memberId: memberId) else { return }
         await MainActor.run { monthEndMessage = kqMonthEndMessage(info) }
     }

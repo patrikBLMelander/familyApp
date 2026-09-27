@@ -169,6 +169,15 @@ enum ScreenHarness {
                 .defaultScrollAnchor(anchor, for: .initialOffset)
             ))
 
+        // Äventyren nås bara genom att trycka sig in från barnets skärm, vilket
+        // simulatorn inte kan -- och en butiksbild behöver dem.
+        case "adventures":
+            return Entry(view: AnyView(
+                AdventuresView.fixture()
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(.light)
+            ))
+
         case "childview", "childview-fed":
             return Entry(view: AnyView(
                 ChildDashboardHost.fixture(fed: name == "childview-fed")

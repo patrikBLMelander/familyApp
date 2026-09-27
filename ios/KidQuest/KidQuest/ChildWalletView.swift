@@ -1135,7 +1135,7 @@ extension ChildWalletView {
 
         let goals: [SavingsGoalResponseDTO] = [
             fixtureGoal(id: "g1", name: String(localized: "Ny cykel"), emoji: "🚲", target: 2500, current: 900),
-            fixtureGoal(id: "g2", name: "Nintendo-spel", emoji: "🎮", target: 600, current: 600),
+            fixtureGoal(id: "g2", name: String(localized: "Nintendo-spel"), emoji: "🎮", target: 600, current: 600),
         ]
 
         // The level kind, because it is the one whose summary line has to say something

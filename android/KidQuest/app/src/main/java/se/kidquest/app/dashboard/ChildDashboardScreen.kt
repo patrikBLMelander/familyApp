@@ -683,7 +683,14 @@ fun ChildDashboardScreen(
 
     var hasAutoOpenedEggDialog by remember { mutableStateOf(false) }
     LaunchedEffect(loading, pet, error, petLoadFailed) {
-        if (fixture != null) return@LaunchedEffect
+        if (fixture != null) {
+            // The harness cannot tap, so a fixture that wants the picker opens it itself.
+            if (fixture.openEggPicker && !hasAutoOpenedEggDialog) {
+                hasAutoOpenedEggDialog = true
+                showSelectEggDialog = true
+            }
+            return@LaunchedEffect
+        }
         // Inte medan avskedet spelas: det slutar med att väljaren öppnas ändå, och två
         // dialoger ovanpå varandra är inte en sekvens.
         if (!loading && error == null && !petLoadFailed && pet == null &&
@@ -1218,6 +1225,8 @@ fun ChildDashboardScreen(
             history = petHistory,
             actingAsParent = actingAsParent,
             childId = childId,
+            preloadedEggs = fixture?.eggOptions,
+            preloadedMonthInfo = fixture?.monthInfo,
             onDismiss = { showSelectEggDialog = false },
             onEggSelected = { updatedPet ->
                 pet = updatedPet
@@ -1338,6 +1347,9 @@ private fun SelectEggDialog(
     // for themselves, because select-egg resolves the member from the device token.
     actingAsParent: Boolean = false,
     childId: String = "",
+    /** Harness only: the picker's data without a session. */
+    preloadedEggs: List<EggOption>? = null,
+    preloadedMonthInfo: MonthInfo? = null,
 ) {
     val season = LocalSeasonPalette.current
     var eggs by remember { mutableStateOf<List<EggOption>>(emptyList()) }
@@ -1359,6 +1371,12 @@ private fun SelectEggDialog(
     val selectedPetType = eggs.firstOrNull { it.eggType == selectedEgg }?.petType
 
     LaunchedEffect(Unit) {
+        if (preloadedEggs != null) {
+            eggs = preloadedEggs
+            selectedEgg = eggs.firstOrNull { it.unlocked && !it.collected }?.eggType
+            loading = false
+            return@LaunchedEffect
+        }
         loading = true
         error = null
         try {
@@ -1379,6 +1397,10 @@ private fun SelectEggDialog(
 
     // Månadsraden är en bonus: går den inte att hämta visas bara ingen rad.
     LaunchedEffect(Unit) {
+        if (preloadedMonthInfo != null) {
+            monthInfo = preloadedMonthInfo
+            return@LaunchedEffect
+        }
         monthInfo = try {
             withContext(Dispatchers.IO) {
                 if (actingAsParent) ApiClient.petsApi.getMonthInfoForMember(childId)
@@ -1995,6 +2017,10 @@ data class ChildDashboardFixture(
     val showFarewell: Boolean = false,
     val history: List<PetHistoryResponse>,
     val viewingPast: Boolean = false,
+    /** Opens the egg picker straight away, with these eggs and this month line. */
+    val openEggPicker: Boolean = false,
+    val eggOptions: List<EggOption>? = null,
+    val monthInfo: MonthInfo? = null,
 ) {
     companion object {
         /**
@@ -2073,7 +2099,34 @@ data class ChildDashboardFixture(
                     ),
                 ),
                 viewingPast = viewingPast,
+                openEggPicker = noPet,
+                eggOptions = if (noPet) fixtureEggs() else null,
+                // Three days left of September, and this is the child's first egg: the
+                // banner says it follows them all of October.
+                monthInfo = if (noPet) MonthInfo(daysLeftInMonth = 3, nextMonth = 10, firstPetGrace = true) else null,
             )
+        }
+
+        /** The picker's three zones: commons and two rares to choose, the rest still to discover. */
+        private fun fixtureEggs(): List<EggOption> {
+            val unlocked = setOf("green_egg", "red_egg", "purple_egg", "yellow_egg", "orange_egg", "cyan_egg")
+            val rarity = mapOf(
+                "green_egg" to "COMMON", "red_egg" to "COMMON", "purple_egg" to "COMMON", "yellow_egg" to "COMMON",
+                "orange_egg" to "RARE", "black_egg" to "RARE", "cyan_egg" to "RARE", "gray_egg" to "RARE",
+                "brown_egg" to "RARE", "silver_egg" to "RARE", "sand_egg" to "RARE", "ice_egg" to "RARE",
+                "golden_egg" to "LEGENDARY", "white_egg" to "LEGENDARY", "frost_egg" to "LEGENDARY",
+                "tiger_egg" to "LEGENDARY", "snow_egg" to "LEGENDARY",
+                "blue_egg" to "MYTHIC", "teal_egg" to "MYTHIC", "pink_egg" to "MYTHIC",
+            )
+            return rarity.map { (egg, level) ->
+                EggOption(
+                    eggType = egg,
+                    petType = PetImages.petTypeForEgg(egg) ?: "cat",
+                    rarity = level,
+                    unlocked = egg in unlocked,
+                    collected = false,
+                )
+            }
         }
     }
 }

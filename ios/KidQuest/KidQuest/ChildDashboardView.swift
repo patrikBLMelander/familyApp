@@ -132,7 +132,9 @@ struct ChildDashboardView: View {
                             collectedFood: s.collectedFood, todaysTasks: s.todaysTasks
                         )
                     }
-                }
+                },
+                preloadedEggs: harnessEggs,
+                preloadedMonthInfo: harnessMonthInfo
             )
         }
         .sheet(isPresented: $showAddChore) {
@@ -330,6 +332,25 @@ struct ChildDashboardView: View {
     }
 }
 
+extension ChildDashboardView {
+    /// The egg picker's data when the harness opened it; nil (so the network) otherwise.
+    fileprivate var harnessEggs: [EggCollectionItemDTO]? {
+        #if DEBUG
+        return harnessOpenEggPicker ? ChildFixtures.eggs : nil
+        #else
+        return nil
+        #endif
+    }
+
+    fileprivate var harnessMonthInfo: MonthInfoDTO? {
+        #if DEBUG
+        return harnessOpenEggPicker ? ChildFixtures.monthInfo : nil
+        #else
+        return nil
+        #endif
+    }
+}
+
 #if DEBUG
 extension ChildDashboardView {
 
@@ -378,6 +399,33 @@ extension ChildDashboardView {
 /// jämföra sida vid sida i harnesket. Skiljer de sig ska det bero på layouten, inte på
 /// att de fick olika siffror.
 enum ChildFixtures {
+
+    /// A first month: the four commons plus three rares won on adventures, the rest still
+    /// to discover. Nothing collected yet -- this is the child's first egg.
+    static let eggs: [EggCollectionItemDTO] = {
+        let unlockedRares: Set<String> = ["orange_egg", "cyan_egg", "ice_egg"]
+        let rarity: [(String, String, String)] = [
+            ("green_egg", "cat", "COMMON"), ("red_egg", "dog", "COMMON"),
+            ("purple_egg", "rabbit", "COMMON"), ("yellow_egg", "bird", "COMMON"),
+            ("orange_egg", "bear", "RARE"), ("black_egg", "panda", "RARE"),
+            ("cyan_egg", "kapybara", "RARE"), ("gray_egg", "slot", "RARE"),
+            ("silver_egg", "koala", "RARE"), ("ice_egg", "penguin", "RARE"),
+            ("sand_egg", "meerkat", "RARE"), ("amber_egg", "spider", "RARE"),
+            ("golden_egg", "lion", "LEGENDARY"), ("white_egg", "shark", "LEGENDARY"),
+            ("frost_egg", "snowleopard", "LEGENDARY"), ("tiger_egg", "tiger", "LEGENDARY"),
+            ("snow_egg", "polarbear", "LEGENDARY"), ("moon_egg", "wolf", "LEGENDARY"),
+        ]
+        return rarity.map { egg, pet, level in
+            EggCollectionItemDTO(
+                eggType: egg, petType: pet, rarity: level,
+                unlocked: level == "COMMON" || unlockedRares.contains(egg),
+                collected: false
+            )
+        }
+    }()
+
+    /// Four days left and a first pet, so the picker says the egg follows into October.
+    static let monthInfo = MonthInfoDTO(daysLeftInMonth: 4, nextMonth: 10, firstPetGrace: true)
 
     static let pet = PetResponseDTO(
         id: "p1", memberId: "child-1", year: 2026, month: 9,

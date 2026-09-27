@@ -56,12 +56,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import se.kidquest.app.billing.Billing
 import se.kidquest.app.dashboard.AddFamilyMemberDialog
+import se.kidquest.app.dashboard.AdultDashboardFixture
 import se.kidquest.app.dashboard.AdultDashboardScreen
+import se.kidquest.app.dashboard.AdventuresFixture
 import se.kidquest.app.dashboard.AdventuresScreen
 import se.kidquest.app.dashboard.ChildDashboardFixture
 import se.kidquest.app.dashboard.ChildDashboardScreen
 import se.kidquest.app.dashboard.ChildPetScreen
 import se.kidquest.app.dashboard.ChildTasksScreen
+import se.kidquest.app.dashboard.ChildWalletFixture
 import se.kidquest.app.dashboard.ChildWalletScreen
 import se.kidquest.app.dashboard.RecurringAllowanceScreen
 import se.kidquest.app.dashboard.FamilyTasksScreen
@@ -149,6 +152,34 @@ class MainActivity : AppCompatActivity() {
                 // Den ligger nära tröskeln så att höjningen går att se i den vägen med.
                 //   --es kq_screen child | child-done | child-past | child-levelup
                 //                 | child-asparent | child-nopet | child-farewell
+                // Store-screenshot fixtures, no session needed:
+                //   --es kq_screen dashboard | wallet-child | adventures
+                val fixtureChild = intent?.getStringExtra("kq_name") ?: "Ella"
+                when (forcedScreen) {
+                    "dashboard" -> {
+                        AdultDashboardScreen(fixture = AdultDashboardFixture.berg(fixtureChild))
+                        return@KidQuestTheme
+                    }
+                    "wallet-child" -> {
+                        ChildWalletScreen(
+                            childName = fixtureChild,
+                            childId = "child-1",
+                            isOwnWallet = true,
+                            onBack = {},
+                            fixture = ChildWalletFixture.ella(),
+                        )
+                        return@KidQuestTheme
+                    }
+                    "adventures" -> {
+                        AdventuresScreen(
+                            childName = fixtureChild,
+                            childId = "child-1",
+                            onBack = {},
+                            fixture = AdventuresFixture.ella(),
+                        )
+                        return@KidQuestTheme
+                    }
+                }
                 if (forcedScreen?.startsWith("child-") == true || forcedScreen == "child") {
                     val asParent = forcedScreen == "child-asparent"
                     // Namnet går att byta för butiksbilder, som inte bör visa ett

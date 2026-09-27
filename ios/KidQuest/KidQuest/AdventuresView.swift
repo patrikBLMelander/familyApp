@@ -9,6 +9,18 @@ struct AdventuresView: View {
     var memberId: String?
     var onBack: () -> Void = {}
 
+    /// Non-nil renders this instead of calling the network. Only `fixture()` sets it; a
+    /// plain stored property so the memberwise initialiser is the same in every build.
+    var preloaded: Preloaded?
+
+    struct Preloaded {
+        let state: AdventureStateDTO
+        let inventory: [InventoryItemDTO]
+        let catalog: [LootCatalogItemDTO]
+        let equippedFrame: String?
+        let equippedSceneItem: String?
+    }
+
     @State private var state: AdventureStateDTO?
     @State private var inventory: [InventoryItemDTO] = []
     @State private var catalog: [String: LootCatalogItemDTO] = [:]
@@ -292,6 +304,16 @@ struct AdventuresView: View {
     }
 
     private func load() async {
+        if let preloaded {
+            state = preloaded.state
+            inventory = preloaded.inventory
+            catalog = Dictionary(uniqueKeysWithValues: preloaded.catalog.map { ($0.id, $0) })
+            equippedFrame = preloaded.equippedFrame
+            equippedSceneItem = preloaded.equippedSceneItem
+            loadedAt = Date()
+            loading = false
+            return
+        }
         loading = true
         error = nil
         do {
@@ -452,3 +474,44 @@ struct LootReveal: View {
         }
     }
 }
+
+#if DEBUG
+extension AdventuresView {
+
+    /// The adventures screen with sample data and no session, for store screenshots:
+    /// tickets to spend, one adventure under way, and a few frames and decorations won.
+    /// See ScreenHarness in KidQuestApp.swift.
+    static func fixture() -> AdventuresView {
+        let items = [
+            ("frame_forest", "FRAME", "COMMON", String(localized: "Skogsram")),
+            ("frame_crystal", "FRAME", "RARE", String(localized: "Kristallram")),
+            ("frame_royal", "FRAME", "LEGENDARY", String(localized: "Kungaram")),
+            ("item_kite", "SCENE_ITEM", "COMMON", String(localized: "Drake i himlen")),
+            ("item_lanterns", "SCENE_ITEM", "RARE", String(localized: "Lyktor")),
+            ("item_shootingstar", "SCENE_ITEM", "LEGENDARY", String(localized: "Stjärnfall")),
+        ]
+        return AdventuresView(
+            childName: "Ella",
+            preloaded: Preloaded(
+                state: AdventureStateDTO(
+                    ticketBalance: 3,
+                    adventures: [
+                        AdventureResponseDTO(
+                            id: "a1", scene: "forest", status: "ONGOING",
+                            durationSecs: 900, secondsRemaining: 412, ready: false,
+                            lootType: nil, lootRef: nil, lootQty: nil,
+                            startedAt: "2026-09-27T09:30:00Z"
+                        ),
+                    ]
+                ),
+                inventory: items.map { InventoryItemDTO(itemId: $0.0, acquiredAt: "2026-09-20T12:00:00Z") },
+                catalog: items.map {
+                    LootCatalogItemDTO(id: $0.0, type: $0.1, rarity: $0.2, name: $0.3, assetKey: $0.0, anchor: nil)
+                },
+                equippedFrame: "frame_crystal",
+                equippedSceneItem: "item_lanterns"
+            )
+        )
+    }
+}
+#endif

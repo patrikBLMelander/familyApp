@@ -83,6 +83,8 @@ fun AdventuresScreen(
     childId: String,
     onBack: () -> Unit,
     actingAsParent: Boolean = false,
+    /** Debug harness only: this state instead of the network. */
+    fixture: AdventureStateResponse? = null,
 ) {
     val season = LocalSeasonPalette.current
     val scope = rememberCoroutineScope()
@@ -103,6 +105,12 @@ fun AdventuresScreen(
     var tick by remember { mutableStateOf(0L) }
 
     LaunchedEffect(refreshKey) {
+        if (fixture != null) {
+            state = fixture
+            loadedAtMillis = System.currentTimeMillis()
+            loading = false
+            return@LaunchedEffect
+        }
         loading = true
         error = null
         try {
@@ -765,4 +773,26 @@ private fun formatRemaining(secs: Long): String {
     val m = secs / 60
     val s = secs % 60
     return if (m >= 3) tr(R.string.adv_minutes, m.toInt()) else "%d:%02d".format(m, s)
+}
+
+/**
+ * Store-screenshot state: three tickets to spend, one adventure on its way home and one
+ * ready to open. No inventory, since the loot catalogue's names come from the server.
+ */
+object AdventuresFixture {
+    fun ella() = AdventureStateResponse(
+        ticketBalance = 3,
+        adventures = listOf(
+            AdventureResponse(
+                id = "a1", scene = "forest", status = "ONGOING", durationSecs = 3600,
+                secondsRemaining = 1420, ready = false, lootType = null, lootRef = null, lootQty = null,
+                startedAt = "2026-09-27T09:00:00Z",
+            ),
+            AdventureResponse(
+                id = "a2", scene = "reef", status = "ONGOING", durationSecs = 1800,
+                secondsRemaining = 0, ready = true, lootType = null, lootRef = null, lootQty = null,
+                startedAt = "2026-09-27T08:00:00Z",
+            ),
+        ),
+    )
 }

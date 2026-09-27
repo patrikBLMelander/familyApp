@@ -672,4 +672,14 @@
         <item quantity="one">%d syssla</item>
         <item quantity="other">%d sysslor</item>
     </plurals>
+
+    <!-- Store-screenshot fixtures (debug harness only). -->
+    <string name="fixture_tx_allowance_aug">Månadspeng AUG</string>
+    <string name="fixture_tx_sweets">godis</string>
+    <string name="fixture_tx_to_goal">Till %1$s</string>
+    <string name="fixture_tx_july">Juli</string>
+    <string name="fixture_tx_tooth_fairy">Tandfen</string>
+    <string name="fixture_tx_great_grandma">Gammelmormor</string>
+    <string name="fixture_goal_bike">Ny cykel</string>
+    <string name="fixture_goal_game">Nintendo-spel</string>
 </resources>

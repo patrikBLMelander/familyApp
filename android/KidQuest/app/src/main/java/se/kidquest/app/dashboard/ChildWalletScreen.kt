@@ -90,6 +90,8 @@ fun ChildWalletScreen(
     onOpenRecurringAllowance: () -> Unit = {},
     /** Opened from inside the child's own view rather than from the overview. */
     fromChildView: Boolean = false,
+    /** Debug harness only: renders this wallet instead of calling the network. */
+    fixture: ChildWalletFixture? = null,
 ) {
     var balance by remember { mutableStateOf<WalletBalanceResponse?>(null) }
     var transactions by remember { mutableStateOf<List<WalletTransactionResponse>>(emptyList()) }
@@ -105,6 +107,14 @@ fun ChildWalletScreen(
     var recurring by remember { mutableStateOf<RecurringAllowanceResponse?>(null) }
 
     LaunchedEffect(childId, isOwnWallet, refreshKey) {
+        if (fixture != null) {
+            balance = fixture.balance
+            transactions = fixture.transactions
+            savingsGoals = fixture.goals
+            petType = fixture.petType
+            loading = false
+            return@LaunchedEffect
+        }
         loading = true
         error = null
         try {
@@ -599,4 +609,50 @@ private fun walletGradient(petType: String?): Brush = when (petType?.lowercase()
     "unicorn" -> Brush.verticalGradient(listOf(Color(0xFFFDE68A), Color(0xFFF9A8D4)))
     "kapybara" -> Brush.verticalGradient(listOf(Color(0xFFDCFCE7), Color(0xFF22C55E)))
     else -> Brush.verticalGradient(listOf(Color(0xFFE0E7FF), Color(0xFFE0F2FE)))
+}
+
+/**
+ * Sample wallet for store screenshots: the same figures as the iOS "wallet-child"
+ * fixture, so the two platforms can be compared side by side. Texts come from string
+ * resources, so each language shows its own.
+ */
+data class ChildWalletFixture(
+    val balance: WalletBalanceResponse,
+    val transactions: List<WalletTransactionResponse>,
+    val goals: List<SavingsGoalResponse>,
+    val petType: String?,
+) {
+    companion object {
+        fun ella(): ChildWalletFixture {
+            fun tx(id: String, amount: Int, type: String, text: String, at: String) = WalletTransactionResponse(
+                id = id, walletId = "w1", amount = amount, transactionType = type, description = text,
+                categoryId = null, createdByMemberId = null, isDeleted = false, deletedAt = null,
+                deletedByMemberId = null, createdAt = at,
+            )
+            fun goal(id: String, name: String, emoji: String, target: Int, current: Int) = SavingsGoalResponse(
+                id = id, memberId = "child-1", name = name, targetAmount = target, currentAmount = current,
+                emoji = emoji, isActive = true, isCompleted = current >= target, isPurchased = false,
+                completedAt = null, purchasedAt = null, purchaseTransactionId = null,
+                progressPercentage = current * 100 / target, remainingAmount = (target - current).coerceAtLeast(0),
+                createdAt = "2026-06-01T10:00:00Z", updatedAt = "2026-08-28T18:02:00Z",
+            )
+            val bike = tr(R.string.fixture_goal_bike)
+            return ChildWalletFixture(
+                balance = WalletBalanceResponse(id = "w1", memberId = "child-1", balance = 2311, currency = Money.familyCurrency),
+                transactions = listOf(
+                    tx("t1", 120, "ALLOWANCE", tr(R.string.fixture_tx_allowance_aug), "2026-08-29T15:36:00Z"),
+                    tx("t2", -21, "EXPENSE", tr(R.string.fixture_tx_sweets), "2026-08-29T15:28:00Z"),
+                    tx("t3", -200, "SAVINGS_ALLOCATION", tr(R.string.fixture_tx_to_goal, bike), "2026-08-28T18:02:00Z"),
+                    tx("t4", 120, "ALLOWANCE", tr(R.string.fixture_tx_july), "2026-08-28T06:42:00Z"),
+                    tx("t5", 10, "ALLOWANCE", tr(R.string.fixture_tx_tooth_fairy), "2026-07-30T07:16:00Z"),
+                    tx("t6", 250, "ALLOWANCE", tr(R.string.fixture_tx_great_grandma), "2026-07-19T13:26:00Z"),
+                ),
+                goals = listOf(
+                    goal("g1", bike, "🚲", target = 2500, current = 900),
+                    goal("g2", tr(R.string.fixture_goal_game), "🎮", target = 600, current = 600),
+                ),
+                petType = "dragon",
+            )
+        }
+    }
 }

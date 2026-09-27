@@ -137,6 +137,8 @@ fun AdultDashboardScreen(
     /** Null while nobody has chosen, in which case the phone decides. */
     darkMode: Boolean? = null,
     onSetDarkMode: (Boolean) -> Unit = {},
+    /** Debug harness only: this family instead of the network. */
+    fixture: AdultDashboardFixture? = null,
 ) {
     var children by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
     // refreshKey comes from the caller; this covers reloads the screen triggers
@@ -171,6 +173,7 @@ fun AdultDashboardScreen(
     var confirmingFamilyDeletion by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        if (fixture != null) return@LaunchedEffect
         onboardingDismissed = PrefsStore.isOnboardingDismissed()
     }
     var loading by remember { mutableStateOf(true) }
@@ -179,9 +182,18 @@ fun AdultDashboardScreen(
     var childSummaries by remember { mutableStateOf<Map<String, ChildSummary>>(emptyMap()) }
     var adults by remember { mutableStateOf<List<FamilyMemberResponse>>(emptyList()) }
     // Used to mark the signed-in parent and keep them out of their own delete menu.
-    val currentMemberId = remember { TokenStore.getSession()?.memberId }
+    val currentMemberId = remember { fixture?.currentMemberId ?: TokenStore.getSession()?.memberId }
 
     LaunchedEffect(refreshKey, localRefresh) {
+        if (fixture != null) {
+            children = fixture.children
+            adults = fixture.adults
+            childSummaries = fixture.summaries()
+            anyChildHasChores = true
+            familyName = fixture.familyName
+            loading = false
+            return@LaunchedEffect
+        }
         loading = true
         error = null
         try {
@@ -1007,7 +1019,7 @@ private fun SeasonSample() {
     }
 }
 
-private data class ChildSummary(
+internal data class ChildSummary(
     val memberId: String,
     val memberName: String,
     val todaysDone: Int,
@@ -2464,4 +2476,54 @@ private fun DeleteFamilyDialog(
             TextButton(onClick = onDismiss, enabled = !deleting) { Text(tr(R.string.common_cancel)) }
         },
     )
+}
+
+/**
+ * The Berg family for store screenshots -- the same family as the iOS dashboard fixture:
+ * Ella part-way through her day with a weekly allowance, Leo done and not yet paired,
+ * and two parents. The allowance line goes through the real formatter, so it follows
+ * the language and the currency.
+ */
+class AdultDashboardFixture private constructor(
+    val familyName: String,
+    val children: List<FamilyMemberResponse>,
+    val adults: List<FamilyMemberResponse>,
+    val currentMemberId: String,
+) {
+    internal fun summaries(): Map<String, ChildSummary> = mapOf(
+        "child-1" to ChildSummary(
+            memberId = "child-1", memberName = children[0].name, todaysDone = 3, todaysTotal = 5,
+            hasPet = true, petType = "dragon", growthStage = 3,
+            allowanceNote = describeAllowance(
+                RecurringAllowanceResponse(
+                    memberId = "child-1", kind = "WEEKLY", amount = 50, weekday = 5, dayOfMonth = null,
+                    level1 = null, level2 = null, level3 = null, level4 = null, level5 = null,
+                    active = true, nextDueOn = null,
+                ),
+            ),
+        ),
+        "child-2" to ChildSummary(
+            memberId = "child-2", memberName = children[1].name, todaysDone = 4, todaysTotal = 4,
+            hasPet = true, petType = "cat", growthStage = 2, allowanceNote = null,
+        ),
+    )
+
+    companion object {
+        fun berg(childName: String = "Ella") = AdultDashboardFixture(
+            familyName = "Berg",
+            children = listOf(
+                FamilyMemberResponse(id = "child-1", name = childName, deviceToken = null, email = null,
+                    role = "CHILD", familyId = "fam-1", hasPairedDevice = true),
+                FamilyMemberResponse(id = "child-2", name = "Leo", deviceToken = null, email = null,
+                    role = "CHILD", familyId = "fam-1", hasPairedDevice = false),
+            ),
+            adults = listOf(
+                FamilyMemberResponse(id = "adult-1", name = "Jonas", deviceToken = null, email = "jonas@exempel.se",
+                    role = "PARENT", familyId = "fam-1", hasPairedDevice = true),
+                FamilyMemberResponse(id = "adult-2", name = "Anna", deviceToken = null, email = null,
+                    role = "PARENT", familyId = "fam-1", hasPairedDevice = false),
+            ),
+            currentMemberId = "adult-1",
+        )
+    }
 }

@@ -680,4 +680,14 @@
         <item quantity="many">%d tareas</item>
         <item quantity="other">%d tareas</item>
     </plurals>
+
+    <!-- Store-screenshot fixtures (debug harness only). -->
+    <string name="fixture_tx_allowance_aug">Paga mensual AGO</string>
+    <string name="fixture_tx_sweets">chuches</string>
+    <string name="fixture_tx_to_goal">Para %1$s</string>
+    <string name="fixture_tx_july">Julio</string>
+    <string name="fixture_tx_tooth_fairy">Ratoncito Pérez</string>
+    <string name="fixture_tx_great_grandma">Bisabuela</string>
+    <string name="fixture_goal_bike">Bici nueva</string>
+    <string name="fixture_goal_game">Juego de Nintendo</string>
 </resources>
