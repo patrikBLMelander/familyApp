@@ -44,7 +44,7 @@ public class CollectedFoodService {
         }
 
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         // Create one food item per XP point (batch insert for performance)
         // For bonus food, event_id will be null (requires nullable column)
@@ -74,10 +74,10 @@ public class CollectedFoodService {
         }
 
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         // Create one food item per XP point (batch insert for performance)
         var now = OffsetDateTime.now();

@@ -96,11 +96,11 @@ public class FamilyController {
             UUID familyId, String deviceToken
     ) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var requester = memberService.getMemberByDeviceToken(deviceToken);
         if (!familyId.equals(requester.familyId())) {
-            throw new IllegalArgumentException("Not a member of this family");
+            throw new LocalizedException("error.accessDenied");
         }
         return requester;
     }
@@ -118,7 +118,7 @@ public class FamilyController {
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var requester = memberService.getMemberByDeviceToken(deviceToken);
         service.deleteFamily(familyId, requester.id());

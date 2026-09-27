@@ -1,5 +1,7 @@
 package com.familyapp.application.pet;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.adventure.AdventureService;
 import com.familyapp.application.adventure.EggCatalog;
 import com.familyapp.application.xp.XpService;
@@ -98,12 +100,12 @@ public class PetService {
      */
     public ChildPet selectEgg(UUID memberId, String eggType, String name) {
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         // Children, assistants, and parents can have pets
         String role = member.getRole();
         if (!"CHILD".equals(role) && !"ASSISTANT".equals(role) && !"PARENT".equals(role)) {
-            throw new IllegalArgumentException("Only children, assistants, and parents can select pets");
+            throw new LocalizedException("pet.roleNotAllowed");
         }
 
         // Validate egg type
@@ -115,7 +117,7 @@ public class PetService {
         // brand-new child is never wrongly rejected for one of the four they start with.
         adventureService.ensureCommonsUnlocked(memberId);
         if (!eggUnlockRepository.existsByMemberAndEggType(memberId, eggType)) {
-            throw new IllegalArgumentException("Egg not unlocked: " + eggType);
+            throw new LocalizedException("egg.locked");
         }
 
         LocalDate now = LocalDate.now();
@@ -125,7 +127,7 @@ public class PetService {
         // Check if pet already exists for this month
         var existingPet = petRepository.findByMemberIdAndYearAndMonth(memberId, year, month);
         if (existingPet.isPresent()) {
-            throw new IllegalArgumentException("Pet already selected for this month");
+            throw new LocalizedException("pet.alreadySelected");
         }
 
         // Determine pet type from egg type
@@ -133,7 +135,7 @@ public class PetService {
 
         // Validate name (optional but if provided, should be reasonable length)
         if (name != null && name.length() > 100) {
-            throw new IllegalArgumentException("Pet name must be 100 characters or less");
+            throw new LocalizedException("pet.nameTooLong");
         }
 
         // Create new pet entity
@@ -323,9 +325,9 @@ public class PetService {
     public ChildPet equipFrame(UUID memberId, String frameId) {
         LocalDate now = LocalDate.now();
         var petEntity = petRepository.findByMemberIdAndYearAndMonth(memberId, now.getYear(), now.getMonthValue())
-                .orElseThrow(() -> new IllegalArgumentException("No pet this month"));
+                .orElseThrow(() -> new LocalizedException("pet.noPetThisMonth"));
         if (frameId != null && !inventoryRepository.existsByMemberAndItem(memberId, frameId)) {
-            throw new IllegalArgumentException("Frame not owned: " + frameId);
+            throw new LocalizedException("loot.notOwned");
         }
         petEntity.setEquippedFrame(frameId);
         petEntity.setUpdatedAt(OffsetDateTime.now());
@@ -339,9 +341,9 @@ public class PetService {
     public ChildPet equipSceneItem(UUID memberId, String itemId) {
         LocalDate now = LocalDate.now();
         var petEntity = petRepository.findByMemberIdAndYearAndMonth(memberId, now.getYear(), now.getMonthValue())
-                .orElseThrow(() -> new IllegalArgumentException("No pet this month"));
+                .orElseThrow(() -> new LocalizedException("pet.noPetThisMonth"));
         if (itemId != null && !inventoryRepository.existsByMemberAndItem(memberId, itemId)) {
-            throw new IllegalArgumentException("Scene item not owned: " + itemId);
+            throw new LocalizedException("loot.notOwned");
         }
         petEntity.setEquippedSceneItem(itemId);
         petEntity.setUpdatedAt(OffsetDateTime.now());
@@ -365,12 +367,12 @@ public class PetService {
         }
 
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         // Children, assistants, and parents can feed pets
         String role = member.getRole();
         if (!"CHILD".equals(role) && !"ASSISTANT".equals(role) && !"PARENT".equals(role)) {
-            throw new IllegalArgumentException("Only children, assistants, and parents can feed pets");
+            throw new LocalizedException("pet.roleNotAllowed");
         }
 
         // Award XP

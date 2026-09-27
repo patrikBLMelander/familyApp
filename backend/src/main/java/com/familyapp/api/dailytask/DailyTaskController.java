@@ -1,5 +1,7 @@
 package com.familyapp.api.dailytask;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.dailytask.DailyTaskService;
 import com.familyapp.domain.dailytask.DailyTask;
@@ -100,10 +102,10 @@ public class DailyTaskController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         
         // Verify task belongs to requester's family
@@ -112,7 +114,7 @@ public class DailyTaskController {
                 .filter(t -> t.id().equals(taskId))
                 .findFirst();
         if (task.isEmpty()) {
-            throw new IllegalArgumentException("Access denied: Task does not belong to your family");
+            throw new LocalizedException("error.accessDenied");
         }
         
         var updatedTask = service.updateTask(
@@ -140,10 +142,10 @@ public class DailyTaskController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         
         // Verify task belongs to requester's family
@@ -152,7 +154,7 @@ public class DailyTaskController {
                 .filter(t -> t.id().equals(taskId))
                 .findFirst();
         if (task.isEmpty()) {
-            throw new IllegalArgumentException("Access denied: Task does not belong to your family");
+            throw new LocalizedException("error.accessDenied");
         }
         
         service.deleteTask(taskId);
@@ -174,24 +176,24 @@ public class DailyTaskController {
                 requesterFamilyId = requester.familyId();
                 memberId = requester.id();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         
         // If memberId is provided as parameter, validate it belongs to same family
         if (memberIdParam != null) {
             var targetMember = memberService.getMemberById(memberIdParam);
             if (!requesterFamilyId.equals(targetMember.familyId())) {
-                throw new IllegalArgumentException("Access denied: Member is not in the same family");
+                throw new LocalizedException("error.accessDenied");
             }
             memberId = memberIdParam;
         }
         
         // Verify task belongs to requester's family — single indexed existence check
         if (!service.taskBelongsToFamily(taskId, requesterFamilyId)) {
-            throw new IllegalArgumentException("Access denied: Task does not belong to your family");
+            throw new LocalizedException("error.accessDenied");
         }
 
         service.toggleTaskCompletion(taskId, memberId);
@@ -229,10 +231,10 @@ public class DailyTaskController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         
         // Verify all tasks belong to requester's family
@@ -242,7 +244,7 @@ public class DailyTaskController {
                 .collect(java.util.stream.Collectors.toSet());
         for (UUID taskId : request.taskIds()) {
             if (!taskIds.contains(taskId)) {
-                throw new IllegalArgumentException("Access denied: Task does not belong to your family");
+                throw new LocalizedException("error.accessDenied");
             }
         }
         

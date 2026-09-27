@@ -333,29 +333,29 @@ public class WalletController {
      */
     private void requireWalletAccess(String deviceToken, UUID memberId) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var requester = memberService.getMemberByDeviceToken(deviceToken);
         var member = memberService.getMemberById(memberId);
         if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
-            throw new IllegalArgumentException("Access denied");
+            throw new LocalizedException("error.accessDenied");
         }
         boolean isSelf = requester.id().equals(memberId);
         boolean isParent = requester.role() == com.familyapp.domain.familymember.FamilyMember.Role.PARENT;
         if (!isSelf && !isParent) {
-            throw new IllegalArgumentException("Access denied");
+            throw new LocalizedException("error.accessDenied");
         }
     }
 
     private UUID getMemberIdFromToken(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         try {
             var member = memberService.getMemberByDeviceToken(deviceToken);
             return member.id();
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid device token");
+            throw new LocalizedException("auth.notSignedIn");
         }
     }
 

@@ -50,11 +50,11 @@ public class FamilyService {
         // unreachable -- and soft keyboards and password managers append trailing
         // spaces readily. Length is checked on the trimmed form for the same reason.
         if (password == null || password.trim().isEmpty()) {
-            throw new IllegalArgumentException("Password is required");
+            throw new LocalizedException("auth.passwordRequired");
         }
         String normalizedPassword = password.trim();
         if (normalizedPassword.length() < 6) {
-            throw new IllegalArgumentException("Password must be at least 6 characters long");
+            throw new LocalizedException("auth.passwordTooShort");
         }
         String normalizedEmail = adminEmail == null ? null
                 : adminEmail.trim().toLowerCase(java.util.Locale.ROOT);
@@ -128,7 +128,7 @@ public class FamilyService {
     public Family getFamilyById(UUID familyId) {
         return familyRepository.findById(familyId)
                 .map(this::toDomain)
-                .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
     }
 
     /**
@@ -148,17 +148,17 @@ public class FamilyService {
      */
     public void deleteFamily(UUID familyId, UUID requesterId) {
         var family = familyRepository.findById(familyId)
-                .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var requester = memberRepository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("Requester not found: " + requesterId));
 
         var requesterFamilyId = requester.getFamily() != null ? requester.getFamily().getId() : null;
         if (!familyId.equals(requesterFamilyId)) {
-            throw new IllegalArgumentException("Not a member of this family");
+            throw new LocalizedException("error.accessDenied");
         }
         if (!Role.PARENT.name().equals(requester.getRole())) {
-            throw new IllegalArgumentException("Only a parent can delete the family");
+            throw new LocalizedException("parent.only");
         }
 
         // Cached device tokens and member lookups would otherwise keep resolving to
@@ -181,7 +181,7 @@ public class FamilyService {
 
     public Family updateFamilyName(UUID familyId, String name) {
         var entity = familyRepository.findById(familyId)
-                .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         entity.setName(name);
         entity.setUpdatedAt(OffsetDateTime.now());
         var saved = familyRepository.save(entity);
@@ -194,7 +194,7 @@ public class FamilyService {
             throw new LocalizedException("family.currency.unsupported", String.valueOf(currency));
         }
         var entity = familyRepository.findById(familyId)
-                .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         entity.setCurrency(currency);
         entity.setUpdatedAt(OffsetDateTime.now());
         return toDomain(familyRepository.save(entity));
@@ -215,10 +215,10 @@ public class FamilyService {
     public EmailLoginResult loginByEmailAndPassword(String email, String password) {
         // Validate input
         if (email == null || email.trim().isEmpty()) {
-            throw new IllegalArgumentException("Email is required");
+            throw new LocalizedException("auth.emailRequired");
         }
         if (password == null || password.trim().isEmpty()) {
-            throw new IllegalArgumentException("Password is required");
+            throw new LocalizedException("auth.passwordRequired");
         }
         
         // Lowercase explicitly rather than relying on the database collation happening
@@ -229,17 +229,17 @@ public class FamilyService {
         
         // Find member by email (not cached - always fresh from database)
         var member = memberRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new IllegalArgumentException("No account found with this email"));
+                .orElseThrow(() -> new LocalizedException("auth.noAccount"));
         
         // Only allow email login for PARENT or ASSISTANT role
         if (!Role.PARENT.name().equals(member.getRole()) && !Role.ASSISTANT.name().equals(member.getRole())) {
-            throw new IllegalArgumentException("Email login is only available for parent or assistant users");
+            throw new LocalizedException("auth.emailLoginAdultsOnly");
         }
         
         // Check if password is set
         String passwordHash = member.getPasswordHash();
         if (passwordHash == null || passwordHash.isEmpty()) {
-            throw new IllegalArgumentException("Password not set for this account. Please set a password first.");
+            throw new LocalizedException("auth.passwordNotSet");
         }
         
         // Verify password
@@ -272,7 +272,7 @@ public class FamilyService {
             } else {
                 log.warn("Password verification failed for email: {}, password hash is null or empty", normalizedEmail);
             }
-            throw new IllegalArgumentException("Invalid password");
+            throw new LocalizedException("auth.wrongPassword");
         }
         
         // Get old token to evict from cache

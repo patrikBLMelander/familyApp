@@ -1,5 +1,7 @@
 package com.familyapp.api.adventure;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.adventure.AdventureService;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.domain.adventure.LootResult;
@@ -141,9 +143,9 @@ public class AdventureController {
     ) {
         requireParentOf(deviceToken, memberId);
         var adventure = adventureRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Adventure not found: " + id));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         if (!adventure.getMember().getId().equals(memberId)) {
-            throw new IllegalArgumentException("Access denied");
+            throw new LocalizedException("error.accessDenied");
         }
         LootResult loot = adventureService.claim(id);
         return new LootResponse(loot.type().name(), loot.ref(), loot.quantity());
@@ -162,7 +164,7 @@ public class AdventureController {
 
     private UUID requireMember(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         return memberService.getMemberByDeviceToken(deviceToken).id();
     }
@@ -170,15 +172,15 @@ public class AdventureController {
     /** Authorises a parent acting for a child in the same family (mirrors PetController). */
     private void requireParentOf(String deviceToken, UUID memberId) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var requester = memberService.getMemberByDeviceToken(deviceToken);
         var member = memberService.getMemberById(memberId);
         if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
-            throw new IllegalArgumentException("Access denied");
+            throw new LocalizedException("error.accessDenied");
         }
         if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
-            throw new IllegalArgumentException("Only a parent can act for another member");
+            throw new LocalizedException("parent.only");
         }
     }
 

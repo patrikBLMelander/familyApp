@@ -1,5 +1,7 @@
 package com.familyapp.application.dailytask;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.domain.dailytask.DailyTask;
 import com.familyapp.infrastructure.dailytask.DailyTaskCompletionEntity;
 import com.familyapp.infrastructure.dailytask.DailyTaskCompletionJpaRepository;
@@ -245,7 +247,7 @@ public class DailyTaskService {
 
     public DailyTask updateTask(UUID taskId, String name, String description, Set<DailyTask.DayOfWeek> daysOfWeek, Set<UUID> memberIds, boolean isRequired, int xpPoints) {
         var entity = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Daily task not found: " + taskId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         entity.setName(name);
         entity.setDescription(description);
@@ -296,10 +298,10 @@ public class DailyTaskService {
             completionRepository.delete(completion);
         } else {
             var task = taskRepository.findById(taskId)
-                    .orElseThrow(() -> new IllegalArgumentException("Daily task not found: " + taskId));
+                    .orElseThrow(() -> new LocalizedException("error.notFound"));
 
             var member = memberRepository.findById(memberId)
-                    .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                    .orElseThrow(() -> new LocalizedException("error.notFound"));
 
             var completion = new DailyTaskCompletionEntity();
             completion.setId(UUID.randomUUID());

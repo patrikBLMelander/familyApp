@@ -74,7 +74,7 @@ class PetServiceGateTest {
 
         assertThatThrownBy(() -> service.selectEgg(MEMBER, "blue_egg", "Bamse"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not unlocked");
+                .hasMessage("egg.locked");
         verify(pets, never()).save(any());
     }
 

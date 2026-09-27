@@ -139,7 +139,7 @@ class RecurringAllowanceServiceTest {
         when(members.findById(PARENT)).thenReturn(Optional.of(stranger));
 
         assertThatThrownBy(() -> service.get(CHILD, PARENT))
-                .hasMessageContaining("Not a member of this family");
+                .hasMessage("error.accessDenied");
     }
 
     // ------------------------------------------------------------------ validering

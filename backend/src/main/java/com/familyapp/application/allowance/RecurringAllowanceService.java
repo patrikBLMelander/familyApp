@@ -385,7 +385,7 @@ public class RecurringAllowanceService {
      */
     private FamilyMemberEntity requireParentOf(UUID memberId, UUID requesterId) {
         if (requesterId == null) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var requester = memberRepository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
@@ -393,11 +393,11 @@ public class RecurringAllowanceService {
             throw new LocalizedException("allowance.parentOnly");
         }
         var child = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found"));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         var requesterFamily = requester.getFamily() != null ? requester.getFamily().getId() : null;
         var childFamily = child.getFamily() != null ? child.getFamily().getId() : null;
         if (requesterFamily == null || !requesterFamily.equals(childFamily)) {
-            throw new IllegalArgumentException("Not a member of this family");
+            throw new LocalizedException("error.accessDenied");
         }
         return requester;
     }

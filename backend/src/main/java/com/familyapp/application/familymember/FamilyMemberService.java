@@ -73,7 +73,7 @@ public class FamilyMemberService {
                 .orElseThrow(() -> {
                     // Evict from cache if member not found (prevents stale cache)
                     cacheService.evictDeviceToken(deviceToken);
-                    return new IllegalArgumentException("Family member not found for device token");
+                    return new LocalizedException("auth.notSignedIn");
                 });
         
         // Double-check: If cached member exists but doesn't match DB, evict cache
@@ -105,7 +105,7 @@ public class FamilyMemberService {
                 .orElseThrow(() -> {
                     // Evict from cache if member doesn't exist (prevents caching null)
                     cacheService.evictMember(memberId);
-                    return new IllegalArgumentException("Family member not found: " + memberId);
+                    return new LocalizedException("error.notFound");
                 });
     }
 
@@ -133,10 +133,10 @@ public class FamilyMemberService {
      */
     private FamilyMemberEntity requireAdministrableBy(UUID memberId, UUID requesterId) {
         if (requesterId == null) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         var requester = repository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
 
@@ -144,13 +144,13 @@ public class FamilyMemberService {
         var requesterFamily = requester.getFamily();
         if (targetFamily == null || requesterFamily == null
                 || !targetFamily.getId().equals(requesterFamily.getId())) {
-            throw new IllegalArgumentException("Cannot administer a member of a different family");
+            throw new LocalizedException("error.accessDenied");
         }
 
         boolean isParent = Role.PARENT.name().equals(requester.getRole());
         boolean isSelf = requester.getId().equals(memberId);
         if (!isParent && !isSelf) {
-            throw new IllegalArgumentException("Only a parent can administer another member");
+            throw new LocalizedException("parent.only");
         }
         return entity;
     }
@@ -165,7 +165,7 @@ public class FamilyMemberService {
         // Set family
         if (familyId != null) {
             var family = familyRepository.findById(familyId)
-                    .orElseThrow(() -> new IllegalArgumentException("Family not found: " + familyId));
+                    .orElseThrow(() -> new LocalizedException("error.notFound"));
             entity.setFamily(family);
         }
         
@@ -205,7 +205,7 @@ public class FamilyMemberService {
     public FamilyMember updateMember(UUID memberId, String name, UUID requesterId) {
         requireAdministrableBy(memberId, requesterId);
         var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
         
@@ -236,13 +236,13 @@ public class FamilyMemberService {
     @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
     public FamilyMember updateEmail(UUID memberId, String email, UUID requesterId) {
         var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
         
         // Only allow email updates for PARENT or ASSISTANT role
         if (!Role.PARENT.name().equals(entity.getRole()) && !Role.ASSISTANT.name().equals(entity.getRole())) {
-            throw new IllegalArgumentException("Email can only be set for parent or assistant users");
+            throw new LocalizedException("member.emailAdultsOnly");
         }
         
         // Mandatory: see requireAdministrableBy. This used to be skipped entirely
@@ -252,7 +252,7 @@ public class FamilyMemberService {
         // Validate email format (basic check)
         if (email != null && !email.trim().isEmpty()) {
             if (!email.contains("@") || !email.contains(".")) {
-                throw new IllegalArgumentException("Invalid email format");
+                throw new LocalizedException("auth.emailInvalid");
             }
             
             // Lowercased so the duplicate check and the stored value agree with login,
@@ -260,7 +260,7 @@ public class FamilyMemberService {
             String trimmedEmail = email.trim().toLowerCase(java.util.Locale.ROOT);
             var existingMember = repository.findByEmail(trimmedEmail);
             if (existingMember.isPresent() && !existingMember.get().getId().equals(memberId)) {
-                throw new IllegalArgumentException("Email is already in use by another account");
+                throw new LocalizedException("auth.emailInUse");
             }
         }
         
@@ -280,7 +280,7 @@ public class FamilyMemberService {
         } catch (DataIntegrityViolationException e) {
             // Handle unique constraint violation (email already exists)
             if (e.getMessage() != null && e.getMessage().contains("email")) {
-                throw new IllegalArgumentException("Email is already in use by another account");
+                throw new LocalizedException("auth.emailInUse");
             }
             throw e;
         }
@@ -301,13 +301,13 @@ public class FamilyMemberService {
     @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
     public FamilyMember updatePassword(UUID memberId, String newPassword, UUID requesterId) {
         var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
         
         // Only allow password updates for PARENT or ASSISTANT role
         if (!Role.PARENT.name().equals(entity.getRole()) && !Role.ASSISTANT.name().equals(entity.getRole())) {
-            throw new IllegalArgumentException("Password can only be set for parent or assistant users");
+            throw new LocalizedException("member.passwordAdultsOnly");
         }
         
         // Mandatory: see requireAdministrableBy. This used to be skipped entirely
@@ -316,10 +316,10 @@ public class FamilyMemberService {
         
         // Validate password
         if (newPassword == null || newPassword.trim().isEmpty()) {
-            throw new IllegalArgumentException("Password is required");
+            throw new LocalizedException("auth.passwordRequired");
         }
         if (newPassword.length() < 6) {
-            throw new IllegalArgumentException("Password must be at least 6 characters long");
+            throw new LocalizedException("auth.passwordTooShort");
         }
         
         // Trimmed, to match what login compares against. See FamilyService.
@@ -351,7 +351,7 @@ public class FamilyMemberService {
         // Removing yourself from the device you are holding is never the intent, and
         // there is no way back from it.
         if (memberId.equals(requesterId)) {
-            throw new IllegalArgumentException("You cannot remove yourself");
+            throw new LocalizedException("member.cannotRemoveSelf");
         }
         deleteMemberInternal(target.getId());
     }
@@ -360,12 +360,12 @@ public class FamilyMemberService {
         // Prevent deletion of admin user
         UUID adminId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         if (adminId.equals(memberId)) {
-            throw new IllegalArgumentException("Cannot delete admin user");
+            throw new LocalizedException("member.cannotDeleteAdmin");
         }
         
         // Get member before deletion to evict cache
         var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
         String deviceToken = entity.getDeviceToken();
         
@@ -434,12 +434,12 @@ public class FamilyMemberService {
      */
     public FamilyMember linkDeviceToMember(String deviceToken, UUID memberId) {
         var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         // Check if token is already used by another member
         repository.findByDeviceToken(deviceToken).ifPresent(existing -> {
             if (!existing.getId().equals(memberId)) {
-                throw new IllegalArgumentException("Device token already in use");
+                throw new LocalizedException("device.inUse");
             }
         });
         
@@ -487,24 +487,24 @@ public class FamilyMemberService {
      */
     public FamilyMember linkDeviceByInviteToken(String inviteToken, String deviceToken) {
         if (inviteToken == null || inviteToken.isBlank()) {
-            throw new IllegalArgumentException("Invalid invite token");
+            throw new LocalizedException("invite.invalid");
         }
         if (deviceToken == null || deviceToken.isBlank()) {
             throw new IllegalArgumentException("Device token cannot be null or empty");
         }
 
         var entity = repository.findByInviteToken(inviteToken.trim())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid invite token"));
+                .orElseThrow(() -> new LocalizedException("invite.invalid"));
 
         var expiresAt = entity.getInviteExpiresAt();
         if (expiresAt == null || expiresAt.isBefore(OffsetDateTime.now())) {
-            throw new IllegalArgumentException("Invite token has expired");
+            throw new LocalizedException("invite.expired");
         }
 
         // Check if deviceToken is already used by another member
         repository.findByDeviceToken(deviceToken).ifPresent(existing -> {
             if (!existing.getId().equals(entity.getId())) {
-                throw new IllegalArgumentException("Device token already in use");
+                throw new LocalizedException("device.inUse");
             }
         });
         
@@ -544,13 +544,13 @@ public class FamilyMemberService {
     @CachePut(value = "members", key = "#memberId != null ? #memberId.toString() : 'null'", unless = "#result == null || #memberId == null")
     public FamilyMember updatePetSettings(UUID memberId, Boolean enabled, UUID requesterId) {
         var entity = repository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
         
         // Only allow pet settings for PARENT role
         if (!Role.PARENT.name().equals(entity.getRole())) {
-            throw new IllegalArgumentException("Pets can only be enabled for parent users");
+            throw new LocalizedException("member.petsParentOnly");
         }
         
         // Mandatory: see requireAdministrableBy. This used to be skipped entirely

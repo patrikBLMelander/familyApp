@@ -1,5 +1,7 @@
 package com.familyapp.application.calendar;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.xp.XpService;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.pet.CollectedFoodService;
@@ -534,7 +536,7 @@ public class CalendarService {
             Boolean isRequired
     ) {
         var entity = eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         if (categoryId != null) {
             categoryRepository.findById(categoryId).ifPresent(entity::setCategory);
@@ -631,7 +633,7 @@ public class CalendarService {
         }
         
         var entity = eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         var baseEvent = toDomain(entity);
         
@@ -713,7 +715,7 @@ public class CalendarService {
         }
         
         var entity = eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         var baseEvent = toDomain(entity);
         
@@ -850,14 +852,14 @@ public class CalendarService {
     public CalendarEvent getEventById(UUID eventId) {
         return eventRepository.findById(eventId)
                 .map(this::toDomain)
-                .orElseThrow(() -> new IllegalArgumentException("Event not found: " + eventId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
     }
 
     @Transactional(readOnly = true)
     public CalendarEventCategory getCategoryById(UUID categoryId) {
         return categoryRepository.findById(categoryId)
                 .map(this::toDomainCategory)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
     }
 
     @Transactional(readOnly = true)
@@ -890,14 +892,14 @@ public class CalendarService {
     public CalendarEventCategory createCategory(UUID familyId, String name, String color) {
         // Validate name
         if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Category name is required");
+            throw new LocalizedException("category.nameRequired");
         }
         
         // Check if category with this name already exists for this family
         if (familyId != null) {
             var existingCategory = categoryRepository.findByFamilyIdAndName(familyId, name.trim());
             if (existingCategory.isPresent()) {
-                throw new IllegalArgumentException("En kategori med namnet '" + name.trim() + "' finns redan");
+                throw new LocalizedException("category.exists", name.trim());
             }
         }
         
@@ -925,7 +927,7 @@ public class CalendarService {
         } catch (DataIntegrityViolationException e) {
             // Handle unique constraint violation (category name already exists)
             if (e.getMessage() != null && e.getMessage().contains("unique_category_name_per_family")) {
-                throw new IllegalArgumentException("En kategori med namnet '" + name.trim() + "' finns redan");
+                throw new LocalizedException("category.exists", name.trim());
             }
             throw e;
         }
@@ -947,11 +949,11 @@ public class CalendarService {
     public CalendarEventCategory updateCategory(UUID categoryId, String name, String color) {
         // Validate name
         if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Category name is required");
+            throw new LocalizedException("category.nameRequired");
         }
         
         var entity = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         UUID familyId = entity.getFamily() != null ? entity.getFamily().getId() : null;
         
@@ -959,7 +961,7 @@ public class CalendarService {
         if (familyId != null) {
             var existingCategory = categoryRepository.findByFamilyIdAndName(familyId, name.trim());
             if (existingCategory.isPresent() && !existingCategory.get().getId().equals(categoryId)) {
-                throw new IllegalArgumentException("En kategori med namnet '" + name.trim() + "' finns redan");
+                throw new LocalizedException("category.exists", name.trim());
             }
         }
         
@@ -979,7 +981,7 @@ public class CalendarService {
         } catch (DataIntegrityViolationException e) {
             // Handle unique constraint violation (category name already exists)
             if (e.getMessage() != null && e.getMessage().contains("unique_category_name_per_family")) {
-                throw new IllegalArgumentException("En kategori med namnet '" + name.trim() + "' finns redan");
+                throw new LocalizedException("category.exists", name.trim());
             }
             throw e;
         }
@@ -997,7 +999,7 @@ public class CalendarService {
     public void deleteCategory(UUID categoryId) {
         // Check if category exists before deletion
         if (!categoryRepository.existsById(categoryId)) {
-            throw new IllegalArgumentException("Category not found: " + categoryId);
+            throw new LocalizedException("error.notFound");
         }
         
         categoryRepository.deleteById(categoryId);
@@ -1062,7 +1064,7 @@ public class CalendarService {
      */
     public CalendarEventTaskCompletion markTaskCompleted(UUID eventId, UUID memberId, LocalDate occurrenceDate) {
         var eventEntity = eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         if (!eventEntity.isTask()) {
             throw new IllegalArgumentException("Event is not a task (isTask=false)");
@@ -1075,7 +1077,7 @@ public class CalendarService {
         // Get member entity for validation (need to check family relation)
         // Use memberService to ensure cache is used and entity is properly loaded
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         // Ensure family is loaded (prevent lazy loading issues with cached entities)
         if (member.getFamily() != null) {
@@ -1086,7 +1088,7 @@ public class CalendarService {
         // Use memberDomain.familyId() which is already loaded (from cache or DB)
         if (eventEntity.getFamily() == null || memberDomain.familyId() == null ||
             !eventEntity.getFamily().getId().equals(memberDomain.familyId())) {
-            throw new IllegalArgumentException("Member is not in the same family as the event");
+            throw new LocalizedException("error.accessDenied");
         }
         
         // Validate occurrence date
@@ -1139,7 +1141,7 @@ public class CalendarService {
      */
     public void unmarkTaskCompleted(UUID eventId, UUID memberId, LocalDate occurrenceDate) {
         var eventEntity = eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         var completion = completionRepository.findByEventIdAndMemberIdAndOccurrenceDate(eventId, memberId, occurrenceDate);
         if (completion.isPresent()) {

@@ -1,5 +1,7 @@
 package com.familyapp.application.affiliate;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.subscription.SubscriptionService;
 import com.familyapp.domain.affiliate.AffiliateStatus;
 import com.familyapp.domain.affiliate.CommissionStatus;
@@ -186,7 +188,8 @@ public class AffiliateService {
         }
         var affiliate = affiliateRepository.findByReferralCodeIgnoreCase(normaliseCode(requireText(code, "code")))
                 .filter(a -> !AffiliateStatus.PAUSED.name().equalsIgnoreCase(a.getStatus()))
-                .orElseThrow(() -> new IllegalArgumentException("Unknown referral code"));
+                // Typed by a family in the app, so it is said in their language.
+                .orElseThrow(() -> new LocalizedException("referral.unknown"));
         var referral = new AffiliateReferralEntity();
         referral.setId(UUID.randomUUID());
         referral.setAffiliateId(affiliate.getId());

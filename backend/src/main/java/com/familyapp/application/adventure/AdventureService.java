@@ -1,5 +1,7 @@
 package com.familyapp.application.adventure;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.pet.CollectedFoodService;
 import com.familyapp.domain.adventure.EggRarity;
 import com.familyapp.domain.adventure.LootResult;
@@ -98,7 +100,7 @@ public class AdventureService {
             }
             if (member == null) {
                 member = memberRepository.findById(memberId)
-                        .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                        .orElseThrow(() -> new LocalizedException("error.notFound"));
             }
             var row = new ChildEggUnlockEntity();
             row.setId(UUID.randomUUID());
@@ -180,10 +182,10 @@ public class AdventureService {
     public AdventureEntity start(UUID memberId, String scene) {
         ensureCommonsUnlocked(memberId);
         if (ticketBalance(memberId) <= 0) {
-            throw new IllegalStateException("No adventure tickets available");
+            throw new LocalizedException("adventure.noTickets");
         }
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         var adventure = new AdventureEntity();
         adventure.setId(UUID.randomUUID());
         adventure.setMember(member);
@@ -199,14 +201,14 @@ public class AdventureService {
      *  rather than resolving again. */
     public LootResult claim(UUID adventureId) {
         var adventure = adventureRepository.findById(adventureId)
-                .orElseThrow(() -> new IllegalArgumentException("Adventure not found: " + adventureId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         if (STATUS_CLAIMED.equals(adventure.getStatus())) {
             return storedLoot(adventure);
         }
         var readyAt = adventure.getStartedAt().plusSeconds(adventure.getDurationSecs());
         if (OffsetDateTime.now().isBefore(readyAt)) {
-            throw new IllegalStateException("Adventure not finished yet");
+            throw new LocalizedException("adventure.notFinished");
         }
 
         UUID memberId = adventure.getMember().getId();
@@ -309,7 +311,7 @@ public class AdventureService {
             return;
         }
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         var row = new ChildEggUnlockEntity();
         row.setId(UUID.randomUUID());
         row.setMember(member);
@@ -324,7 +326,7 @@ public class AdventureService {
             return;
         }
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         var row = new ChildInventoryEntity();
         row.setId(UUID.randomUUID());
         row.setMember(member);

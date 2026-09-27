@@ -52,7 +52,7 @@ public class WalletService {
         return walletRepository.findByMemberId(memberId)
                 .orElseGet(() -> {
                     var member = memberRepository.findById(memberId)
-                            .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                            .orElseThrow(() -> new LocalizedException("error.notFound"));
                     
                     var wallet = new ChildWalletEntity();
                     wallet.setId(UUID.randomUUID());

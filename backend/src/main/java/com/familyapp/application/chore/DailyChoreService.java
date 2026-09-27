@@ -90,7 +90,7 @@ public class DailyChoreService {
         validateSameFamily(requesterId, memberId);
 
         var memberEntity = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Member not found"));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var entity = new DailyChoreEntity();
         entity.setId(UUID.randomUUID());
@@ -108,7 +108,7 @@ public class DailyChoreService {
 
     public void deleteChore(UUID requesterId, UUID choreId) {
         var chore = choreRepository.findById(choreId)
-                .orElseThrow(() -> new IllegalArgumentException("Chore not found"));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         validateSameFamilyByIds(requesterId, chore.getFamily().getId());
         choreRepository.delete(chore);
@@ -118,7 +118,7 @@ public class DailyChoreService {
     public DailyChore updateChore(
             UUID requesterId, UUID choreId, String title, List<String> weekdays, int xpPoints) {
         var chore = choreRepository.findById(choreId)
-                .orElseThrow(() -> new IllegalArgumentException("Chore not found"));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         validateSameFamilyByIds(requesterId, chore.getFamily().getId());
         chore.setTitle(title);
@@ -130,7 +130,7 @@ public class DailyChoreService {
 
     public DailyChoreCompletion markCompleted(UUID requesterId, UUID choreId, LocalDate date) {
         var chore = choreRepository.findById(choreId)
-                .orElseThrow(() -> new IllegalArgumentException("Chore not found"));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         validateSameFamilyByIds(requesterId, chore.getFamily().getId());
 
@@ -163,7 +163,7 @@ public class DailyChoreService {
 
     public void unmarkCompleted(UUID requesterId, UUID choreId, LocalDate date) {
         var chore = choreRepository.findById(choreId)
-                .orElseThrow(() -> new IllegalArgumentException("Chore not found"));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         validateSameFamilyByIds(requesterId, chore.getFamily().getId());
 
@@ -185,9 +185,9 @@ public class DailyChoreService {
         var requester = memberRepository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Member not found"));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         if (!requester.getFamily().getId().equals(member.getFamily().getId())) {
-            throw new IllegalArgumentException("Access denied: not in same family");
+            throw new LocalizedException("error.accessDenied");
         }
     }
 
@@ -195,7 +195,7 @@ public class DailyChoreService {
         var requester = memberRepository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("Requester not found"));
         if (!requester.getFamily().getId().equals(familyId)) {
-            throw new IllegalArgumentException("Access denied: not in same family");
+            throw new LocalizedException("error.accessDenied");
         }
     }
 

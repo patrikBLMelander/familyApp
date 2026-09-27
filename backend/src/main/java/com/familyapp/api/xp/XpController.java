@@ -1,5 +1,7 @@
 package com.familyapp.api.xp;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.pet.CollectedFoodService;
 import com.familyapp.application.xp.XpService;
@@ -35,12 +37,12 @@ public class XpController {
      */
     private void requireSameFamily(String deviceToken, java.util.UUID memberId) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var requester = memberService.getMemberByDeviceToken(deviceToken);
         var member = memberService.getMemberById(memberId);
         if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
-            throw new IllegalArgumentException("Access denied");
+            throw new LocalizedException("error.accessDenied");
         }
     }
 
@@ -54,10 +56,10 @@ public class XpController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         var progress = xpService.getCurrentProgress(memberId);
@@ -78,10 +80,10 @@ public class XpController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         return xpService.getHistory(memberId).stream()
@@ -125,7 +127,7 @@ public class XpController {
     ) {
         // Verify the requester is a parent in the same family
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         try {
@@ -134,22 +136,22 @@ public class XpController {
             
             // Check if same family
             if (!requester.familyId().equals(member.familyId())) {
-                throw new IllegalArgumentException("Access denied");
+                throw new LocalizedException("error.accessDenied");
             }
 
             // Only parents can award bonus XP
             if (requester.role() != FamilyMember.Role.PARENT) {
-                throw new IllegalArgumentException("Only parents can award bonus XP");
+                throw new LocalizedException("parent.only");
             }
 
             // Only award to children and assistants
             if (member.role() != FamilyMember.Role.CHILD && member.role() != FamilyMember.Role.ASSISTANT) {
-                throw new IllegalArgumentException("Bonus XP can only be awarded to children and assistants");
+                throw new LocalizedException("xp.bonusChildOnly");
             }
 
             // Validate XP amount (reasonable limit)
             if (request.xpPoints() <= 0 || request.xpPoints() > 100) {
-                throw new IllegalArgumentException("XP points must be between 1 and 100");
+                throw new LocalizedException("xp.pointsRange");
             }
 
             // Create bonus food instead of awarding XP directly
@@ -170,7 +172,7 @@ public class XpController {
                 return toResponse(newProgress);
             }
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid device token or access denied: " + e.getMessage());
+            throw new LocalizedException("auth.notSignedIn");
         }
     }
 

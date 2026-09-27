@@ -1,5 +1,7 @@
 package com.familyapp.api.familymember;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.subscription.EntitlementGuard;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.domain.familymember.FamilyMember;
@@ -60,7 +62,7 @@ public class FamilyMemberController {
      */
     private UUID requireRequesterId(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         return service.getMemberByDeviceToken(deviceToken).id();
     }
@@ -81,11 +83,11 @@ public class FamilyMemberController {
         // rows from an unauthenticated caller. And adding family members is a parent's
         // job; a child should not be able to.
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var requester = service.getMemberByDeviceToken(deviceToken);
         if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
-            throw new IllegalArgumentException("Only a parent can add family members");
+            throw new LocalizedException("parent.only");
         }
         if (requester.familyId() == null) {
             throw new IllegalArgumentException("Requester does not belong to a family");
@@ -182,8 +184,11 @@ public class FamilyMemberController {
         try {
             var member = service.linkDeviceByInviteToken(request.inviteToken(), request.deviceToken());
             return toResponse(member);
+        } catch (LocalizedException e) {
+            // Already says what went wrong ("the invite has expired", "this phone is taken").
+            throw e;
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid invite token or device token: " + e.getMessage(), e);
+            throw new LocalizedException("invite.invalid");
         }
     }
 

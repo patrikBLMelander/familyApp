@@ -184,13 +184,13 @@ public class DailyChoreController {
 
     private UUID getMemberIdFromToken(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         try {
             var member = memberService.getMemberByDeviceToken(deviceToken);
             return member.id();
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid device token");
+            throw new LocalizedException("auth.notSignedIn");
         }
     }
 

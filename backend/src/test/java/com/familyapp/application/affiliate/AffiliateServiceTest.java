@@ -156,7 +156,7 @@ class AffiliateServiceTest {
         when(affiliates.findByReferralCodeIgnoreCase(any())).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.redeem(FAMILY, "NOPE"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unknown referral code");
+                .hasMessage("referral.unknown");
     }
 
     @Test

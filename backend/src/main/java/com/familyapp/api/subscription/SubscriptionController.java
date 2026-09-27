@@ -1,5 +1,7 @@
 package com.familyapp.api.subscription;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.subscription.SubscriptionService;
 import com.familyapp.domain.subscription.SubscriptionStatus;
@@ -33,7 +35,7 @@ public class SubscriptionController {
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken
     ) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var member = memberService.getMemberByDeviceToken(deviceToken);
         var familyId = member.familyId();

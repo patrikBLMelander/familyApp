@@ -1,5 +1,7 @@
 package com.familyapp.api.pet;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.pet.PetService;
 import com.familyapp.application.pet.CollectedFoodService;
@@ -39,10 +41,10 @@ public class PetController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         var pet = petService.getCurrentPet(memberId);
@@ -67,13 +69,13 @@ public class PetController {
 
                 // Children, assistants, and parents can select eggs
                 if (member.role() != FamilyMember.Role.CHILD && member.role() != FamilyMember.Role.ASSISTANT && member.role() != FamilyMember.Role.PARENT) {
-                    throw new IllegalArgumentException("Only children, assistants, and parents can select eggs");
+                    throw new LocalizedException("pet.roleNotAllowed");
                 }
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token: " + e.getMessage());
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         // Validate request
@@ -95,10 +97,10 @@ public class PetController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         return petService.getPetHistory(memberId).stream()
@@ -189,7 +191,7 @@ public class PetController {
 
     private UUID requireMember(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         return memberService.getMemberByDeviceToken(deviceToken).id();
     }
@@ -240,13 +242,13 @@ public class PetController {
                 if (member.role() != FamilyMember.Role.CHILD && 
                     member.role() != FamilyMember.Role.ASSISTANT && 
                     member.role() != FamilyMember.Role.PARENT) {
-                    throw new IllegalArgumentException("Only children, assistants, and parents can feed pets");
+                    throw new LocalizedException("pet.roleNotAllowed");
                 }
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token: " + e.getMessage());
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         // Validate request
@@ -258,7 +260,7 @@ public class PetController {
         int actualFedAmount = foodService.markFoodAsFed(memberId, request.xpAmount());
         
         if (actualFedAmount == 0) {
-            throw new IllegalArgumentException("No unfed food available");
+            throw new LocalizedException("pet.noUnfedFood");
         }
         
         // Award XP for the actual amount fed
@@ -274,7 +276,7 @@ public class PetController {
      */
     private com.familyapp.domain.familymember.FamilyMember requireRequester(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         return memberService.getMemberByDeviceToken(deviceToken);
     }
@@ -284,7 +286,7 @@ public class PetController {
         var requester = requireRequester(deviceToken);
         var member = memberService.getMemberById(memberId);
         if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
-            throw new IllegalArgumentException("Access denied");
+            throw new LocalizedException("error.accessDenied");
         }
     }
 
@@ -297,10 +299,10 @@ public class PetController {
         var requester = requireRequester(deviceToken);
         var member = memberService.getMemberById(memberId);
         if (requester.familyId() == null || !requester.familyId().equals(member.familyId())) {
-            throw new IllegalArgumentException("Access denied");
+            throw new LocalizedException("error.accessDenied");
         }
         if (requester.role() != com.familyapp.domain.familymember.FamilyMember.Role.PARENT) {
-            throw new IllegalArgumentException("Only a parent can act for another member");
+            throw new LocalizedException("parent.only");
         }
     }
 
@@ -347,7 +349,7 @@ public class PetController {
 
         int actualFedAmount = foodService.markFoodAsFed(memberId, request.xpAmount());
         if (actualFedAmount == 0) {
-            throw new IllegalArgumentException("No unfed food available");
+            throw new LocalizedException("pet.noUnfedFood");
         }
         petService.feedPet(memberId, actualFedAmount);
     }
@@ -384,10 +386,10 @@ public class PetController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         var unfedFood = foodService.getUnfedFood(memberId);
@@ -409,10 +411,10 @@ public class PetController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 memberId = member.id();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         } else {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
 
         var lastFedAt = foodService.getLastFedAt(memberId);

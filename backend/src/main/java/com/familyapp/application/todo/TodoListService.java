@@ -1,5 +1,7 @@
 package com.familyapp.application.todo;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.domain.todo.TodoItem;
 import com.familyapp.domain.todo.TodoList;
 import com.familyapp.infrastructure.familymember.FamilyMemberJpaRepository;
@@ -66,7 +68,7 @@ public class TodoListService {
         
         if (ownerId != null) {
             var owner = memberRepository.findById(ownerId)
-                    .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + ownerId));
+                    .orElseThrow(() -> new LocalizedException("error.notFound"));
             entity.setOwner(owner);
         }
         
@@ -89,7 +91,7 @@ public class TodoListService {
 
     public TodoList updateListName(UUID listId, String name) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         list.setName(name);
         list.setUpdatedAt(OffsetDateTime.now());
@@ -100,7 +102,7 @@ public class TodoListService {
 
     public TodoList updateListColor(UUID listId, String color) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         list.setColor(color);
         list.setUpdatedAt(OffsetDateTime.now());
@@ -111,7 +113,7 @@ public class TodoListService {
 
     public TodoList updateListPrivacy(UUID listId, boolean isPrivate) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         
         list.setPrivate(isPrivate);
         list.setUpdatedAt(OffsetDateTime.now());
@@ -122,7 +124,7 @@ public class TodoListService {
 
     public TodoList addItem(UUID listId, String description) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var item = new TodoItemEntity();
         item.setId(UUID.randomUUID());
@@ -148,12 +150,12 @@ public class TodoListService {
 
     public TodoList toggleItem(UUID listId, UUID itemId) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var item = list.getItems().stream()
                 .filter(i -> i.getId().equals(itemId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Todo item not found: " + itemId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var now = OffsetDateTime.now();
         var done = !item.isDone();
@@ -179,7 +181,7 @@ public class TodoListService {
 
     public TodoList clearDone(UUID listId) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         list.getItems().removeIf(TodoItemEntity::isDone);
         list.setUpdatedAt(OffsetDateTime.now());
@@ -190,16 +192,16 @@ public class TodoListService {
 
     public TodoList updateItem(UUID listId, UUID itemId, String description) {
         if (description == null || description.trim().isEmpty()) {
-            throw new IllegalArgumentException("Description cannot be empty");
+            throw new LocalizedException("description.required");
         }
         
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var item = list.getItems().stream()
                 .filter(i -> i.getId().equals(itemId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Todo item not found: " + itemId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         item.setDescription(description.trim());
         list.setUpdatedAt(OffsetDateTime.now());
@@ -210,11 +212,11 @@ public class TodoListService {
 
     public TodoList deleteItem(UUID listId, UUID itemId) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var removed = list.getItems().removeIf(item -> item.getId().equals(itemId));
         if (!removed) {
-            throw new IllegalArgumentException("Todo item not found: " + itemId);
+            throw new LocalizedException("error.notFound");
         }
 
         list.setUpdatedAt(OffsetDateTime.now());
@@ -224,7 +226,7 @@ public class TodoListService {
 
     public TodoList reorderItems(UUID listId, List<UUID> orderedItemIds) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         var idToItem = list.getItems().stream()
                 .collect(java.util.stream.Collectors.toMap(TodoItemEntity::getId, i -> i));
@@ -264,7 +266,7 @@ public class TodoListService {
 
     public void deleteList(UUID listId) {
         var list = listRepository.findById(listId)
-                .orElseThrow(() -> new IllegalArgumentException("Todo list not found: " + listId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
         listRepository.delete(list);
     }
 

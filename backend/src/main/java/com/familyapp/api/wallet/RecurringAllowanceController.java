@@ -97,7 +97,7 @@ public class RecurringAllowanceController {
 
     private UUID requesterId(String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         return memberService.getMemberByDeviceToken(deviceToken).id();
     }

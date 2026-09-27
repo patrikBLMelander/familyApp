@@ -1,5 +1,7 @@
 package com.familyapp.application.adventure;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.pet.CollectedFoodService;
 import com.familyapp.domain.adventure.LootResult;
 import com.familyapp.domain.adventure.LootType;
@@ -119,8 +121,8 @@ class AdventureServiceTest {
         when(adventures.findById(ADVENTURE)).thenReturn(Optional.of(ongoing(OffsetDateTime.now(), 3600)));
 
         assertThatThrownBy(() -> service.claim(ADVENTURE))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("not finished");
+                .isInstanceOf(LocalizedException.class)
+                .hasMessage("adventure.notFinished");
         verify(adventures, never()).save(any());
     }
 
@@ -229,8 +231,8 @@ class AdventureServiceTest {
         when(adventures.countByMemberId(MEMBER)).thenReturn(0L);
 
         assertThatThrownBy(() -> service.start(MEMBER, "forest"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("No adventure tickets");
+                .isInstanceOf(LocalizedException.class)
+                .hasMessage("adventure.noTickets");
         verify(adventures, never()).save(any());
     }
 }

@@ -8,7 +8,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,5 +76,23 @@ class MessageTranslatorTest {
         assertThat(translator.systemText("Godis")).isEqualTo("Dulces");
         // Something a parent typed stays exactly as typed.
         assertThat(translator.systemText("Glass på stranden")).isEqualTo("Glass på stranden");
+    }
+
+    @Test
+    void everyLanguageHasTheSameMessages() throws IOException {
+        // A key missing in one file would fall back to English for that language only --
+        // easy to miss by hand, so every file has to list exactly what the English one does.
+        var english = load("messages.properties").stringPropertyNames();
+        for (var file : new String[] {"messages_sv.properties", "messages_de.properties", "messages_es.properties"}) {
+            assertThat(load(file).stringPropertyNames()).as(file).isEqualTo(english);
+        }
+    }
+
+    private static Properties load(String file) throws IOException {
+        var properties = new Properties();
+        try (var in = MessageTranslatorTest.class.getClassLoader().getResourceAsStream(file)) {
+            properties.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+        }
+        return properties;
     }
 }

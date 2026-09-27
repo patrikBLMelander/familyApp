@@ -1,5 +1,7 @@
 package com.familyapp.application.xp;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.adventure.AdventureService;
 import com.familyapp.application.pet.PetService;
 import com.familyapp.domain.xp.MemberXpHistory;
@@ -61,7 +63,7 @@ public class XpService {
      */
     public void awardXp(UUID memberId, int xpPoints) {
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         // Award XP to children, assistants, and parents
         String role = member.getRole();
@@ -118,7 +120,7 @@ public class XpService {
      */
     public void awardBonusXp(UUID memberId, int xpPoints) {
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         // Award XP to children, assistants, and parents
         String role = member.getRole();
@@ -173,7 +175,7 @@ public class XpService {
      */
     public void removeXp(UUID memberId, int xpPoints) {
         var member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new IllegalArgumentException("Family member not found: " + memberId));
+                .orElseThrow(() -> new LocalizedException("error.notFound"));
 
         // Only remove XP from children and assistants
         String role = member.getRole();

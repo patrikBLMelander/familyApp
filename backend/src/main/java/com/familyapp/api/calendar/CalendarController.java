@@ -1,5 +1,7 @@
 package com.familyapp.api.calendar;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.calendar.CalendarService;
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.domain.calendar.CalendarEvent;
@@ -74,7 +76,7 @@ public class CalendarController {
                 familyId = member.familyId();
                 createdById = member.id();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -127,7 +129,7 @@ public class CalendarController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -135,7 +137,7 @@ public class CalendarController {
         if (requesterFamilyId != null) {
             var event = service.getEventById(eventId);
             if (!requesterFamilyId.equals(event.familyId())) {
-                throw new IllegalArgumentException("Access denied: Event does not belong to your family");
+                throw new LocalizedException("error.accessDenied");
             }
         }
         
@@ -219,7 +221,7 @@ public class CalendarController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -227,7 +229,7 @@ public class CalendarController {
         if (requesterFamilyId != null) {
             var event = service.getEventById(eventId);
             if (!requesterFamilyId.equals(event.familyId())) {
-                throw new IllegalArgumentException("Access denied: Event does not belong to your family");
+                throw new LocalizedException("error.accessDenied");
             }
         }
         // If scope is provided, use deleteEventWithScope
@@ -287,7 +289,7 @@ public class CalendarController {
                 var member = memberService.getMemberByDeviceToken(deviceToken);
                 familyId = member.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -312,7 +314,7 @@ public class CalendarController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -320,7 +322,7 @@ public class CalendarController {
         if (requesterFamilyId != null) {
             var category = service.getCategoryById(categoryId);
             if (!requesterFamilyId.equals(category.familyId())) {
-                throw new IllegalArgumentException("Access denied: Category does not belong to your family");
+                throw new LocalizedException("error.accessDenied");
             }
         }
         
@@ -341,7 +343,7 @@ public class CalendarController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -349,7 +351,7 @@ public class CalendarController {
         if (requesterFamilyId != null) {
             var category = service.getCategoryById(categoryId);
             if (!requesterFamilyId.equals(category.familyId())) {
-                throw new IllegalArgumentException("Access denied: Category does not belong to your family");
+                throw new LocalizedException("error.accessDenied");
             }
         }
         
@@ -378,7 +380,7 @@ public class CalendarController {
                     memberId = requester.id();
                 }
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -390,7 +392,7 @@ public class CalendarController {
         if (requesterFamilyId != null) {
             var targetMember = memberService.getMemberById(memberId);
             if (!requesterFamilyId.equals(targetMember.familyId())) {
-                throw new IllegalArgumentException("Access denied: Member is not in the same family");
+                throw new LocalizedException("error.accessDenied");
             }
         }
         
@@ -412,10 +414,10 @@ public class CalendarController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 var targetMember = memberService.getMemberById(memberId);
                 if (!requester.familyId().equals(targetMember.familyId())) {
-                    throw new IllegalArgumentException("Access denied: Member is not in the same family");
+                    throw new LocalizedException("error.accessDenied");
                 }
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token or access denied");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -434,7 +436,7 @@ public class CalendarController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -442,7 +444,7 @@ public class CalendarController {
         if (requesterFamilyId != null) {
             var event = service.getEventById(eventId);
             if (!requesterFamilyId.equals(event.familyId())) {
-                throw new IllegalArgumentException("Access denied: Event does not belong to your family");
+                throw new LocalizedException("error.accessDenied");
             }
         }
         
@@ -460,12 +462,12 @@ public class CalendarController {
         // Mandatory: this used to be conditional on a token being present, so an
         // unauthenticated caller could read any member's task completions.
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         var requester = memberService.getMemberByDeviceToken(deviceToken);
         var targetMember = memberService.getMemberById(memberId);
         if (requester.familyId() == null || !requester.familyId().equals(targetMember.familyId())) {
-            throw new IllegalArgumentException("Access denied");
+            throw new LocalizedException("error.accessDenied");
         }
 
         

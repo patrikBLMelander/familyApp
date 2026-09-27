@@ -1,5 +1,7 @@
 package com.familyapp.api.todo;
 
+import com.familyapp.domain.i18n.LocalizedException;
+
 import com.familyapp.application.familymember.FamilyMemberService;
 import com.familyapp.application.todo.TodoListService;
 import com.familyapp.domain.todo.TodoItem;
@@ -192,7 +194,7 @@ public class TodoListController {
                 var requester = memberService.getMemberByDeviceToken(deviceToken);
                 requesterFamilyId = requester.familyId();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid device token");
+                throw new LocalizedException("auth.notSignedIn");
             }
         }
         
@@ -222,7 +224,7 @@ public class TodoListController {
      */
     private void validateListAccess(UUID listId, String deviceToken) {
         if (deviceToken == null || deviceToken.isEmpty()) {
-            throw new IllegalArgumentException("Device token is required");
+            throw new LocalizedException("auth.notSignedIn");
         }
         
         try {
@@ -235,10 +237,10 @@ public class TodoListController {
                     .findFirst();
             
             if (list.isEmpty()) {
-                throw new IllegalArgumentException("Access denied: List does not belong to your family");
+                throw new LocalizedException("error.accessDenied");
             }
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid device token or access denied");
+            throw new LocalizedException("auth.notSignedIn");
         }
     }
 
