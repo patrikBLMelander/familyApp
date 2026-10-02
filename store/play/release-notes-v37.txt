@@ -1,0 +1,28 @@
+<sv-SE>
+• Ny ryggsäcksknapp till äventyren 🎒
+• Slut på biljetter? Nu ser barnet hur nära nästa biljett det är, och vilka äventyr som väntar
+• Knappen "Gör dagens sysslor" leder rakt till sysslorna
+• Ramar och dekorationer från äventyren har namn på ditt språk
+• Små förbättringar
+</sv-SE>
+<en-US>
+• New backpack button for adventures 🎒
+• Out of tickets? Your child now sees how close the next ticket is, and which adventures are waiting
+• The "Do today's chores" button goes straight to the chores
+• Frames and decorations from adventures are named in your language
+• Small improvements
+</en-US>
+<de-DE>
+• Neuer Rucksack-Button für Abenteuer 🎒
+• Keine Tickets mehr? Jetzt sieht dein Kind, wie nah das nächste Ticket ist und welche Abenteuer warten
+• Der Button „Aufgaben für heute erledigen“ führt direkt zu den Aufgaben
+• Rahmen und Deko aus Abenteuern heißen jetzt in deiner Sprache
+• Kleine Verbesserungen
+</de-DE>
+<es-ES>
+• Nuevo botón de mochila para las aventuras 🎒
+• ¿Sin tickets? Ahora tu hijo o hija ve cuánto le falta para el siguiente ticket y qué aventuras le esperan
+• El botón «Hacer las tareas de hoy» lleva directo a las tareas
+• Los marcos y decoraciones de las aventuras tienen nombre en tu idioma
+• Pequeñas mejoras
+</es-ES>
