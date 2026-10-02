@@ -316,6 +316,10 @@ struct ContentView: View {
                             currentScreen = memberId == nil
                                 ? .childDashboard(childId: childId, childName: childName)
                                 : .childView(childId: childId, childName: childName)
+                        },
+                        // Same screen the dashboard opens; its back routes on the viewer's role.
+                        onOpenTasks: {
+                            currentScreen = .childTasks(childId: childId, childName: childName)
                         }
                     )
                 

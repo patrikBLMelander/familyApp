@@ -85,7 +85,7 @@
     <string name="amount_label">Belopp (%1$s)</string>
     <string name="amount_label_required">Belopp (%1$s) *</string>
     <string name="back_to_now">Tillbaka till nu</string>
-    <string name="band_adventures">🗺️ Äventyr</string>
+    <string name="band_adventures">Äventyr</string>
     <string name="band_name_level">%1$s · NIVÅ %2$d</string>
     <string name="band_wallet">Plånbok ›</string>
     <string name="band_wallet_amount">%1$s ›</string>
@@ -682,4 +682,17 @@
     <string name="fixture_tx_great_grandma">Gammelmormor</string>
     <string name="fixture_goal_bike">Ny cykel</string>
     <string name="fixture_goal_game">Nintendo-spel</string>
+    <string name="adv_waiting_scenes">Här väntar nästa äventyr</string>
+    <string name="adv_needs_ticket_badge">Biljett krävs</string>
+    <string name="adv_packed_named">%1$s har packat ryggsäcken! 🎒</string>
+    <string name="adv_packed">Ryggsäcken är packad! 🎒</string>
+    <string name="adv_do_chores">Gör dagens sysslor</string>
+    <plurals name="adv_xp_to_ticket">
+        <item quantity="one">Bara %d XP kvar till nästa biljett</item>
+        <item quantity="other">Bara %d XP kvar till nästa biljett</item>
+    </plurals>
+    <plurals name="adv_rare_eggs_left">
+        <item quantity="one">%d sällsynt ägg kvar att upptäcka</item>
+        <item quantity="other">%d sällsynta ägg kvar att upptäcka</item>
+    </plurals>
 </resources>

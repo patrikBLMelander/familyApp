@@ -472,7 +472,7 @@ struct ChildDayLayout<TopBar: View, Banner: View, Footer: View>: View {
     private var adventuresChip: some View {
         Button(action: { onOpenAdventures?() }) {
             HStack(spacing: 5) {
-                Image(systemName: "map.fill")
+                Image(systemName: "backpack.fill")
                     .font(.system(size: 12, weight: .semibold))
                 Text("Äventyr")
                     .font(.caption.weight(.bold))

@@ -8,6 +8,9 @@ struct AdventuresView: View {
     let childName: String
     var memberId: String?
     var onBack: () -> Void = {}
+    /// Leads to the child's chores from the no-ticket state -- that is where tickets are earned.
+    /// Nil hides the button.
+    var onOpenTasks: (() -> Void)?
 
     /// Non-nil renders this instead of calling the network. Only `fixture()` sets it; a
     /// plain stored property so the memberwise initialiser is the same in every build.
@@ -19,6 +22,9 @@ struct AdventuresView: View {
         let catalog: [LootCatalogItemDTO]
         let equippedFrame: String?
         let equippedSceneItem: String?
+        var pet: PetResponseDTO? = nil
+        var xp: XpProgressResponseDTO? = nil
+        var eggs: [EggCollectionItemDTO] = []
     }
 
     @State private var state: AdventureStateDTO?
@@ -32,6 +38,10 @@ struct AdventuresView: View {
     @State private var loot: ClaimLootResponseDTO?
     @State private var loadedAt = Date()
     @State private var now = Date()
+    @State private var pet: PetResponseDTO?
+    @State private var xp: XpProgressResponseDTO?
+    /// Rare and legendary eggs not yet unlocked; nil when the eggs could not be read.
+    @State private var rareEggsLeft: Int?
 
     private var palette: SeasonPalette { SeasonTheme.current(dark: false) }
 
@@ -87,9 +97,9 @@ struct AdventuresView: View {
                     sectionTitle(String(localized: "Skicka på äventyr"))
                     sceneGrid
                 } else if ongoing.isEmpty {
-                    Text("Klara fler nivåer för att få en äventyrsbiljett.")
-                        .font(.body)
-                        .foregroundStyle(palette.inkFaint)
+                    noTicketHero
+                    lockedScenes
+                    curiosityLine
                 }
 
                 if !ongoing.isEmpty {
@@ -104,6 +114,166 @@ struct AdventuresView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - No tickets
+
+    /// Rare and legendary eggs this child has not unlocked yet.
+    private static func rareLeft(_ eggs: [EggCollectionItemDTO]) -> Int {
+        eggs.filter { $0.rarity != "COMMON" && !$0.unlocked }.count
+    }
+
+    /// XP left to the next ticket, and how far along the way the child is (0...1).
+    /// Tickets come at every level-up, and after level 5 at every star (every 50 XP).
+    private var nextTicket: (remaining: Int, progress: Double)? {
+        guard let xp else { return nil }
+        if xp.currentLevel < 5 {
+            let span = xp.xpInCurrentLevel + xp.xpForNextLevel
+            guard span > 0 else { return nil }
+            return (xp.xpForNextLevel, Double(xp.xpInCurrentLevel) / Double(span))
+        }
+        let perStar = 50
+        let remaining = min(max(xp.xpToNextStar ?? perStar, 0), perStar)
+        return (remaining, Double(perStar - remaining) / Double(perStar))
+    }
+
+    private var heroTitle: String {
+        if let name = pet?.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
+            return String(localized: "\(name) har packat ryggsäcken! 🎒")
+        }
+        return String(localized: "Ryggsäcken är packad! 🎒")
+    }
+
+    /// Instead of a grey "no tickets" line: the child's own pet, ready to go, and exactly
+    /// how close the next ticket is. A wait reads as a goal, not a wall.
+    private var noTicketHero: some View {
+        VStack(spacing: 14) {
+            HStack(alignment: .bottom, spacing: -18) {
+                if let name = PetImagesIOS.petImageName(for: pet?.petType, growthStage: pet?.growthStage ?? 1),
+                   let img = UIImage(named: name) {
+                    Image(uiImage: img).resizable().scaledToFit()
+                        .frame(width: 120, height: 120)
+                        .zIndex(1)
+                }
+                Image("adventure_backpack").resizable().scaledToFit()
+                    .frame(width: 130, height: 130)
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityHidden(true)
+
+            Text(heroTitle)
+                .font(.title3.weight(.bold))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(palette.ink)
+
+            if let next = nextTicket {
+                VStack(spacing: 8) {
+                    Text(next.remaining == 1
+                         ? String(localized: "Bara 1 XP kvar till nästa biljett")
+                         : String(localized: "Bara \(next.remaining) XP kvar till nästa biljett"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(palette.tipStrong)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(palette.track)
+                            Capsule()
+                                .fill(LinearGradient(
+                                    colors: [Color(red: 0.92, green: 0.70, blue: 0.03),
+                                             Color(red: 0.99, green: 0.88, blue: 0.28)],
+                                    startPoint: .leading, endPoint: .trailing))
+                                .frame(width: max(12, geo.size.width * next.progress))
+                        }
+                    }
+                    .frame(height: 12)
+                    .accessibilityElement()
+                    .accessibilityLabel(String(localized: "Mot nästa biljett"))
+                    .accessibilityValue("\(Int((next.progress * 100).rounded())) %")
+                }
+            } else {
+                Text("Klara fler nivåer för att få en äventyrsbiljett.")
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(palette.inkSoft)
+            }
+
+            if let onOpenTasks {
+                Button(action: onOpenTasks) {
+                    Text("Gör dagens sysslor")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(palette.onAccent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(palette.accent))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(palette.tipBg))
+    }
+
+    /// The places waiting behind the next ticket, shown but locked -- something to want.
+    private var lockedScenes: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle(String(localized: "Här väntar nästa äventyr")).padding(.top, 4)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(scenes) { scene in
+                    ZStack(alignment: .bottomLeading) {
+                        if let name = PetImagesIOS.sceneImageName(scene.key), let img = UIImage(named: name) {
+                            Image(uiImage: img).resizable().scaledToFill()
+                                .frame(height: 92).frame(maxWidth: .infinity)
+                                .clipped()
+                                .grayscale(0.55)
+                                .opacity(0.8)
+                        } else {
+                            Rectangle().fill(palette.cardEdge).frame(height: 92)
+                        }
+                        LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
+                        Text(scene.label)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(10)
+                    }
+                    .frame(height: 92)
+                    .frame(maxWidth: .infinity)
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(palette.ink)
+                            .padding(7)
+                            .background(Circle().fill(.white.opacity(0.9)))
+                            .padding(8)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "\(scene.label), låst"))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var curiosityLine: some View {
+        if let left = rareEggsLeft, left > 0 {
+            HStack(spacing: 10) {
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Ellipse()
+                            .fill(palette.cardEdge)
+                            .frame(width: 22, height: 28)
+                            .overlay(Text("?").font(.caption.weight(.heavy)).foregroundStyle(palette.inkFaint))
+                    }
+                }
+                .accessibilityHidden(true)
+                Text(left == 1
+                     ? String(localized: "1 sällsynt ägg kvar att upptäcka")
+                     : String(localized: "\(left) sällsynta ägg kvar att upptäcka"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(palette.inkSoft)
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -310,6 +480,9 @@ struct AdventuresView: View {
             catalog = Dictionary(uniqueKeysWithValues: preloaded.catalog.map { ($0.id, $0) })
             equippedFrame = preloaded.equippedFrame
             equippedSceneItem = preloaded.equippedSceneItem
+            pet = preloaded.pet
+            xp = preloaded.xp
+            rareEggsLeft = preloaded.eggs.isEmpty ? nil : Self.rareLeft(preloaded.eggs)
             loadedAt = Date()
             loading = false
             return
@@ -321,7 +494,18 @@ struct AdventuresView: View {
             let inv = try await AdventureRepository.inventory(memberId: memberId)
             let cat = await AdventureRepository.lootCatalog()
             let pet = await AdventureRepository.currentPet(memberId: memberId)
+            // Only needed for the no-ticket state, and never worth failing the screen over.
+            async let xpLoad: XpProgressResponseDTO? = try? ApiClient.shared.send(
+                XpProgressResponseDTO.self,
+                path: memberId.map { "xp/members/\($0)/current" } ?? "xp/current",
+                method: "GET")
+            async let eggsLoad: [EggCollectionItemDTO]? = try? AdventureRepository.eggs(memberId: memberId)
+            let xpResult = await xpLoad
+            let eggsResult = await eggsLoad
             await MainActor.run {
+                self.pet = pet
+                xp = xpResult
+                rareEggsLeft = eggsResult.map(Self.rareLeft)
                 state = s
                 inventory = inv
                 catalog = Dictionary(uniqueKeysWithValues: cat.map { ($0.id, $0) })
@@ -477,6 +661,32 @@ struct LootReveal: View {
 
 #if DEBUG
 extension AdventuresView {
+
+    /// No tickets and nothing under way: the waiting state, with Kvitter seven XP from
+    /// the next level and five rare eggs still to find. KQ_SCREEN=adventures-empty.
+    static func emptyFixture() -> AdventuresView {
+        let rare = ["orange_egg", "black_egg", "cyan_egg", "gray_egg", "silver_egg"].map {
+            EggCollectionItemDTO(eggType: $0, petType: "bear", rarity: "RARE", unlocked: false, collected: false)
+        }
+        return AdventuresView(
+            childName: "Ella",
+            onOpenTasks: {},
+            preloaded: Preloaded(
+                state: AdventureStateDTO(ticketBalance: 0, adventures: []),
+                inventory: [],
+                catalog: [],
+                equippedFrame: nil,
+                equippedSceneItem: nil,
+                pet: ChildFixtures.pet,
+                xp: XpProgressResponseDTO(
+                    id: "x1", memberId: "child-1", year: 2026, month: 10,
+                    currentXp: 63, currentLevel: 3, totalTasksCompleted: 30,
+                    xpForNextLevel: 7, xpInCurrentLevel: 28, stars: 0, xpToNextStar: 0
+                ),
+                eggs: rare
+            )
+        )
+    }
 
     /// The adventures screen with sample data and no session, for store screenshots:
     /// tickets to spend, one adventure under way, and a few frames and decorations won.

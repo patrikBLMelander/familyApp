@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Backpack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -918,13 +919,24 @@ fun ChildDashboardScreen(
                                 color = Color.White.copy(alpha = 0.92f),
                                 modifier = Modifier.padding(end = 8.dp),
                             ) {
-                                Text(
-                                    text = tr(R.string.band_adventures),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = season.accent,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                )
+                                Row(
+                                    modifier = Modifier.padding(start = 10.dp, end = 12.dp, top = 7.dp, bottom = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Backpack,
+                                        contentDescription = null,
+                                        tint = season.accent,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text(
+                                        text = tr(R.string.band_adventures),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = season.accent,
+                                    )
+                                }
                             }
                         }
                         // Saldot, och vägen till plånboken. Ett tryck och inte ett kort:

@@ -85,7 +85,7 @@
     <string name="amount_label">Betrag (%1$s)</string>
     <string name="amount_label_required">Betrag (%1$s) *</string>
     <string name="back_to_now">Zurück zu jetzt</string>
-    <string name="band_adventures">🗺️ Abenteuer</string>
+    <string name="band_adventures">Abenteuer</string>
     <string name="band_name_level">%1$s · LEVEL %2$d</string>
     <string name="band_wallet">Geldbörse ›</string>
     <string name="band_wallet_amount">%1$s ›</string>
@@ -682,4 +682,17 @@
     <string name="fixture_tx_great_grandma">Uroma</string>
     <string name="fixture_goal_bike">Neues Fahrrad</string>
     <string name="fixture_goal_game">Nintendo-Spiel</string>
+    <string name="adv_waiting_scenes">Hier wartet das nächste Abenteuer</string>
+    <string name="adv_needs_ticket_badge">Ticket nötig</string>
+    <string name="adv_packed_named">%1$s hat den Rucksack gepackt! 🎒</string>
+    <string name="adv_packed">Der Rucksack ist gepackt! 🎒</string>
+    <string name="adv_do_chores">Aufgaben für heute erledigen</string>
+    <plurals name="adv_xp_to_ticket">
+        <item quantity="one">Nur noch %d XP bis zum nächsten Ticket</item>
+        <item quantity="other">Nur noch %d XP bis zum nächsten Ticket</item>
+    </plurals>
+    <plurals name="adv_rare_eggs_left">
+        <item quantity="one">Noch %d seltenes Ei zu entdecken</item>
+        <item quantity="other">Noch %d seltene Eier zu entdecken</item>
+    </plurals>
 </resources>

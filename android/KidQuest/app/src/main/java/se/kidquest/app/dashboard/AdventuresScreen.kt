@@ -4,6 +4,17 @@ import se.kidquest.app.i18n.trp
 import se.kidquest.app.i18n.tr
 import se.kidquest.app.R
 import androidx.compose.foundation.Image
+import se.kidquest.app.network.XpProgressResponse
+import se.kidquest.app.network.PetResponse
+import se.kidquest.app.network.EggOption
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -83,8 +94,12 @@ fun AdventuresScreen(
     childId: String,
     onBack: () -> Unit,
     actingAsParent: Boolean = false,
+    /** Opens the child's chores, from the "no tickets" card. Null falls back to onBack. */
+    onOpenChores: (() -> Unit)? = null,
     /** Debug harness only: this state instead of the network. */
     fixture: AdventureStateResponse? = null,
+    /** Debug harness only: the pet, XP and eggs the "no tickets" card reads. */
+    fixtureExtras: AdventuresExtras? = null,
 ) {
     val season = LocalSeasonPalette.current
     val scope = rememberCoroutineScope()
@@ -100,6 +115,11 @@ fun AdventuresScreen(
     var catalog by remember { mutableStateOf<Map<String, LootCatalogItemResponse>>(emptyMap()) }
     var equippedFrame by remember { mutableStateOf<String?>(null) }
     var equippedSceneItem by remember { mutableStateOf<String?>(null) }
+    // What the "no tickets" card shows: the pet waiting, how far to the next ticket, and
+    // how many rare eggs are still out there. Any of them may stay null; the card copes.
+    var pet by remember { mutableStateOf<PetResponse?>(null) }
+    var xp by remember { mutableStateOf<XpProgressResponse?>(null) }
+    var eggs by remember { mutableStateOf<List<EggOption>?>(null) }
     // Increments each second so the countdowns recompose; the remaining time itself is
     // computed from the server's secondsRemaining minus wall-clock elapsed since load.
     var tick by remember { mutableStateOf(0L) }
@@ -107,6 +127,9 @@ fun AdventuresScreen(
     LaunchedEffect(refreshKey) {
         if (fixture != null) {
             state = fixture
+            pet = fixtureExtras?.pet
+            xp = fixtureExtras?.xp
+            eggs = fixtureExtras?.eggs
             loadedAtMillis = System.currentTimeMillis()
             loading = false
             return@LaunchedEffect
@@ -127,13 +150,30 @@ fun AdventuresScreen(
             catalog = withContext(Dispatchers.IO) {
                 ApiClient.adventuresApi.getLootCatalog().associateBy { it.id }
             }
-            val pet = withContext(Dispatchers.IO) {
+            val loadedPet = withContext(Dispatchers.IO) {
                 val resp = if (actingAsParent) ApiClient.petsApi.getMemberPet(childId)
                 else ApiClient.petsApi.getCurrentPet()
                 if (resp.isSuccessful) resp.body() else null
             }
-            equippedFrame = pet?.equippedFrame
-            equippedSceneItem = pet?.equippedSceneItem
+            pet = loadedPet
+            equippedFrame = loadedPet?.equippedFrame
+            equippedSceneItem = loadedPet?.equippedSceneItem
+            // Only needed for the "no tickets" card; a failure here must not break the screen.
+            if (loaded.ticketBalance == 0L) {
+                xp = runCatching {
+                    withContext(Dispatchers.IO) {
+                        val resp = if (actingAsParent) ApiClient.xpApi.getMemberXpProgress(childId)
+                        else ApiClient.xpApi.getCurrentProgress()
+                        if (resp.isSuccessful) resp.body() else null
+                    }
+                }.getOrNull()
+                eggs = runCatching {
+                    withContext(Dispatchers.IO) {
+                        if (actingAsParent) ApiClient.petsApi.getEggsForMember(childId)
+                        else ApiClient.petsApi.getEggs()
+                    }
+                }.getOrNull()
+            }
         } catch (e: Exception) {
             error = ApiErrors.message(e, tr(R.string.adv_load_failed))
         } finally {
@@ -273,11 +313,22 @@ fun AdventuresScreen(
                 )
                 SceneList(enabled = !busy, season = season, onPick = { startAdventure(it.key) })
             } else if (ongoing.isEmpty()) {
-                Text(
-                    text = tr(R.string.adv_need_ticket),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = season.inkFaint,
+                NoTicketsCard(
+                    pet = pet,
+                    xp = xp,
+                    season = season,
+                    onOpenChores = onOpenChores ?: onBack,
                 )
+                Text(
+                    text = tr(R.string.adv_waiting_scenes),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = season.ink,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                SceneList(enabled = false, season = season, locked = true, onPick = {})
+                val rareLeft = eggs?.count { !it.unlocked && it.rarity != "COMMON" } ?: 0
+                if (rareLeft > 0) RareEggsTeaser(count = rareLeft, season = season)
             }
 
             if (ongoing.isNotEmpty()) {
@@ -357,6 +408,8 @@ private fun TicketBadge(balance: Long, season: SeasonPalette) {
 private fun SceneList(
     enabled: Boolean,
     season: SeasonPalette,
+    /** A teaser of what a ticket opens: dimmed, a lock instead of "Send", not tappable. */
+    locked: Boolean = false,
     onPick: (AdventureScene) -> Unit,
 ) {
     val context = LocalContext.current
@@ -372,6 +425,7 @@ private fun SceneList(
                     .height(150.dp)
                     .clip(RoundedCornerShape(18.dp))
                     .background(season.surface)
+                    .alpha(if (locked) 0.6f else 1f)
                     .clickable(enabled = enabled) { onPick(scene) },
             ) {
                 if (drawable != null) {
@@ -380,6 +434,7 @@ private fun SceneList(
                         contentDescription = scene.label,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
+                        colorFilter = if (locked) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.35f) }) else null,
                     )
                 }
                 // Mörk toning nedtill så namnet syns mot vilken scen som helst.
@@ -410,9 +465,18 @@ private fun SceneList(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text("🗺️", style = MaterialTheme.typography.labelMedium)
+                    if (locked) {
+                        Icon(
+                            imageVector = Icons.Filled.Lock,
+                            contentDescription = null,
+                            tint = Color.Black.copy(alpha = 0.8f),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    } else {
+                        Text("🗺️", style = MaterialTheme.typography.labelMedium)
+                    }
                     Text(
-                        text = tr(R.string.adv_send),
+                        text = if (locked) tr(R.string.adv_needs_ticket_badge) else tr(R.string.adv_send),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = Color.Black.copy(alpha = 0.8f),
@@ -779,6 +843,162 @@ private fun formatRemaining(secs: Long): String {
  * Store-screenshot state: three tickets to spend, one adventure on its way home and one
  * ready to open. No inventory, since the loot catalogue's names come from the server.
  */
+/** What the "no tickets" card reads, bundled for the debug harness. */
+data class AdventuresExtras(
+    val pet: PetResponse?,
+    val xp: XpProgressResponse?,
+    val eggs: List<EggOption>?,
+)
+
+/** XP still needed for the next ticket, and how far along the current stretch is (0..1). */
+private fun nextTicketProgress(xp: XpProgressResponse?): Pair<Int, Float>? {
+    if (xp == null) return null
+    return if (xp.currentLevel < 5) {
+        // Every level-up pays a ticket.
+        val span = xp.xpInCurrentLevel + xp.xpForNextLevel
+        if (span <= 0) null else xp.xpForNextLevel to xp.xpInCurrentLevel.toFloat() / span
+    } else {
+        // After the top level, every star (XP_PER_STAR = 50) pays a ticket.
+        val left = xp.xpToNextStar.coerceIn(0, XP_PER_STAR)
+        left to (XP_PER_STAR - left).toFloat() / XP_PER_STAR
+    }
+}
+
+private const val XP_PER_STAR = 50
+private val TICKET_GOLD = Color(0xFFFACC15)
+
+/**
+ * What a child with no ticket sees: the pet ready to go with a packed backpack, how
+ * little is left to the next ticket, and the way to earn it. A goal, not a dead end.
+ */
+@Composable
+private fun NoTicketsCard(
+    pet: PetResponse?,
+    xp: XpProgressResponse?,
+    season: SeasonPalette,
+    onOpenChores: () -> Unit,
+) {
+    val context = LocalContext.current
+    val petImage = remember(pet?.petType, pet?.growthStage) {
+        pet?.let { PetImages.petDrawable(context, it.petType, it.growthStage) }
+    }
+    val progress = nextTicketProgress(xp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(season.tipBg)
+            .border(1.dp, season.badgeEdge, RoundedCornerShape(22.dp))
+            .padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy((-14).dp),
+        ) {
+            if (petImage != null) {
+                Image(
+                    painter = painterResource(id = petImage),
+                    contentDescription = null,
+                    modifier = Modifier.size(120.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+            Image(
+                painter = painterResource(id = R.drawable.adventure_backpack),
+                contentDescription = null,
+                modifier = Modifier.size(130.dp),
+                contentScale = ContentScale.Fit,
+            )
+        }
+        val name = pet?.name?.takeIf { it.isNotBlank() }
+        Text(
+            text = if (name != null) tr(R.string.adv_packed_named, name) else tr(R.string.adv_packed),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = season.ink,
+            textAlign = TextAlign.Center,
+        )
+        if (progress != null) {
+            val (left, fraction) = progress
+            Text(
+                text = trp(R.plurals.adv_xp_to_ticket, left, left),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = season.tipStrong,
+                textAlign = TextAlign.Center,
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(season.track),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction.coerceIn(0.04f, 1f))
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(TICKET_GOLD),
+                )
+            }
+        } else {
+            Text(
+                text = tr(R.string.adv_need_ticket),
+                style = MaterialTheme.typography.bodyMedium,
+                color = season.inkSoft,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Button(
+            onClick = onOpenChores,
+            colors = ButtonDefaults.buttonColors(containerColor = season.accent, contentColor = season.onAccent),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+        ) {
+            Text(tr(R.string.adv_do_chores), fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** "4 rare eggs left to discover", with a row of question-mark eggs. */
+@Composable
+private fun RareEggsTeaser(count: Int, season: SeasonPalette) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(season.surface)
+            .border(1.dp, season.cardEdge, RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+            repeat(minOf(count, 3)) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 26.dp, height = 32.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(season.track)
+                        .border(2.dp, season.surface, RoundedCornerShape(percent = 50)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("?", fontWeight = FontWeight.Bold, color = season.inkSoft)
+                }
+            }
+        }
+        Text(
+            text = trp(R.plurals.adv_rare_eggs_left, count, count),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = season.ink,
+        )
+    }
+}
+
 object AdventuresFixture {
     fun ella() = AdventureStateResponse(
         ticketBalance = 3,
@@ -794,5 +1014,26 @@ object AdventuresFixture {
                 startedAt = "2026-09-27T08:00:00Z",
             ),
         ),
+    )
+
+    /** No tickets, nothing on its way: the state the "no tickets" card is for. */
+    fun empty() = AdventureStateResponse(ticketBalance = 0, adventures = emptyList())
+
+    /** Kvitter at level 3, 28 of 35 XP into the level (7 left), five rare eggs to find. */
+    fun emptyExtras() = AdventuresExtras(
+        pet = PetResponse(
+            id = "p1", memberId = "child-1", year = 2026, month = 10,
+            selectedEggType = "yellow_egg", petType = "bird", name = "Kvitter",
+            growthStage = 3, hatchedAt = null,
+            createdAt = "2026-10-01T08:00:00Z", updatedAt = "2026-10-01T08:00:00Z",
+        ),
+        xp = XpProgressResponse(
+            id = "x1", memberId = "child-1", year = 2026, month = 10,
+            currentXp = 63, currentLevel = 3, totalTasksCompleted = 30,
+            xpForNextLevel = 7, xpInCurrentLevel = 28,
+        ),
+        eggs = listOf("orange_egg", "black_egg", "cyan_egg", "gray_egg", "silver_egg").map {
+            EggOption(eggType = it, petType = "?", rarity = "RARE", unlocked = false, collected = false)
+        } + EggOption(eggType = "green_egg", petType = "cat", rarity = "COMMON", unlocked = true, collected = false),
     )
 }

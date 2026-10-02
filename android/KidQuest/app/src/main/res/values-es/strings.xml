@@ -85,7 +85,7 @@
     <string name="amount_label">Cantidad (%1$s)</string>
     <string name="amount_label_required">Cantidad (%1$s) *</string>
     <string name="back_to_now">Volver al presente</string>
-    <string name="band_adventures">🗺️ Aventuras</string>
+    <string name="band_adventures">Aventuras</string>
     <string name="band_name_level">%1$s · NIVEL %2$d</string>
     <string name="band_wallet">Monedero ›</string>
     <string name="band_wallet_amount">%1$s ›</string>
@@ -690,4 +690,17 @@
     <string name="fixture_tx_great_grandma">Bisabuela</string>
     <string name="fixture_goal_bike">Bici nueva</string>
     <string name="fixture_goal_game">Juego de Nintendo</string>
+    <string name="adv_waiting_scenes">Aquí te espera la próxima aventura</string>
+    <string name="adv_needs_ticket_badge">Hace falta un ticket</string>
+    <string name="adv_packed_named">¡%1$s ya tiene la mochila lista! 🎒</string>
+    <string name="adv_packed">¡La mochila está lista! 🎒</string>
+    <string name="adv_do_chores">Hacer las tareas de hoy</string>
+    <plurals name="adv_xp_to_ticket">
+        <item quantity="one">Solo te falta %d XP para el próximo ticket</item>
+        <item quantity="other">Solo te faltan %d XP para el próximo ticket</item>
+    </plurals>
+    <plurals name="adv_rare_eggs_left">
+        <item quantity="one">Queda %d huevo raro por descubrir</item>
+        <item quantity="other">Quedan %d huevos raros por descubrir</item>
+    </plurals>
 </resources>

@@ -179,6 +179,16 @@ class MainActivity : AppCompatActivity() {
                         )
                         return@KidQuestTheme
                     }
+                    "adventures-empty" -> {
+                        AdventuresScreen(
+                            childName = fixtureChild,
+                            childId = "child-1",
+                            onBack = {},
+                            fixture = AdventuresFixture.empty(),
+                            fixtureExtras = AdventuresFixture.emptyExtras(),
+                        )
+                        return@KidQuestTheme
+                    }
                 }
                 if (forcedScreen?.startsWith("child-") == true || forcedScreen == "child") {
                     val asParent = forcedScreen == "child-asparent"
@@ -499,6 +509,12 @@ class MainActivity : AppCompatActivity() {
                             childId = screen.childId,
                             actingAsParent = screen.actingAsParent,
                             onBack = { backAction?.invoke() },
+                            // Same route as the dashboard's chores button; Back then returns
+                            // to the child's dashboard.
+                            onOpenChores = {
+                                returnToChildDashboard = screen.childId to screen.childName
+                                currentScreen = AppScreen.ChildTasks(screen.childId, screen.childName)
+                            },
                         )
                         is AppScreen.ChildWallet -> ChildWalletScreen(
                             childName = screen.childName,

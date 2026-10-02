@@ -367,6 +367,34 @@
         }
       }
     },
+    "%@ har packat ryggsäcken! 🎒" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ har packat ryggsäcken! 🎒"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has packed the backpack! 🎒"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ hat den Rucksack gepackt! 🎒"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡%@ ya tiene la mochila lista! 🎒"
+          }
+        }
+      }
+    },
     "%@ kvar" : {
       "localizations" : {
         "de" : {
@@ -727,6 +755,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ – men ditt första ägg följer med dig hela %@! 🥚"
+          }
+        }
+      }
+    },
+    "%@, låst" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, låst"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, locked"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, gesperrt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, bloqueado"
           }
         }
       }
@@ -1210,6 +1266,34 @@
         }
       }
     },
+    "%lld sällsynta ägg kvar att upptäcka" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld sällsynta ägg kvar att upptäcka"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld rare eggs left to discover"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch %lld seltene Eier zu entdecken"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quedan %lld huevos raros por descubrir"
+          }
+        }
+      }
+    },
     "%lld xp till nästa ⭐" : {
       "localizations" : {
         "de" : {
@@ -1517,6 +1601,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 syssla"
+          }
+        }
+      }
+    },
+    "1 sällsynt ägg kvar att upptäcka" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 sällsynt ägg kvar att upptäcka"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 rare egg left to discover"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch 1 seltenes Ei zu entdecken"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queda 1 huevo raro por descubrir"
           }
         }
       }
@@ -2080,6 +2192,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Avmarkera"
+          }
+        }
+      }
+    },
+    "Bara %lld XP kvar till nästa biljett" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bara %lld XP kvar till nästa biljett"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Just %lld XP to your next ticket"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur noch %lld XP bis zum nächsten Ticket"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo te faltan %lld XP para el próximo ticket"
+          }
+        }
+      }
+    },
+    "Bara 1 XP kvar till nästa biljett" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bara 1 XP kvar till nästa biljett"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Just 1 XP to your next ticket"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur noch 1 XP bis zum nächsten Ticket"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo te falta 1 XP para el próximo ticket"
           }
         }
       }
@@ -5892,6 +6060,34 @@
         }
       }
     },
+    "Gör dagens sysslor" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gör dagens sysslor"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Do today's chores"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufgaben für heute erledigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hacer las tareas de hoy"
+          }
+        }
+      }
+    },
     "Gör tråkiga sysslor till roliga uppdrag" : {
       "localizations" : {
         "de" : {
@@ -6392,6 +6588,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hänga upp jacka & skor"
+          }
+        }
+      }
+    },
+    "Här väntar nästa äventyr" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Här väntar nästa äventyr"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your next adventure awaits"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hier wartet das nächste Abenteuer"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aquí te espera la próxima aventura"
           }
         }
       }
@@ -11549,6 +11773,34 @@
         }
       }
     },
+    "Mot nästa biljett" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mot nästa biljett"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Towards the next ticket"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf dem Weg zum nächsten Ticket"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hacia el próximo ticket"
+          }
+        }
+      }
+    },
     "Mytiska" : {
       "localizations" : {
         "de" : {
@@ -13393,6 +13645,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rikta kameran mot koden på förälderns skärm"
+          }
+        }
+      }
+    },
+    "Ryggsäcken är packad! 🎒" : {
+      "localizations" : {
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ryggsäcken är packad! 🎒"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backpack is packed! 🎒"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Rucksack ist gepackt! 🎒"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡La mochila está lista! 🎒"
           }
         }
       }

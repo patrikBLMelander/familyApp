@@ -178,6 +178,13 @@ enum ScreenHarness {
                     .preferredColorScheme(.light)
             ))
 
+        case "adventures-empty":
+            return Entry(view: AnyView(
+                AdventuresView.emptyFixture()
+                    .environment(\.seasonPalette, palette)
+                    .preferredColorScheme(.light)
+            ))
+
         case "childview", "childview-fed":
             return Entry(view: AnyView(
                 ChildDashboardHost.fixture(fed: name == "childview-fed")
