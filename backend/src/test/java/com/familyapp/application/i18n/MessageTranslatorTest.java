@@ -95,4 +95,16 @@ class MessageTranslatorTest {
         }
         return properties;
     }
+
+    @Test
+    void rewardNamesFollowTheLanguageAndUnknownOnesKeepTheirStoredName() {
+        LocaleContextHolder.setLocale(Locale.GERMAN);
+        assertThat(translator.lootName("frame_forest", "Skogsram")).isEqualTo("Waldrahmen");
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        assertThat(translator.lootName("item_lanterns", "Lyktor")).isEqualTo("Farolillos");
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("sv"));
+        assertThat(translator.lootName("item_kite", "Drake")).isEqualTo("Drake");
+        // An item added to the catalog later, before anyone translates it.
+        assertThat(translator.lootName("frame_new_one", "Ny ram")).isEqualTo("Ny ram");
+    }
 }

@@ -61,6 +61,19 @@ public class MessageTranslator {
             "Kläder", "system.category.clothes"
     );
 
+    /**
+     * A reward's name (frames, scene items) in the request's language. The catalog keeps
+     * one Swedish name per item in loot_item.name; translations live under loot.<id>, and
+     * an item without one keeps its stored name rather than showing a message code.
+     */
+    public String lootName(String id, String stored) {
+        if (id == null) {
+            return stored;
+        }
+        var translated = find("loot." + id);
+        return translated == null ? stored : translated;
+    }
+
     /** A system-written stored text in the request's language; anything else unchanged. */
     public String systemText(String stored) {
         if (stored == null) {

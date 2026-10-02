@@ -4,6 +4,7 @@ import com.familyapp.domain.i18n.LocalizedException;
 
 import com.familyapp.application.adventure.AdventureService;
 import com.familyapp.application.familymember.FamilyMemberService;
+import com.familyapp.application.i18n.MessageTranslator;
 import com.familyapp.domain.adventure.LootResult;
 import com.familyapp.infrastructure.adventure.AdventureEntity;
 import com.familyapp.infrastructure.adventure.AdventureJpaRepository;
@@ -34,13 +35,17 @@ public class AdventureController {
     private final ChildInventoryJpaRepository inventoryRepository;
     private final LootItemJpaRepository lootItemRepository;
 
+    private final MessageTranslator translator;
+
     public AdventureController(
             AdventureService adventureService,
             FamilyMemberService memberService,
             AdventureJpaRepository adventureRepository,
             ChildInventoryJpaRepository inventoryRepository,
-            LootItemJpaRepository lootItemRepository
+            LootItemJpaRepository lootItemRepository,
+            MessageTranslator translator
     ) {
+        this.translator = translator;
         this.adventureService = adventureService;
         this.memberService = memberService;
         this.adventureRepository = adventureRepository;
@@ -103,7 +108,7 @@ public class AdventureController {
     ) {
         requireMember(deviceToken);
         return lootItemRepository.findByActiveTrue().stream()
-                .map(AdventureController::toCatalogResponse)
+                .map(this::toCatalogResponse)
                 .toList();
     }
 
@@ -206,12 +211,13 @@ public class AdventureController {
         return new InventoryItemResponse(i.getItemId(), i.getAcquiredAt());
     }
 
-    private static LootCatalogItemResponse toCatalogResponse(LootItemEntity item) {
+    /** The name follows the request's language; the stored one is Swedish only. */
+    private LootCatalogItemResponse toCatalogResponse(LootItemEntity item) {
         return new LootCatalogItemResponse(
                 item.getId(),
                 item.getType(),
                 item.getRarity(),
-                item.getName(),
+                translator.lootName(item.getId(), item.getName()),
                 item.getAssetKey(),
                 item.getAnchor()
         );
