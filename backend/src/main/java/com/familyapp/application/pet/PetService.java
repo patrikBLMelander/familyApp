@@ -5,6 +5,7 @@ import com.familyapp.domain.i18n.LocalizedException;
 import com.familyapp.application.adventure.AdventureService;
 import com.familyapp.application.adventure.EggCatalog;
 import com.familyapp.application.xp.XpService;
+import com.familyapp.domain.adventure.EggRarity;
 import com.familyapp.domain.pet.ChildPet;
 import com.familyapp.domain.pet.PetHistory;
 import com.familyapp.infrastructure.adventure.ChildEggUnlockJpaRepository;
@@ -20,11 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SplittableRandom;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -304,9 +307,27 @@ public class PetService {
     public List<EggOption> getEggOptions(UUID memberId) {
         adventureService.ensureCommonsUnlocked(memberId);
         var unlocked = new HashSet<>(eggUnlockRepository.findEggTypesByMemberId(memberId));
-        Set<String> collected = historyRepository.findByMemberIdOrderByYearDescMonthDesc(memberId).stream()
+        var history = historyRepository.findByMemberIdOrderByYearDescMonthDesc(memberId);
+        Set<String> collected = history.stream()
                 .map(PetHistoryEntity::getSelectedEggType)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(HashSet::new));
+        // There must always be an egg to pick, and never one the child already had. A child
+        // who has hatched every egg they unlocked would otherwise face an empty picker (the
+        // apps only offer unlocked, not-yet-collected eggs) and get no pet that month. Then a
+        // new egg is unlocked for them -- see eggToGive. Only a child who has collected all
+        // of them is offered an old one again.
+        boolean nothingToPick = unlocked.stream().allMatch(collected::contains);
+        if (nothingToPick) {
+            var neverHad = EGG_TO_PET_MAP.keySet().stream().filter(e -> !collected.contains(e)).toList();
+            if (!neverHad.isEmpty()) {
+                var gift = eggToGive(memberId, neverHad, LocalDate.now());
+                adventureService.unlockEgg(memberId, gift, "gift");
+                unlocked.add(gift);
+            } else if (!unlocked.isEmpty()) {
+                var lastEgg = history.isEmpty() ? null : history.get(0).getSelectedEggType();
+                collected.remove(eggToOfferAgain(memberId, unlocked, lastEgg, LocalDate.now()));
+            }
+        }
         return EGG_TO_PET_MAP.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> new EggOption(
@@ -348,6 +369,38 @@ public class PetService {
         petEntity.setEquippedSceneItem(itemId);
         petEntity.setUpdatedAt(OffsetDateTime.now());
         return toDomain(petRepository.save(petEntity));
+    }
+
+    /**
+     * The new egg a child gets when they have hatched every egg they had: from the least
+     * rare tier that still has one (common, rare, legendary, then mythic), so the rarest
+     * animals stay something adventures are for. Random, but the same for a child within a
+     * month.
+     */
+    static String eggToGive(UUID memberId, List<String> neverHad, LocalDate today) {
+        var lowestTier = neverHad.stream().map(EggCatalog::rarityOf).min(Comparator.naturalOrder()).orElseThrow();
+        var pool = neverHad.stream().filter(e -> EggCatalog.rarityOf(e) == lowestTier).sorted().toList();
+        return pool.get(new SplittableRandom(monthSeed(memberId, today)).nextInt(pool.size()));
+    }
+
+    private static long monthSeed(UUID memberId, LocalDate today) {
+        return memberId.getMostSignificantBits() ^ memberId.getLeastSignificantBits()
+                ^ (today.getYear() * 100L + today.getMonthValue());
+    }
+
+    /**
+     * Which collected egg is offered again, only once every egg in the game is collected. Random, but the same for a
+     * child for the whole month, so the picker shows the same egg every time it opens.
+     * Last month's animal is skipped when there is any other choice. SplittableRandom, not
+     * Random: Random's first value barely changes between neighbouring seeds, so every month
+     * would have offered the same egg.
+     */
+    static String eggToOfferAgain(UUID memberId, Set<String> unlocked, String lastEgg, LocalDate today) {
+        var candidates = unlocked.stream().sorted().toList();
+        if (candidates.size() > 1 && lastEgg != null && candidates.contains(lastEgg)) {
+            candidates = candidates.stream().filter(e -> !e.equals(lastEgg)).toList();
+        }
+        return candidates.get(new SplittableRandom(monthSeed(memberId, today)).nextInt(candidates.size()));
     }
 
     /** One row of the egg picker: the egg, the animal it hatches, its rarity, and this

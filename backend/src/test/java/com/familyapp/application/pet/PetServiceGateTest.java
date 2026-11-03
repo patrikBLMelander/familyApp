@@ -148,4 +148,64 @@ class PetServiceGateTest {
     private static OffsetDateTime hatched(int year, int month, int day) {
         return LocalDate.of(year, month, day).atTime(12, 0).atZone(ZoneId.systemDefault()).toOffsetDateTime();
     }
+
+    // ---- there is always an egg to pick, and never one the child already had
+
+    @Test
+    void aChildWhoHasHatchedEveryEggGetsANewOneUnlocked() {
+        when(unlocks.findEggTypesByMemberId(MEMBER)).thenReturn(List.of("green_egg", "purple_egg", "red_egg", "yellow_egg"));
+        when(history.findByMemberIdOrderByYearDescMonthDesc(MEMBER)).thenReturn(List.of(
+                hatched("yellow_egg"), hatched("purple_egg"), hatched("red_egg"), hatched("green_egg")));
+
+        var selectable = service.getEggOptions(MEMBER).stream().filter(o -> o.unlocked() && !o.collected()).toList();
+
+        assertThat(selectable).hasSize(1);
+        var gift = selectable.get(0);
+        // A new egg -- not one she had -- and a rare rather than a legendary.
+        assertThat(gift.eggType()).isNotIn("green_egg", "purple_egg", "red_egg", "yellow_egg");
+        assertThat(gift.rarity()).isEqualTo("RARE");
+        verify(adventure).unlockEgg(MEMBER, gift.eggType(), "gift");
+    }
+
+    @Test
+    void aChildWithEggsLeftIsNotGivenOne() {
+        when(unlocks.findEggTypesByMemberId(MEMBER)).thenReturn(List.of("green_egg", "purple_egg", "red_egg", "yellow_egg"));
+        when(history.findByMemberIdOrderByYearDescMonthDesc(MEMBER)).thenReturn(List.of(hatched("green_egg")));
+
+        var selectable = service.getEggOptions(MEMBER).stream().filter(o -> o.unlocked() && !o.collected()).map(PetService.EggOption::eggType).toList();
+
+        assertThat(selectable).containsExactlyInAnyOrder("purple_egg", "red_egg", "yellow_egg");
+        verify(adventure, never()).unlockEgg(any(), any(), any());
+    }
+
+    @Test
+    void theGiftIsStableWithinAMonthAndVariesBetweenMonths() {
+        var neverHad = List.of("orange_egg", "black_egg", "cyan_egg", "gray_egg", "silver_egg", "ice_egg");
+        var day1 = PetService.eggToGive(MEMBER, neverHad, LocalDate.of(2026, 11, 1));
+        var day20 = PetService.eggToGive(MEMBER, neverHad, LocalDate.of(2026, 11, 20));
+        assertThat(day20).isEqualTo(day1);
+        var picks = new java.util.HashSet<String>();
+        for (int month = 1; month <= 12; month++) {
+            picks.add(PetService.eggToGive(MEMBER, neverHad, LocalDate.of(2027, month, 1)));
+        }
+        assertThat(picks.size()).isGreaterThan(1);
+    }
+
+    @Test
+    void theGiftComesFromTheLeastRareTierLeft() {
+        // blue = mythic dragon, golden = legendary lion, orange = rare bear.
+        var nov = LocalDate.of(2026, 11, 1);
+        for (int m = 1; m <= 12; m++) {
+            var day = LocalDate.of(2027, m, 1);
+            assertThat(PetService.eggToGive(MEMBER, List.of("blue_egg", "golden_egg", "orange_egg"), day)).isEqualTo("orange_egg");
+            assertThat(PetService.eggToGive(MEMBER, List.of("blue_egg", "golden_egg"), day)).isEqualTo("golden_egg");
+        }
+        assertThat(PetService.eggToGive(MEMBER, List.of("blue_egg"), nov)).isEqualTo("blue_egg");
+    }
+
+    private static PetHistoryEntity hatched(String egg) {
+        var h = new PetHistoryEntity();
+        h.setSelectedEggType(egg);
+        return h;
+    }
 }

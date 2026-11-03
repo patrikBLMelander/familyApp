@@ -307,6 +307,14 @@ public class AdventureService {
     }
 
     private void unlockEgg(UUID memberId, String eggType) {
+        unlockEgg(memberId, eggType, "adventure");
+    }
+
+    /**
+     * Unlocks an egg for a child; a no-op if it is already theirs. The source says how it
+     * came: "adventure" from loot, "gift" when the picker would otherwise be empty.
+     */
+    public void unlockEgg(UUID memberId, String eggType, String source) {
         if (eggUnlockRepository.existsByMemberAndEggType(memberId, eggType)) {
             return;
         }
@@ -316,7 +324,7 @@ public class AdventureService {
         row.setId(UUID.randomUUID());
         row.setMember(member);
         row.setEggType(eggType);
-        row.setSource("adventure");
+        row.setSource(source);
         row.setUnlockedAt(OffsetDateTime.now());
         eggUnlockRepository.save(row);
     }
