@@ -51,6 +51,10 @@ public class AdventureService {
     // also the floor when a roll cannot be satisfied (no unlockable egg, no active frame).
     private static final int EGG_WEIGHT = 20;
     private static final int FRAME_WEIGHT = 25;
+    // Running low on eggs to pick: a better egg chance, so the picker refills before it
+    // empties. Taken from food, so frames keep their share.
+    private static final int LOW_EGG_SUPPLY = 3;
+    private static final int LOW_SUPPLY_EGG_WEIGHT = 50;
 
     private static final String STATUS_ONGOING = "ONGOING";
     private static final String STATUS_CLAIMED = "CLAIMED";
@@ -234,26 +238,33 @@ public class AdventureService {
      *   1. The first adventure ever, or a child with no selectable egg left, is a
      *      guaranteed egg -- so the loop teaches itself and nobody is ever stranded with
      *      nothing to pick next month.
-     *   2. Otherwise roll the weighted table, with food as the floor.
+     *   2. Otherwise roll the weighted table, with food as the floor. With fewer than
+     *      LOW_EGG_SUPPLY eggs left to pick, the egg share rises to LOW_SUPPLY_EGG_WEIGHT.
      * A guaranteed or rolled egg that cannot be satisfied (nothing left to unlock) falls
      * back to food, so there is always something to bring home.
      */
     private LootResult resolveLoot(UUID memberId) {
         boolean firstEver = adventureRepository.countByMemberIdAndStatus(memberId, STATUS_CLAIMED) == 0;
-        boolean noSelectableEgg = selectableEggTypes(memberId).isEmpty();
+        int selectable = selectableEggTypes(memberId).size();
 
-        if (firstEver || noSelectableEgg) {
+        if (firstEver || selectable == 0) {
             return eggLootOrFood(memberId);
         }
 
+        int eggWeight = eggWeight(selectable);
         int roll = ThreadLocalRandom.current().nextInt(100);
-        if (roll < EGG_WEIGHT) {
+        if (roll < eggWeight) {
             return eggLootOrFood(memberId);
         }
-        if (roll < EGG_WEIGHT + FRAME_WEIGHT) {
+        if (roll < eggWeight + FRAME_WEIGHT) {
             return cosmeticLootOrFood();
         }
         return new LootResult(LootType.FOOD, FOOD_REF, FLOOR_FOOD_QTY);
+    }
+
+    /** The egg share (out of 100) for a child with this many eggs left to pick. */
+    static int eggWeight(int selectableEggs) {
+        return selectableEggs < LOW_EGG_SUPPLY ? LOW_SUPPLY_EGG_WEIGHT : EGG_WEIGHT;
     }
 
     /** Pick a not-yet-unlocked egg, escalating Rare -> Legendary -> Mythic; food if the

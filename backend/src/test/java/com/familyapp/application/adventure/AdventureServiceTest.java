@@ -235,4 +235,12 @@ class AdventureServiceTest {
                 .hasMessage("adventure.noTickets");
         verify(adventures, never()).save(any());
     }
+
+    @Test
+    void eggChanceRisesWhenFewerThanThreeEggsAreLeft() {
+        assertThat(AdventureService.eggWeight(1)).isEqualTo(50);
+        assertThat(AdventureService.eggWeight(2)).isEqualTo(50);
+        assertThat(AdventureService.eggWeight(3)).isEqualTo(20);
+        assertThat(AdventureService.eggWeight(7)).isEqualTo(20);
+    }
 }
